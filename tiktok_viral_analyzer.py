@@ -61,22 +61,22 @@ class TikTokViralAnalyzer:
         return []
 
     def get_video_comments(self, video_id: str, max_count: int = 20) -> List[Dict]:
-        """抓取视频评论（只抓高赞评论）"""
+        """使用本地 TikTok API 抓取评论"""
         try:
-            url = "https://tiktok-scraper7.p.rapidapi.com/comment/list"
-            headers = {
-                "x-rapidapi-key": self.api_key,
-                "x-rapidapi-host": "tiktok-scraper7.p.rapidapi.com"
-            }
-            params = {"aweme_id": video_id, "count": max_count}
-            response = requests.get(url, headers=headers, params=params, timeout=10)
+            url = "http://localhost:8080/api/tiktok/web/fetch_post_comment"
+            params = {"aweme_id": video_id, "cursor": 0, "count": max_count, "current_region": ""}
+            response = requests.get(url, params=params, timeout=15)
 
             if response.status_code == 200:
                 data = response.json()
                 comments = data.get('data', {}).get('comments', [])
-                # 只保留点赞数 > 100 的评论
-                high_quality = [c for c in comments if c.get('digg_count', 0) > 100]
-                return high_quality[:15]  # 最多15条
+                result = []
+                for c in comments[:15]:
+                    result.append({
+                        'text': c.get('text', ''),
+                        'likes': c.get('digg_count', 0)
+                    })
+                return result
         except Exception as e:
             print(f"[评论抓取失败] {e}")
         return []

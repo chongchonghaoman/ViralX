@@ -21,28 +21,35 @@ class AIAnalyzer:
 
         # 处理评论数据
         comments_text = ""
-        if video_data.get('comments_data'):
+        has_comments = False
+        if video_data.get('comments_data') and len(video_data.get('comments_data', [])) > 0:
             comments_list = [f"- {c['text']} (👍{c['likes']})" for c in video_data['comments_data'][:15]]
             comments_text = "\n".join(comments_list)
+            has_comments = True
+
+        if has_comments:
+            analysis_type = "基于真实评论分析：用户关注点、痛点、转化信号"
+        else:
+            analysis_type = "基于互动数据推断：用户可能关注的点、潜在痛点"
 
         prompt = f"""角色设定：你是资深TikTok电商短视频拆解专家。
 
-任务：深度拆解以下视频，包含用户评论洞察。
+任务：深度拆解以下视频。
 
 视频信息：
 标题: {video_data.get('title', '')}
 点赞: {video_data.get('likes', 0):,}
 评论: {video_data.get('comments', 0):,}
+分享: {video_data.get('shares', 0):,}
 
-高赞用户评论：
-{comments_text if comments_text else "暂无评论数据"}
+{'高赞用户评论：\n' + comments_text if has_comments else ''}
 
-请用 Markdown 格式输出分析结果，必须包含以下章节：
+请用 Markdown 格式输出分析结果，必须包含：
 
 ## 🎯 核心卖点
 ## 🎬 视听语言
 ## 💬 用户反馈洞察
-（基于评论分析：用户关注点、痛点、转化信号）
+（{analysis_type}）
 ## 📝 翻拍脚本"""
 
         try:
