@@ -60,6 +60,27 @@ class TikTokViralAnalyzer:
 
         return []
 
+    def get_video_comments(self, video_id: str, max_count: int = 20) -> List[Dict]:
+        """抓取视频评论（只抓高赞评论）"""
+        try:
+            url = "https://tiktok-scraper7.p.rapidapi.com/comment/list"
+            headers = {
+                "x-rapidapi-key": self.api_key,
+                "x-rapidapi-host": "tiktok-scraper7.p.rapidapi.com"
+            }
+            params = {"aweme_id": video_id, "count": max_count}
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                comments = data.get('data', {}).get('comments', [])
+                # 只保留点赞数 > 100 的评论
+                high_quality = [c for c in comments if c.get('digg_count', 0) > 100]
+                return high_quality[:15]  # 最多15条
+        except Exception as e:
+            print(f"[评论抓取失败] {e}")
+        return []
+
     def extract_video_info(self, video: Dict) -> Dict:
         """提取视频关键信息"""
         return {

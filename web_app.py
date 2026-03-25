@@ -55,6 +55,10 @@ def analyze():
         results = []
         for i, video in enumerate(video_data[:10], 1):
             try:
+                # 抓取评论
+                comments = tiktok.get_video_comments(video['video_id'])
+                video['comments_data'] = [{'text': c.get('text', ''), 'likes': c.get('digg_count', 0)} for c in comments]
+
                 analysis = ai.analyze_video_script(video)
                 results.append({**video, 'ai_analysis': analysis})
             except Exception as e:
