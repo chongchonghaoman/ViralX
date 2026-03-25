@@ -6,6 +6,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 from flask import Flask, render_template, request, jsonify
 import json
 from pathlib import Path
+from datetime import datetime
 from tiktok_viral_analyzer import TikTokViralAnalyzer
 from ai_analyzer import AIAnalyzer
 
@@ -78,6 +79,36 @@ def get_keywords():
         if cache_file.exists():
             keywords.append({'keyword': kw, 'cached': True})
     return jsonify({'keywords': keywords})
+
+@app.route('/api/export-obsidian', methods=['POST'])
+def export_obsidian():
+    """导出分析结果到 Obsidian"""
+    try:
+        data = request.json
+        title = data.get('title', 'AI 深度拆解')
+        content = data.get('content', '')
+
+        # Obsidian 知识库路径
+        obsidian_path = Path('E:/我的知识库/07-对话记录')
+        folder_path = obsidian_path / '抖音爆款视频分析'
+
+        # 创建文件夹
+        folder_path.mkdir(parents=True, exist_ok=True)
+
+        # 生成文件名（带时间戳）
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{title}.md"
+        file_path = folder_path / filename
+
+        # 写入文件
+        file_path.write_text(content, encoding='utf-8')
+
+        return jsonify({
+            'status': 'success',
+            'file_path': str(file_path)
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

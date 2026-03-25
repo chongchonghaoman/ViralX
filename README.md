@@ -1,8 +1,10 @@
-# TikTok 爆款视频分析器
+# ViralX — AI 短视频爆款分析器
 
-> 使用 AI 深度拆解 TikTok 爆款视频，提取流量密码、爆款元素和可复用的短视频创作公式。
+![ViralX Logo](logo.png)
 
-[![GitHub stars](https://img.shields.io/github/stars/chongchonghaoman/tiktok_analyzer?style=flat-square)](https://github.com/chongchonghaoman/tiktok_analyzer)
+> 使用 AI 深度拆解 TikTok/抖音爆款视频，提取流量密码、爆款元素和可复用的短视频创作公式。
+
+[![GitHub stars](https://img.shields.io/github/stars/chongchonghaoman/tiktok_analyzer?style=flat-square)](https://github.com/chongchonghaoman/ViralX)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-green.svg?style=flat-square)](https://www.python.org/)
 
@@ -10,9 +12,9 @@
 
 ## 🎯 项目简介
 
-**TikTok Viral Analyzer** 是一款面向短视频创作者、跨境电商运营者和内容策划者的 AI 分析工具。
+**ViralX** 是一款面向短视频创作者、跨境电商运营者和内容策划者的 AI 分析工具。
 
-通过输入关键词，自动抓取 TikTok 平台上该关键词下的**高热度视频**，并借助大模型从**钩子设计、卖点提炼、视听语言、流量密码、翻拍脚本**等多个维度进行深度拆解，输出结构化的爆款内容分析报告。
+通过输入关键词，自动抓取 TikTok/抖音平台上该关键词下的**高热度视频**，并借助大模型从**钩子设计、卖点提炼、视听语言、流量密码、翻拍脚本**等多个维度进行深度拆解，输出结构化的爆款内容分析报告。
 
 ---
 
@@ -33,17 +35,17 @@
 
 ```
 ┌──────────────────────────────────────────────┐
-│  🔍 TikTok 爆款分析器                    [刷新]│
+│  🔍 ViralX 短视频爆款分析器              [刷新]│
 ├──────────────────────────────────────────────┤
-│  关键词: [outdoor lighting lamp    ] [搜索]  │
+│  关键词: [outdoor lighting lamp    ] [搜索]    │
 │                                              │
-│  📦 已缓存关键词                            │
+│  📦 已缓存关键词                              │
 │  ┌────────────────────────────────────────┐ │
 │  │ 🏷️  outdoor lighting lamp   12个视频  │ │
 │  │ 🏷️  camping light            8个视频  │ │
 │  └────────────────────────────────────────┘ │
 │                                              │
-│  ▶ 点击任意视频标题 → AI 深度拆解           │
+│  ▶ 点击任意视频标题 → AI 深度拆解             │
 └──────────────────────────────────────────────┘
 ```
 
@@ -59,8 +61,8 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/chongchonghaoman/tiktok_analyzer.git
-cd tiktok_analyzer
+git clone https://github.com/chongchonghaoman/ViralX.git
+cd ViralX
 ```
 
 ### 2. 安装依赖
@@ -138,7 +140,7 @@ python export_to_obsidian.py
 ## 🗂️ 项目结构
 
 ```
-tiktok_analyzer/
+ViralX/
 ├── web_app.py                 # Flask Web 服务（主入口）
 ├── ai_analyzer.py             # MiniMax AI 分析器
 ├── tiktok_viral_analyzer.py   # TikTok 数据抓取器
@@ -147,6 +149,7 @@ tiktok_analyzer/
 ├── report_generator.py        # 报告生成模块
 ├── config.json.example        # 配置模板
 ├── requirements.txt           # Python 依赖
+├── logo.png                   # ViralX Logo
 │
 ├── templates/
 │   └── index.html             # 前端页面（Linear 风格深色 UI）
@@ -210,10 +213,10 @@ GET /api/keywords
 |------|------|
 | **🎬 黄金3秒 Hook** | 视频开头设计分析，包含视觉钩子 + 听觉钩子 |
 | **💡 核心卖点** | 5 个主要卖点 + 对应视觉呈现方式 |
-| **🎞️ 视听语言** | 节奏分析、运镜手法、光影运用 |
+| **🎞️ 视听语言** | 节奏分析、运镜手法，光影运用 |
 | **🔥 流量密码** | 互动钩子设计、评论区埋梗、转化锚点 |
 | **📋 翻拍脚本** | 6 个标准镜头的完整分镜表（可照着拍） |
-| **⚠️ 风险提示** | 合规建议、音乐版权注意点、复刻风险评估 |
+| **⚠️ 风险提示** | 合规建议，音乐版权注意点、复刻风险评估 |
 
 ---
 
@@ -238,8 +241,6 @@ gunicorn -w 2 -b 0.0.0.0:5000 web_app:app
 ---
 
 ## ⚙️ 配置参考
-
-### 完整配置项
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
