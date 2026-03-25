@@ -297,6 +297,29 @@
             font-weight: 600;
         }
 
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .export-btn {
+            background: none;
+            border: 1px solid #3a3a3a;
+            color: #aaa;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .export-btn:hover {
+            background: #2a2a2a;
+            border-color: #4a4a4a;
+            color: #e0e0e0;
+        }
+
         .modal-close {
             background: none;
             border: none;
@@ -415,14 +438,22 @@
         <div class="modal">
             <div class="modal-header">
                 <h2 id="modal-title">AI 深度拆解</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div class="modal-actions">
+                    <button class="export-btn" onclick="exportToObsidian()">📤 导出到 Obsidian</button>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
             </div>
             <div class="modal-content markdown-content" id="modal-content"></div>
         </div>
     </div>
 
     <script>
+        let currentModalTitle = '';
+        let currentModalContent = '';
+
         function openModal(title, content) {
+            currentModalTitle = title;
+            currentModalContent = content;
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-content').innerHTML = marked.parse(content);
             document.getElementById('modal').classList.add('active');
@@ -430,6 +461,28 @@
 
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+        }
+
+        async function exportToObsidian() {
+            try {
+                const response = await fetch('/api/export-obsidian', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: currentModalTitle,
+                        content: currentModalContent
+                    })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    alert(`✓ 已导出到 Obsidian\n${data.file_path}`);
+                } else {
+                    alert(`✗ 导出失败: ${data.message}`);
+                }
+            } catch (err) {
+                alert(`✗ 导出失败: ${err.message}`);
+            }
         }
 
         document.getElementById('modal').addEventListener('click', (e) => {
