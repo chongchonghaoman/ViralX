@@ -114,5 +114,26 @@ def export_obsidian():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/generate_variants', methods=['POST'])
+def generate_variants():
+    """基于爆款分析生成 4 种裂变变体脚本"""
+    try:
+        data = request.json
+        video = data.get('video', {})
+        analysis = data.get('analysis', '')
+
+        if not analysis:
+            return jsonify({'status': 'error', 'message': '缺少原始视频分析内容'}), 400
+
+        ai = AIAnalyzer(api_key=config.get('minimax_api_key'))
+        variants = ai.generate_viral_variants(video, analysis)
+
+        return jsonify({
+            'status': 'success',
+            'variants': variants
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
