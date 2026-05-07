@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+venv39/
+venv_backup/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.env
+.env.local
+
+# Config with secrets
+config.json
+
+# Cache
+cache/
+video_cache/
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+package-lock.json
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Release builds
+release/
