@@ -1,0 +1,11 @@
+{
+  "rapidapi_key": "YOUR_RAPIDAPI_KEY_HERE",
+  "minimax_api_key": "YOUR_MINIMAX_API_KEY_HERE",
+  "search_keywords": [
+    "outdoor lighting lamp",
+    "camping light",
+    "portable LED light"
+  ],
+  "min_likes": 5000,
+  "output_dir": "./data"
+}

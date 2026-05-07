@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - ViralX</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #1a1a1a;
+            border-right: 1px solid #2a2a2a;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 32px;
+            color: #fff;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: #e0e0e0;
+            display: block;
+        }
+
+        .nav-item:hover {
+            background: #2a2a2a;
+        }
+
+        .nav-item.active {
+            background: #333;
+            color: #fff;
+        }
+
+        .nav-item.settings {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 32px;
+            color: #fff;
+        }
+
+        .section {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #5a5a5a;
+        }
+
+        .form-group input[type="number"] {
+            font-family: monospace;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 6px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .keywords-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .keyword-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        .keyword-tag .remove {
+            cursor: pointer;
+            color: #888;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .keyword-tag .remove:hover {
+            color: #ff6b6b;
+        }
+
+        .add-keyword {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .add-keyword input {
+            flex: 1;
+            margin: 0;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #5a5a5a;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #6a6a6a;
+        }
+
+        .btn-secondary {
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+        }
+
+        .btn-secondary:hover {
+            background: #333;
+        }
+
+        .btn-save {
+            background: #4a9eff;
+            color: #fff;
+            padding: 12px 32px;
+            font-size: 15px;
+        }
+
+        .btn-save:hover {
+            background: #5aafff;
+        }
+
+        .btn-save:disabled {
+            background: #3a3a3a;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.success {
+            background: rgba(74, 222, 128, 0.15);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            color: #4ade80;
+            display: block;
+        }
+
+        .status.error {
+            background: rgba(255, 107, 107, 0.15);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+            display: block;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .api-status {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .api-status.success { background: #4ade80; }
+        .api-status.error { background: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo">ViralX</div>
+        <a href="/" class="nav-item">分析</a>
+        <a href="/settings" class="nav-item settings active">设置</a>
+    </div>
+
+    <div class="main-content">
+        <h1>设置</h1>
+
+        <div id="status" class="status"></div>
+
+        <div class="section">
+            <h2>TikTok API</h2>
+            <div class="form-group">
+                <label>RapidAPI Key</label>
+                <input type="password" id="rapidapi_key" placeholder="输入 RapidAPI Key">
+                <small>用于调用 TikTok API（RapidAPI 平台）</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>AI 模型设置</h2>
+            <div class="form-group">
+                <label>MiniMax API Key</label>
+                <input type="password" id="minimax_api_key" placeholder="输入 MiniMax API Key">
+                <small>用于 AI 视频分析和脚本生成</small>
+            </div>
+            <div class="form-group">
+                <label>Base URL</label>
+                <input type="text" id="minimax_base_url" placeholder="https://api.minimaxi.com/anthropic">
+                <small>AI API 的 base URL 地址</small>
+            </div>
+            <div class="form-group">
+                <label>模型名称</label>
+                <input type="text" id="minimax_model" placeholder="MiniMax-M2.7">
+                <small>使用的模型名称（如 MiniMax-M2.7、claude-3-5-sonnet 等）</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>搜索设置</h2>
+            <div class="form-group">
+                <label>最小点赞数</label>
+                <input type="number" id="min_likes" placeholder="5000">
+                <small>只分析点赞数高于此值的视频</small>
+            </div>
+            <div class="form-group">
+                <label>输出目录</label>
+                <input type="text" id="output_dir" placeholder="./data">
+                <small>分析结果保存目录</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>搜索关键词</h2>
+            <div id="keywords-list" class="keywords-list"></div>
+            <div class="add-keyword">
+                <input type="text" id="new-keyword" placeholder="输入新关键词，按回车添加">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-save" id="save-btn" onclick="saveSettings()">保存设置</button>
+            <button class="btn btn-secondary" onclick="loadSettings()">重置</button>
+        </div>
+    </div>
+
+    <script>
+        let settings = {};
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                settings = await res.json();
+
+                document.getElementById('rapidapi_key').value = settings.rapidapi_key || '';
+                document.getElementById('minimax_api_key').value = settings.minimax_api_key || '';
+                document.getElementById('minimax_base_url').value = settings.minimax_base_url || 'https://api.minimaxi.com/anthropic';
+                document.getElementById('minimax_model').value = settings.minimax_model || 'MiniMax-M2.7';
+                document.getElementById('min_likes').value = settings.min_likes || 5000;
+                document.getElementById('output_dir').value = settings.output_dir || './data';
+
+                renderKeywords();
+            } catch (e) {
+                showStatus('加载配置失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderKeywords() {
+            const container = document.getElementById('keywords-list');
+            container.innerHTML = (settings.search_keywords || []).map(kw =>
+                `<span class="keyword-tag">${kw}<span class="remove" onclick="removeKeyword('${kw}')">&times;</span></span>`
+            ).join('');
+        }
+
+        function addKeyword(kw) {
+            if (!kw.trim()) return;
+            if (!settings.search_keywords) settings.search_keywords = [];
+            if (!settings.search_keywords.includes(kw)) {
+                settings.search_keywords.push(kw);
+                renderKeywords();
+            }
+            document.getElementById('new-keyword').value = '';
+        }
+
+        function removeKeyword(kw) {
+            settings.search_keywords = settings.search_keywords.filter(k => k !== kw);
+            renderKeywords();
+        }
+
+        async function saveSettings() {
+            const btn = document.getElementById('save-btn');
+            btn.disabled = true;
+            btn.textContent = '保存中...';
+
+            settings.rapidapi_key = document.getElementById('rapidapi_key').value;
+            settings.minimax_api_key = document.getElementById('minimax_api_key').value;
+            settings.minimax_base_url = document.getElementById('minimax_base_url').value;
+            settings.minimax_model = document.getElementById('minimax_model').value;
+            settings.min_likes = parseInt(document.getElementById('min_likes').value) || 5000;
+            settings.output_dir = document.getElementById('output_dir').value;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(settings)
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    showStatus('设置已保存并生效', 'success');
+                } else {
+                    showStatus('保存失败: ' + result.message, 'error');
+                }
+            } catch (e) {
+                showStatus('保存失败: ' + e.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '保存设置';
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = 'status ' + type;
+            setTimeout(() => el.className = 'status', 3000);
+        }
+
+        document.getElementById('new-keyword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addKeyword(e.target.value);
+            }
+        });
+
+        loadSettings();
+    </script>
+</body>
+</html>
