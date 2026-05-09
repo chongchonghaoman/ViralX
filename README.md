@@ -1,79 +1,115 @@
 # ViralX
 
-AI驱动的TikTok美区爆款视频分析工具
+AI驱动的 TikTok 美区爆款视频分析工具
+
+![ViralX](logo.png)
 
 ## 核心功能
 
 ### AI 多模态分析
-- **Gemini 2.5 Flash** - 视频帧多模态理解，提取视觉元素、场景、人物
-- **MiniMax M2.7** - 纯文本深度分析，脚本拆解、爆款元素识别、文案结构
+- **OpenRouter (NVIDIA)** - 视频帧逐秒分析，免费使用
+- **Gemini 2.5 Flash** - 视频帧多模态理解
+- **MiniMax M2.7** - 纯文本深度分析
 
 ### 视频分析
-- 视频链接一键下载（yt-dlp）
-- 爆款视频搜索（RapidAPI TikTok数据）
+- 爆款视频搜索（RapidAPI TikTok 数据，5000+ 点赞过滤）
+- 视频一键下载（yt-dlp）
 - 评论抓取与情感分析
+
+### 流式分析
+- 边分析边返回结果，实时进度展示
+- 并发处理多个视频
+- 分析结果自动缓存
 
 ### 脚本生成
 - 爆款脚本结构拆解
-- 裂变变体脚本生成（多角度改编）
+- 裂变变体脚本生成（4 种不同角度改编）
 
 ### 数据导出
 - 导出至 Obsidian 知识库
-- Markdown 格式保存分析结果
+- Markdown 格式保存
 
-## 项目结构
+## 界面预览
 
-```
-ViralX/
-├── ai_analyzer.py          # AI分析引擎（MiniMax + Gemini）
-├── tiktok_viral_analyzer.py # TikTok数据获取
-├── export_to_obsidian.py   # Obsidian导出
-├── web_app.py              # Web界面
-├── main.js                 # Electron桌面应用
-├── requirements.txt        # Python依赖
-└── package.json            # Node.js依赖
-```
+Linear 风格的深色主题 UI，支持设置页面配置 API 密钥。
 
 ## 快速开始
 
-### 安装依赖
+### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 npm install
 ```
 
-### 配置API密钥
+### 2. 配置
 
-在代码中配置以下环境变量：
-- `MINIMAX_API_KEY` - MiniMax API
-- `GEMINI_API_KEY` - Gemini API
-- `RAPIDAPI_KEY` - RapidAPI TikTok Key（可选）
+编辑 `config.json`：
 
-### 运行
+```json
+{
+  "rapidapi_key": "YOUR_RAPIDAPI_KEY",
+  "minimax_api_key": "YOUR_MINIMAX_API_KEY",
+  "openrouter_api_key": "YOUR_OPENROUTER_KEY",
+  "search_keywords": ["outdoor lighting lamp"],
+  "min_likes": 5000
+}
+```
 
-**Web界面：**
+API 获取地址：
+- RapidAPI: https://rapidapi.com/DataFanatic/api/tiktok-scraper7
+- MiniMax: https://www.minimaxi.com/
+- OpenRouter: https://openrouter.ai/
+
+### 3. 运行
+
+**Web 界面：**
 ```bash
 python web_app.py
 ```
+
+访问 http://localhost:5001
 
 **桌面应用：**
 ```bash
 npm start
 ```
 
-**命令行分析：**
-```bash
-python ai_analyzer.py --url "视频链接"
-```
+## API 端点
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/` | GET | 主界面 |
+| `/settings` | GET | 设置页面 |
+| `/api/analyze` | POST | 流式分析视频 |
+| `/api/keywords` | GET | 获取已缓存关键词 |
+| `/api/export-obsidian` | POST | 导出到 Obsidian |
+| `/api/generate_variants` | POST | 生成裂变变体 |
+| `/api/cache/clear` | POST | 清除分析缓存 |
 
 ## 技术栈
 
-- **AI**: MiniMax M2.7, Google Gemini 2.5 Flash
+- **AI**: MiniMax M2.7, Google Gemini 2.5 Flash, OpenRouter (NVIDIA)
 - **后端**: Python Flask
-- **前端**: HTML/CSS/JavaScript
+- **前端**: HTML/CSS/JavaScript (Linear 风格深色主题)
 - **桌面**: Electron
-- **数据**: RapidAPI TikTok
+- **数据**: RapidAPI TikTok Scraper
+
+## 项目结构
+
+```
+ViralX/
+├── ai_analyzer.py          # AI 分析引擎
+├── tiktok_viral_analyzer.py # TikTok 数据获取
+├── web_app.py              # Web 服务 + API
+├── export_to_obsidian.py   # Obsidian 导出
+├── main.js                 # Electron 入口
+├── templates/
+│   ├── index.html          # 主界面
+│   └── settings.html       # 设置页面
+├── package.json
+└── requirements.txt
+```
 
 ## License
 
