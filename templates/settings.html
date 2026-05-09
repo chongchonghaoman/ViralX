@@ -277,11 +277,51 @@
         </div>
 
         <div class="section">
-            <h2>AI 模型设置</h2>
+            <h2>AI 分析模式</h2>
+            <div class="form-group">
+                <label>选择模式</label>
+                <select id="analysis_mode" style="width:100%;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;padding:12px;color:#e0e0e0;font-size:14px;">
+                    <option value="gemini">模式1：Gemini 多模态分析</option>
+                    <option value="openrouter">模式2：OpenRouter（免费模型）</option>
+                </select>
+                <small>模式1使用 Gemini 直接分析视频；模式2使用 OpenRouter 免费模型（视频分析不佳时每1秒取1帧）</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>模式1：Gemini 设置</h2>
+            <div class="form-group">
+                <label>Gemini API Key</label>
+                <input type="password" id="gemini_api_key" placeholder="输入 Gemini API Key">
+                <small>用于 Gemini 多模态视频分析（从 aistudio.google.com 获取）</small>
+            </div>
+            <div class="form-group">
+                <label>Gemini 模型</label>
+                <input type="text" id="gemini_model" placeholder="gemini-2.5-flash">
+                <small>使用的 Gemini 模型名称</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>模式2：OpenRouter 设置</h2>
+            <div class="form-group">
+                <label>OpenRouter API Key</label>
+                <input type="password" id="openrouter_api_key" placeholder="输入 OpenRouter API Key">
+                <small>用于 OpenRouter 免费模型调用（从 openrouter.ai 获取）</small>
+            </div>
+            <div class="form-group">
+                <label>模型名称</label>
+                <input type="text" id="openrouter_model" placeholder="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">
+                <small>使用的模型（如 nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free）</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>复刻脚本生成（MiniMax）</h2>
             <div class="form-group">
                 <label>MiniMax API Key</label>
                 <input type="password" id="minimax_api_key" placeholder="输入 MiniMax API Key">
-                <small>用于 AI 视频分析和脚本生成</small>
+                <small>用于生成复刻脚本（必填）</small>
             </div>
             <div class="form-group">
                 <label>Base URL</label>
@@ -332,6 +372,11 @@
                 settings = await res.json();
 
                 document.getElementById('rapidapi_key').value = settings.rapidapi_key || '';
+                document.getElementById('analysis_mode').value = settings.analysis_mode || 'gemini';
+                document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
+                document.getElementById('gemini_model').value = settings.gemini_model || 'gemini-2.5-flash';
+                document.getElementById('openrouter_api_key').value = settings.openrouter_api_key || '';
+                document.getElementById('openrouter_model').value = settings.openrouter_model || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
                 document.getElementById('minimax_api_key').value = settings.minimax_api_key || '';
                 document.getElementById('minimax_base_url').value = settings.minimax_base_url || 'https://api.minimaxi.com/anthropic';
                 document.getElementById('minimax_model').value = settings.minimax_model || 'MiniMax-M2.7';
@@ -372,6 +417,11 @@
             btn.textContent = '保存中...';
 
             settings.rapidapi_key = document.getElementById('rapidapi_key').value;
+            settings.analysis_mode = document.getElementById('analysis_mode').value;
+            settings.gemini_api_key = document.getElementById('gemini_api_key').value;
+            settings.gemini_model = document.getElementById('gemini_model').value;
+            settings.openrouter_api_key = document.getElementById('openrouter_api_key').value;
+            settings.openrouter_model = document.getElementById('openrouter_model').value;
             settings.minimax_api_key = document.getElementById('minimax_api_key').value;
             settings.minimax_base_url = document.getElementById('minimax_base_url').value;
             settings.minimax_model = document.getElementById('minimax_model').value;
