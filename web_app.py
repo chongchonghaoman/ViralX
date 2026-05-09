@@ -61,24 +61,12 @@ def analyze():
     data = request.json
     keyword = data.get('keyword', 'outdoor lighting lamp')
     refresh = data.get('refresh', False)
+    product_name = data.get('product_name', '')
+    product_info = data.get('product_info', '')
 
     def generate():
         try:
             current_config = load_config()
-
-            # 非刷新模式先查缓存
-            if not refresh:
-                cache_file = Path(current_config['output_dir']) / f"{keyword.replace(' ', '_')}_analysis.json"
-                if cache_file.exists():
-                    cached = json.loads(cache_file.read_text(encoding='utf-8'))
-                    yield json.dumps({
-                        'status': 'success',
-                        'total_videos': len(cached),
-                        'videos': cached,
-                        'source': 'cache',
-                        'done': True
-                    }, ensure_ascii=False) + '\n'
-                    return
 
             # 搜索视频
             tiktok = TikTokViralAnalyzer(current_config['output_dir'])
@@ -95,7 +83,10 @@ def analyze():
             ai = AIAnalyzer(
                 api_key=current_config.get('minimax_api_key'),
                 base_url=current_config.get('minimax_base_url'),
-                model=current_config.get('minimax_model')
+                model=current_config.get('minimax_model'),
+                analysis_mode=current_config.get('analysis_mode', 'gemini'),
+                openrouter_api_key=current_config.get('openrouter_api_key', ''),
+                openrouter_model=current_config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')
             )
 
             # 构建视频 URL 映射
@@ -106,7 +97,7 @@ def analyze():
 
             # 流式并发分析，结果边完成边推送
             results = []
-            for result in ai.batch_analyze_streaming(video_data, max_videos=MAX_ANALYZE_VIDEOS, video_urls=video_urls):
+            for result in ai.batch_analyze_streaming(video_data, max_videos=MAX_ANALYZE_VIDEOS, video_urls=video_urls, product_name=product_name, product_info=product_info):
                 # 抓取评论（在主线程串行执行，不影响并发分析）
                 try:
                     comments = tiktok.get_video_comments(result['video_id'])
@@ -125,13 +116,6 @@ def analyze():
                     'total': MAX_ANALYZE_VIDEOS,
                     'video': result
                 }, ensure_ascii=False) + '\n'
-
-            # 保存到缓存
-            try:
-                cache_file = Path(current_config['output_dir']) / f"{keyword.replace(' ', '_')}_analysis.json"
-                cache_file.write_text(json.dumps(results, ensure_ascii=False), encoding='utf-8')
-            except Exception as e:
-                print(f"[缓存保存失败] {e}")
 
             # 推送完成信号
             yield json.dumps({

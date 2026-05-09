@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""使用 MiniMax M2.7 + Gemini 多模态进行深度分析"""
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 import json
@@ -9,6 +6,7 @@ import time
 import hashlib
 import subprocess
 import pathlib
+import requests
 import anthropic
 import google.genai as genai
 from pathlib import Path
@@ -39,7 +37,6 @@ class VideoDownloader:
 
         print(f"[视频下载] {video_id}...")
         try:
-            # yt-dlp 下载 TikTok 视频
             cmd = [
                 sys.executable, "-m", "yt_dlp",
                 "--no-playlist",
@@ -100,6 +97,353 @@ class AICache:
             print(f"[缓存写入失败] {e}")
 
 
+class OpenRouterAnalyzer:
+    """OpenRouter 免费模型分析器（每1秒取1帧图片）"""
+
+    BASE_URL = "https://openrouter.ai/api/v1"
+
+    def __init__(self, api_key: str = None, model: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"):
+        config = load_config()
+        self.api_key = api_key or config.get('openrouter_api_key', '')
+        self.model_name = model
+        self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
+        self.video_dir.mkdir(exist_ok=True)
+        self.downloader = VideoDownloader(str(self.video_dir))
+
+    def extract_frames(self, video_path: str, output_dir: str = None) -> list:
+        """从视频每1秒提取1帧，返回帧文件路径列表"""
+        if output_dir is None:
+            output_dir = self.video_dir / "frames"
+        output_dir = Path(output_dir)
+        output_dir.mkdir(exist_ok=True, parents=True)
+
+        for f in output_dir.glob("frame_*.jpg"):
+            f.unlink()
+
+        try:
+            cmd = [
+                "ffmpeg", "-i", video_path,
+                "-vf", "fps=1",
+                "-q:v", "3",
+                str(output_dir / "frame_%04d.jpg"),
+                "-y"
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode != 0:
+                print(f"[帧提取失败] {result.stderr[:100]}")
+                return []
+
+            frames = sorted(output_dir.glob("frame_*.jpg"))
+            print(f"[帧提取完成] {len(frames)} 帧")
+            return [str(f) for f in frames]
+        except Exception as e:
+            print(f"[帧提取异常] {e}")
+            return []
+
+    def analyze(self, video_data: dict, video_file_path: str = None) -> str:
+        """用 OpenRouter 模型分析视频帧 + 文本数据"""
+        video_id = video_data.get('video_id', '')
+        metadata_text = self._build_metadata_text(video_data)
+
+        try:
+            if video_file_path and os.path.exists(video_file_path):
+                print(f"[OpenRouter 分析] {video_id}...")
+                frames = self.extract_frames(video_file_path)
+                if not frames:
+                    return self._analyze_text_only(video_data)
+
+                prompt = self._build_analysis_prompt(video_data, metadata_text, len(frames))
+
+                content_parts = [{"type": "text", "text": prompt}]
+                for frame in frames[:30]:
+                    content_parts.append({"type": "image_url", "image_url": {"url": "file://" + frame}})
+
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://viralx.local",
+                    "X-Title": "ViralX"
+                }
+                payload = {
+                    "model": self.model_name,
+                    "messages": [{"role": "user", "content": content_parts}],
+                    "max_tokens": 8192,
+                    "temperature": 0.7
+                }
+
+                resp = requests.post(
+                    f"{self.BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=120
+                )
+
+                if resp.status_code == 200:
+                    result = resp.json()["choices"][0]["message"]["content"].strip()
+                    return result
+                else:
+                    return f"OpenRouter 分析失败: {resp.status_code} {resp.text[:100]}"
+
+            return self._analyze_text_only(video_data)
+
+        except Exception as e:
+            print(f"[OpenRouter 分析异常] {e}")
+            return f"OpenRouter 分析失败: {str(e)[:100]}"
+
+    def _build_analysis_prompt(self, video_data: dict, metadata_text: str, frame_count: int) -> str:
+        return f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+
+=== 视频数据 ===
+{metadata_text}
+
+=== 视频帧 ===
+视频共提取了 {frame_count} 帧图片，代表每秒的画面。
+
+=== 你的任务 ===
+1. 仔细观看这些视频帧
+2. 不要复述画面内容（用户自己有眼睛），重点分析为什么能爆
+3. 输出结构化深度拆解报告
+
+请严格按照以下格式输出 Markdown：
+
+## 🎯 核心卖点
+
+| 卖点层级 | 具体内容 | 呈现方式 |
+|---------|---------|---------|
+| **痛点解决** | （视频解决了什么痛点） | （如何呈现的：文字/画面/配音） |
+| **核心优势** | （产品最大卖点是什么） | （用了什么词/表达方式） |
+| **价值感知** | （让用户觉得值在哪） | （如何传达性价比） |
+| **效果承诺** | （使用后的美好结果） | （如何可视化呈现） |
+| **购买便利** | （如何引导购买） | （链接/话术等） |
+| **信任建立** | （如何让人相信） | （品牌背书/测评/展示等） |
+
+### 卖点提炼技巧
+- （总结2-3个最核心的卖点表达技巧，用**强调**标注关键词）
+
+---
+
+## 🎬 视听语言
+
+### 标题语言结构
+
+```
+（用箭头图展示标题的结构层次）
+```
+
+### 标签策略分析
+
+| 标签类型 | 数量 | 具体标签 | 覆盖人群 |
+| ---- | --- | ----- | ----- |
+| 平台电商 | X个 | #XXX #XXX | XXX用户 |
+| 产品品类 | X个 | #XXX #XXX | XXX用户 |
+| 生活方式 | X个 | #XXX #XXX | XXX用户 |
+| 内容类型 | X个 | #XXX #XXX | XXX用户 |
+| 价格敏感 | X个 | #XXX | XXX用户 |
+
+**标签特点**：精准垂直，覆盖"搜索-种草-购买"全链路
+
+---
+
+## 💬 用户反馈洞察
+
+### 互动数据解读
+
+| 指标 | 数值 | 基准比 | 数据含义 |
+| --- | --- | ----- | ----- |
+| 点赞 | X | 100% | 基础认可度 |
+| 评论 | X | X% | 低/中/高，说明什么 |
+| 分享 | X | X% | 超高/正常/低分享率 |
+
+### 用户行为推断
+
+**① 评论反映的真实需求**
+```
+✓ 需求1
+✓ 需求2
+```
+
+**② 分享驱动因素**（如果有高分享率）
+```
+📌 驱动1
+```
+
+### 用户潜在关注点
+
+| 关注维度 | 推测热点问题 | 优先级 |
+|---------|-------------| ------ |
+
+---
+
+## 📝 翻拍脚本
+
+### 版本一：产品展示型（{video_data.get('duration', 'X')}秒）
+
+```
+【开场钩子 - 0:00-0:0X】
+画面：（描述）
+配音：（暗示什么情绪/痛点）
+
+【痛点引入 - 0:0X-0:0X】
+画面：
+配音：
+
+【解决方案 - 0:0X-0:0X】
+画面：
+配音：
+
+【卖点轰炸 - 0:0X-0:0X】
+画面：
+配音/字幕：（核心卖点）
+
+【效果展示 - 0:0X-0:0X】
+画面：（如何展示效果）
+
+【购买引导 - 0:0X-0:XX】
+画面：
+文字：
+```
+
+### 版本二：对比测评型（X秒）
+（类似结构）
+
+### 版本三：情绪共鸣型（15秒快剪）
+（类似结构）
+
+---
+
+## 📊 拆解总结
+
+| 维度 | 核心发现 | 可复用技巧 |
+|-----|---------|-----------|
+| **卖点** | | |
+| **语言** | | |
+| **标签** | | |
+| **数据** | | |
+| **洞察** | | |
+
+---
+*拆解完毕*"""
+
+    def _build_metadata_text(self, video_data: dict) -> str:
+        comments_text = ""
+        if video_data.get('comments_data') and len(video_data['comments_data']) > 0:
+            comments_list = [f"- {c['text']} (👍{c['likes']})" for c in video_data['comments_data'][:15]]
+            comments_text = "\n".join(comments_list)
+
+        return f"""视频标题: {video_data.get('title', '') or '无标题'}
+作者: @{video_data.get('author', 'unknown')}
+视频时长: {video_data.get('duration', '未知')} 秒
+点赞: {video_data.get('likes', 0):,}
+评论数: {video_data.get('comments', 0):,}
+分享数: {video_data.get('shares', 0):,}
+播放量: {video_data.get('views', 0):,}
+
+高赞评论:
+{comments_text or '（无评论数据）'}"""
+
+    def _analyze_text_only(self, video_data: dict) -> str:
+        """纯文本分析（无视频文件时）"""
+        prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+
+{self._build_metadata_text(video_data)}
+
+=== 你的任务 ===
+基于以上数据进行分析，只能分析数据中提供的内容：
+- 不要编造视频画面
+- 不要逐秒描述画面（用户有眼睛）
+- 重点分析：为什么这个视频能爆？它做对了什么？
+- 输出结构化深度拆解报告
+
+请用 Markdown 格式输出：
+
+## 🎯 核心卖点
+
+| 卖点层级 | 具体内容 | 呈现方式 |
+|---------|---------|---------|
+| **痛点解决** | （从标题/评论推断） | （如何呈现） |
+| **核心优势** | （最大卖点） | （用了什么词） |
+| **价值感知** | （值在哪） | （如何传达） |
+| **效果承诺** | （使用结果） | （如何可视化） |
+| **购买便利** | （如何引导） | （话术） |
+| **信任建立** | （如何让人信） | （背书/展示） |
+
+### 卖点提炼技巧
+- （总结2-3个核心表达技巧）
+
+---
+
+## 💬 用户反馈洞察
+
+### 互动数据解读
+
+| 指标 | 数值 | 基准比 | 数据含义 |
+| --- | --- | ----- | ----- |
+| 点赞 | X | 100% | 基础认可度 |
+| 评论 | X | X% | 低/中/高，说明什么 |
+| 分享 | X | X% | 超高/正常/低分享率 |
+
+### 用户行为推断
+
+**① 评论反映的真实需求**
+```
+✓ 需求1
+✓ 需求2
+```
+
+### 用户潜在关注点
+
+| 关注维度 | 推测热点问题 | 优先级 |
+|---------|-------------| ------ |
+
+---
+
+## 🔥 爆款逻辑推断
+
+- 标题：暗示了___痛点/欲望
+- 评论：反映___真实需求
+- 互动数据：透露___信息
+
+---
+
+## 📝 翻拍框架（基于推断的逻辑）
+
+| 维度 | 内容 |
+|-----|-----|
+| **核心卖点定位** | |
+| **开场模式** | |
+| **信任建立路径** | |
+| **转化节奏** | |
+
+---
+*拆解完毕*"""
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://viralx.local",
+                "X-Title": "ViralX"
+            }
+            payload = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 8192,
+                "temperature": 0.7
+            }
+            resp = requests.post(
+                f"{self.BASE_URL}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=120
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            else:
+                return f"分析失败: {resp.status_code} {resp.text[:100]}"
+        except Exception as e:
+            return f"分析失败: {str(e)[:100]}"
+
+
 class GeminiAnalyzer:
     """Gemini 多模态分析器（支持视频 + 文本）"""
 
@@ -116,62 +460,156 @@ class GeminiAnalyzer:
         """用 Gemini 分析视频 + 文本数据"""
         video_id = video_data.get('video_id', '')
 
-        # 构建文本 metadata
         metadata_text = self._build_metadata_text(video_data)
 
         try:
             if video_file_path and os.path.exists(video_file_path):
-                # 视频 + 文本多模态分析
                 print(f"[Gemini 多模态分析] {video_id}...")
                 uploaded_file = self.client.files.upload(file=video_file_path)
-                # 等待上传完成
                 while uploaded_file.state.name == "PROCESSING":
                     time.sleep(2)
                     uploaded_file = self.client.files.get(name=uploaded_file.name)
 
-                prompt = f"""你是一位资深TikTok电商短视频拆解专家。
+                prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
 
 === 视频数据 ===
 {metadata_text}
 
-=== 任务 ===
+=== 你的任务 ===
 1. 仔细观看这个TikTok视频
-2. 结合视频画面内容和上述数据，进行深度电商拆解
-3. 输出可执行的翻拍脚本
+2. 不要复述画面内容（用户自己有眼睛），重点分析为什么能爆
+3. 输出结构化深度拆解报告
 
 请严格按照以下格式输出 Markdown：
 
 ## 🎯 核心卖点
-（基于视频实际画面提炼，禁止编造）
 
-## 🎬 视听语言分析
-（逐秒描述视频实际内容：画面、声音、字幕、节奏等）
+| 卖点层级 | 具体内容 | 呈现方式 |
+|---------|---------|---------|
+| **痛点解决** | （视频解决了什么痛点） | （如何呈现的：文字/画面/配音） |
+| **核心优势** | （产品最大卖点是什么） | （用了什么词/表达方式） |
+| **价值感知** | （让用户觉得值在哪） | （如何传达性价比） |
+| **效果承诺** | （使用后的美好结果） | （如何可视化呈现） |
+| **购买便利** | （如何引导购买） | （链接/话术等） |
+| **信任建立** | （如何让人相信） | （品牌背书/测评/展示等） |
+
+### 卖点提炼技巧
+- （总结2-3个最核心的卖点表达技巧，用**强调**标注关键词）
+
+---
+
+## 🎬 视听语言
+
+### 标题语言结构
+
+```
+（用箭头图展示标题的结构层次）
+```
+
+### 标签策略分析
+
+| 标签类型 | 数量 | 具体标签 | 覆盖人群 |
+| ---- | --- | ----- | ----- |
+| 平台电商 | X个 | #XXX #XXX | XXX用户 |
+| 产品品类 | X个 | #XXX #XXX | XXX用户 |
+| 生活方式 | X个 | #XXX #XXX | XXX用户 |
+| 内容类型 | X个 | #XXX #XXX | XXX用户 |
+| 价格敏感 | X个 | #XXX | XXX用户 |
+
+**标签特点**：精准垂直，覆盖"搜索-种草-购买"全链路
+
+---
 
 ## 💬 用户反馈洞察
-（结合评论数据分析用户关注点）
 
-## 📝 翻拍脚本（时间轴必须与视频实际时长一致）
-（根据实际视频时长设计对应的叙事结构，不要超出视频实际长度）
+### 互动数据解读
 
-【4大转化钩子】（根据视频实际情况判断）：
-1. 复购声明
-2. 口语自我纠正
-3. 价格悬念
-4. 身份标签
+| 指标 | 数值 | 基准比 | 数据含义 |
+| --- | --- | ----- | ----- |
+| 点赞 | X | 100% | 基础认可度 |
+| 评论 | X | X% | 低/中/高，说明什么 |
+| 分享 | X | X% | 超高/正常/低分享率 |
 
-【推荐钩子】：本视频使用了哪种钩子？裂变版本建议用哪种？"""
+### 用户行为推断
+
+**① 评论反映的真实需求**
+```
+✓ 需求1
+✓ 需求2
+```
+
+**② 分享驱动因素**（如果有高分享率）
+```
+📌 驱动1
+```
+
+### 用户潜在关注点
+
+| 关注维度 | 推测热点问题 | 优先级 |
+|---------|-------------| ------ |
+
+---
+
+## 📝 翻拍脚本
+
+### 版本一：产品展示型（{video_data.get('duration', 'X')}秒）
+
+```
+【开场钩子 - 0:00-0:0X】
+画面：（描述）
+配音：（暗示什么情绪/痛点）
+
+【痛点引入 - 0:0X-0:0X】
+画面：
+配音：
+
+【解决方案 - 0:0X-0:0X】
+画面：
+配音：
+
+【卖点轰炸 - 0:0X-0:0X】
+画面：
+配音/字幕：（核心卖点）
+
+【效果展示 - 0:0X-0:0X】
+画面：（如何展示效果）
+
+【购买引导 - 0:0X-0:XX】
+画面：
+文字：
+```
+
+### 版本二：对比测评型（X秒）
+（类似结构）
+
+### 版本三：情绪共鸣型（15秒快剪）
+（类似结构）
+
+---
+
+## 📊 拆解总结
+
+| 维度 | 核心发现 | 可复用技巧 |
+|-----|---------|-----------|
+| **卖点** | | |
+| **语言** | | |
+| **标签** | | |
+| **数据** | | |
+| **洞察** | | |
+
+---
+*拆解完毕*"""
 
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=[uploaded_file, prompt],
                     config={
                         "temperature": 0.7,
-                        "max_output_tokens": 4096,
+                        "max_output_tokens": 8192,
                     }
                 )
                 result = response.text.strip() if hasattr(response, 'text') and response.text else "分析结果为空"
 
-                # 清理上传的文件
                 try:
                     self.client.files.delete(name=uploaded_file.name)
                 except Exception:
@@ -179,7 +617,6 @@ class GeminiAnalyzer:
 
                 return result
             else:
-                # 纯文本分析（fallback）
                 return self._analyze_text_only(video_data)
 
         except Exception as e:
@@ -205,33 +642,85 @@ class GeminiAnalyzer:
 
     def _analyze_text_only(self, video_data: dict) -> str:
         """纯文本分析（无视频文件时）"""
-        prompt = f"""你是一位资深TikTok电商短视频拆解专家。
+        prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
 
 {self._build_metadata_text(video_data)}
 
-=== 任务 ===
-基于以上数据进行分析，只能分析数据中提供的内容，不要编造视频画面。
+=== 你的任务 ===
+基于以上数据进行分析，只能分析数据中提供的内容：
+- 不要编造视频画面
+- 不要逐秒描述画面（用户有眼睛）
+- 重点分析：为什么这个视频能爆？它做对了什么？
+- 输出结构化深度拆解报告
 
 请用 Markdown 格式输出：
 
 ## 🎯 核心卖点
-（基于标题和评论关键词提炼）
 
-## 🎬 拆解分析
-（基于互动数据分析）
+| 卖点层级 | 具体内容 | 呈现方式 |
+|---------|---------|---------|
+| **痛点解决** | （从标题/评论推断） | （如何呈现） |
+| **核心优势** | （最大卖点） | （用了什么词） |
+| **价值感知** | （值在哪） | （如何传达） |
+| **效果承诺** | （使用结果） | （如何可视化） |
+| **购买便利** | （如何引导） | （话术） |
+| **信任建立** | （如何让人信） | （背书/展示） |
 
-## 📝 翻拍脚本
-（根据视频时长设计对应叙事结构）
+### 卖点提炼技巧
+- （总结2-3个核心表达技巧）
 
-【4大转化钩子】：从「复购声明」「口语自我纠正」「价格悬念」「身份标签」中选择适用的。
+---
 
-【推荐钩子】"""
+## 💬 用户反馈洞察
+
+### 互动数据解读
+
+| 指标 | 数值 | 基准比 | 数据含义 |
+| --- | --- | ----- | ----- |
+| 点赞 | X | 100% | 基础认可度 |
+| 评论 | X | X% | 低/中/高，说明什么 |
+| 分享 | X | X% | 超高/正常/低分享率 |
+
+### 用户行为推断
+
+**① 评论反映的真实需求**
+```
+✓ 需求1
+✓ 需求2
+```
+
+### 用户潜在关注点
+
+| 关注维度 | 推测热点问题 | 优先级 |
+|---------|-------------| ------ |
+
+---
+
+## 🔥 爆款逻辑推断
+
+- 标题：暗示了___痛点/欲望
+- 评论：反映___真实需求
+- 互动数据：透露___信息
+
+---
+
+## 📝 翻拍框架（基于推断的逻辑）
+
+| 维度 | 内容 |
+|-----|-----|
+| **核心卖点定位** | |
+| **开场模式** | |
+| **信任建立路径** | |
+| **转化节奏** | |
+
+---
+*拆解完毕*"""
 
         try:
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=prompt,
-                config={"temperature": 0.7, "max_output_tokens": 2048}
+                config={"temperature": 0.7, "max_output_tokens": 8192}
             )
             return response.text.strip() if hasattr(response, 'text') and response.text else "分析结果为空"
         except Exception as e:
@@ -239,7 +728,7 @@ class GeminiAnalyzer:
 
 
 class MiniMaxAnalyzer:
-    """MiniMax 纯文本分析器（原有逻辑）"""
+    """MiniMax 纯文本分析器"""
 
     def __init__(self, api_key: str = "", base_url: str = None, model: str = None):
         config = load_config()
@@ -264,30 +753,17 @@ class MiniMaxAnalyzer:
             has_comments = True
 
         if has_comments:
-            analysis_type_label = "基于真实评论分析：用户关注点、痛点、转化信号"
             comments_block = f"高赞用户评论：\n{comments_text}"
         else:
-            analysis_type_label = "基于互动数据推断：用户可能关注的点、潜在痛点"
-            comments_block = ""
+            comments_block = "（无评论数据）"
 
-        if duration > 0:
-            if duration <= 15:
-                segment_hint = f"【视频时长 {duration} 秒】极短视频，只需分析：Hook（前{duration}s）+ Demo（展示产品/效果）+ CTA（引导行动）。"
-            elif duration <= 30:
-                segment_hint = f"【视频时长 {duration} 秒】短视频，建议分析：Hook + Pain/Solution + Demo + CTA。"
-            elif duration <= 60:
-                segment_hint = f"【视频时长 {duration} 秒】中等视频，分析：Hook + Pain + Solution + Demo + Trust + CTA。"
-            else:
-                segment_hint = f"【视频时长 {duration} 秒】长视频，可完整分析9段叙事。"
-        else:
-            segment_hint = "【视频时长未知】请根据视频内容推断时长。"
-
-        return f"""角色设定：你是资深TikTok电商短视频拆解专家，熟悉平台算法推荐机制和用户心理路径。
+        return f"""角色设定：你是资深TikTok电商短视频拆解专家，擅长深度结构化分析。
 
 重要规则：
 1. 只分析视频资料中提供的数据，禁止编造视频画面、台词、或时长。
-2. 如果某项数据未提供（如评论为空），请明确说明「数据不足，无法分析」。
-3. 脚本时间轴必须与视频实际时长一致，不得超出。
+2. 不要逐秒描述画面（用户有眼睛），重点分析：为什么能爆？
+3. 如果某项数据未提供（如评论为空），请明确说明「数据不足，无法分析」。
+4. 输出结构化深度拆解报告。
 
 === 视频数据 ===
 标题: {video_data.get('title', '') or '（无标题）'}
@@ -300,63 +776,120 @@ class MiniMaxAnalyzer:
 
 {comments_block}
 
-{segment_hint}
-
 === 输出要求 ===
 
 ## 🎯 核心卖点
-（仅基于标题和评论中反复出现的关键词提炼）
 
-## 🎬 拆解分析
-（{analysis_type_label}）
+| 卖点层级 | 具体内容 | 呈现方式 |
+|---------|---------|---------|
+| **痛点解决** | （从标题/评论推断） | （如何呈现） |
+| **核心优势** | （最大卖点） | （用了什么词） |
+| **价值感知** | （值在哪） | （如何传达） |
+| **效果承诺** | （使用结果） | （如何可视化） |
+| **购买便利** | （如何引导） | （话术） |
+| **信任建立** | （如何让人信） | （背书/展示） |
 
-## 📝 翻拍脚本（动态时间轴）
+### 卖点提炼技巧
+- （总结2-3个核心表达技巧）
 
-{segment_hint}
+---
 
-【4大转化钩子】（出现频率>70%）：
-1. 复购声明：「这是我第三次买了」
-2. 口语自我纠正：说到一半纠正自己
-3. 价格悬念：Demo和Trust之后才亮价格
-4. 身份标签：「As a busy mom」
+## 💬 用户反馈洞察
 
-【推荐钩子】：本视频使用了哪种钩子？裂变版本建议用哪种？
+### 互动数据解读
 
-**注意**：脚本表格的时间轴总长不得超过视频实际时长。"""
+| 指标 | 数值 | 基准比 | 数据含义 |
+| --- | --- | ----- | ----- |
+| 点赞 | X | 100% | 基础认可度 |
+| 评论 | X | X% | 低/中/高，说明什么 |
+| 分享 | X | X% | 超高/正常/低分享率 |
+
+### 用户行为推断
+
+**① 评论反映的真实需求** {"" if has_comments else "（无评论数据）"}
+```
+{comments_text if has_comments else "（无评论数据）"}
+```
+
+### 用户潜在关注点
+
+| 关注维度 | 推测热点问题 | 优先级 |
+|---------|-------------| ------ |
+
+---
+
+## 🔥 爆款逻辑推断
+
+- 标题：暗示了___痛点/欲望
+- 评论：反映___真实需求
+- 互动数据：透露___信息
+
+---
+
+## 📝 翻拍框架（基于推断的逻辑）
+
+| 维度 | 内容 |
+|-----|-----|
+| **核心卖点定位** | |
+| **开场模式** | |
+| **信任建立路径** | |
+| **转化节奏** | |
+
+---
+*拆解完毕*"""
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config={"temperature": 0.7, "max_output_tokens": 8192}
+            )
+            return response.text.strip() if hasattr(response, 'text') and response.text else "分析结果为空"
+        except Exception as e:
+            return f"分析失败: {str(e)[:100]}"
 
 
 class AIAnalyzer:
-    """统一分析器：优先 Gemini（多模态），fallback MiniMax（纯文本）"""
+    """统一分析器：支持 Gemini 多模态 / OpenRouter 免费模型"""
 
     _cache = None
     MAX_CONCURRENT = 5
     REQUEST_TIMEOUT = 120
-    USE_GEMINI = True  # 是否优先使用 Gemini
 
-    def __init__(self, api_key: str = "", base_url: str = None, model: str = None):
+    def __init__(self, api_key: str = "", base_url: str = None, model: str = None, analysis_mode: str = 'gemini', openrouter_api_key: str = '', openrouter_model: str = ''):
         config = load_config()
 
         self.api_key = api_key or config.get('minimax_api_key', '')
         self.base_url = base_url or config.get('minimax_base_url', 'https://api.minimaxi.com/anthropic')
         self.model = model or config.get('minimax_model', 'MiniMax-M2.7')
+        self.analysis_mode = analysis_mode or config.get('analysis_mode', 'gemini')
+        self.openrouter_api_key = openrouter_api_key or config.get('openrouter_api_key', '')
+        self.openrouter_model = openrouter_model or config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')
 
         self.gemini_key = config.get('gemini_api_key', '')
         self.gemini_model = config.get('gemini_model', 'gemini-2.5-flash')
-        self.use_gemini = self.USE_GEMINI and bool(self.gemini_key)
+        self.use_gemini = self.analysis_mode == 'gemini' and bool(self.gemini_key)
+        self.use_openrouter = self.analysis_mode == 'openrouter' and bool(self.openrouter_api_key)
 
         if self.use_gemini:
             self.gemini = GeminiAnalyzer(api_key=self.gemini_key, model=self.gemini_model)
-            print(f"[AIAnalyzer] 使用 Gemini 多模态分析 ({self.gemini_model})")
+            print(f"[AIAnalyzer] 模式1: Gemini 多模态分析 ({self.gemini_model})")
         else:
             self.gemini = None
-            os.environ["ANTHROPIC_BASE_URL"] = self.base_url
-            os.environ["ANTHROPIC_API_KEY"] = self.api_key
-            self.client = anthropic.Anthropic(
-                api_key=self.api_key,
-                base_url=self.base_url,
-                timeout=self.REQUEST_TIMEOUT,
-            )
-            print(f"[AIAnalyzer] 使用 MiniMax 纯文本分析 ({self.model})")
+
+        if self.use_openrouter:
+            self.openrouter = OpenRouterAnalyzer(api_key=self.openrouter_api_key, model=self.openrouter_model)
+            print(f"[AIAnalyzer] 模式2: OpenRouter ({self.openrouter_model})")
+        else:
+            self.openrouter = None
+
+        os.environ["ANTHROPIC_BASE_URL"] = self.base_url
+        os.environ["ANTHROPIC_API_KEY"] = self.api_key
+        self.client = anthropic.Anthropic(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=self.REQUEST_TIMEOUT,
+        )
 
         if AIAnalyzer._cache is None:
             AIAnalyzer._cache = AICache()
@@ -378,35 +911,31 @@ class AIAnalyzer:
                     text += block.thinking
         return text.strip()
 
-    def analyze_video_script(self, video_data: dict, video_url: str = None, use_cache: bool = True) -> str:
-        """分析视频：优先下载视频用 Gemini 分析，否则用 MiniMax"""
+    def analyze_video_script(self, video_data: dict, video_url: str = None, use_cache: bool = False) -> str:
+        """分析视频：根据模式选择 Gemini 或 OpenRouter"""
         video_id = video_data.get('video_id', '')
-
-        if use_cache:
-            cached = self.cache.get(video_id, "video_script")
-            if cached:
-                print(f"[缓存命中] {video_id[:20]}...")
-                return f"[缓存] {cached}"
-
         video_file_path = None
 
         if self.use_gemini and video_url:
-            # 下载视频
             video_file_path = self.gemini.downloader.download(video_url, video_id)
             if video_file_path:
-                # Gemini 多模态分析
                 result = self.gemini.analyze(video_data, video_file_path)
                 if "失败" not in result:
-                    self.cache.set(video_id, result, "video_script")
                     return result
                 print(f"[Gemini 失败，fallback] {result[:100]}")
 
-        # MiniMax fallback
+        elif self.use_openrouter and video_url:
+            video_file_path = self.openrouter.downloader.download(video_url, video_id)
+            if video_file_path:
+                result = self.openrouter.analyze(video_data, video_file_path)
+                if "失败" not in result:
+                    return result
+                print(f"[OpenRouter 失败，fallback] {result[:100]}")
+
         return self._analyze_minimax(video_data)
 
     def _analyze_minimax(self, video_data: dict) -> str:
         """MiniMax 纯文本分析"""
-        video_id = video_data.get('video_id', '')
         analyzer = MiniMaxAnalyzer(self.api_key, self.base_url, self.model)
         prompt = analyzer._build_prompt(video_data)
 
@@ -419,14 +948,12 @@ class AIAnalyzer:
             )
             text = self._extract_text(msg)
             result = text if text else "分析结果为空"
-            if result != "分析结果为空":
-                self.cache.set(video_id, result, "video_script")
             return result
         except Exception as e:
             return f"分析失败: {str(e)[:100]}"
 
-    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None):
-        """并发分析多个视频，流式返回"""
+    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = ''):
+        """并发分析多个视频，视频分析并发，复刻脚本串行生成"""
         def hot_score(v):
             return v.get('likes', 0) * 1 + v.get('comments', 0) * 5 + v.get('shares', 0) * 2
 
@@ -435,30 +962,45 @@ class AIAnalyzer:
 
         with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT) as executor:
             future_to_video = {
-                executor.submit(self._analyze_safe, v, urls.get(v['video_id'])): v
+                executor.submit(self._analyze_video_only, v, urls.get(v['video_id'])): v
                 for v in sorted_videos
             }
             for future in as_completed(future_to_video):
                 video = future_to_video[future]
                 try:
                     result = future.result()
-                    yield {**video, 'ai_analysis': result}
-                except Exception as e:
-                    yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}"}
+                    analysis = result['analysis']
+                    remake_script = ''
 
-    def _analyze_safe(self, video: dict, video_url: str = None) -> str:
-        return self.analyze_video_script(video, video_url=video_url, use_cache=True)
+                    if product_name and product_info and analysis and '分析异常' not in analysis:
+                        remake_script = self._generate_remake_with_retry(video, analysis, product_name, product_info)
+
+                    yield {**video, 'ai_analysis': analysis, 'remake_script': remake_script}
+                except Exception as e:
+                    yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}", 'remake_script': ''}
+
+    def _analyze_video_only(self, video: dict, video_url: str = None) -> dict:
+        """仅分析视频，不生成复刻脚本"""
+        analysis = self.analyze_video_script(video, video_url=video_url, use_cache=False)
+        return {'analysis': analysis}
+
+    def _generate_remake_with_retry(self, video: dict, analysis: str, product_name: str, product_info: str, max_retries: int = 3) -> str:
+        """带重试的复刻脚本生成"""
+        for attempt in range(max_retries):
+            result = self.generate_remake_script(video, analysis, product_name, product_info)
+            if '429' not in result and 'RESOURCE_EXHAUSTED' not in result:
+                return result
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 5
+                print(f"[限速等待] {wait_time}秒后重试...")
+                time.sleep(wait_time)
+        return result
 
     def batch_analyze(self, videos: list, max_videos: int = 5) -> list:
         return list(self.batch_analyze_streaming(videos, max_videos))
 
     def generate_viral_variants(self, video_data: dict, original_analysis: str) -> str:
         """用 MiniMax 生成裂变变体"""
-        video_id = video_data.get('video_id', '')
-        cached = self.cache.get(video_id, "variants")
-        if cached:
-            return f"[缓存] {cached}"
-
         prompt = f"""角色设定：你是资深 TikTok 电商短视频裂变策划专家。
 
 === 原始视频信息 ===
@@ -481,8 +1023,60 @@ class AIAnalyzer:
             )
             text = self._extract_text(msg)
             result = text.strip() if text else "裂变脚本生成结果为空"
-            if "失败" not in result:
-                self.cache.set(video_id, result, "variants")
             return result
         except Exception as e:
             return f"裂变脚本生成失败: {str(e)[:100]}"
+
+    def generate_remake_script(self, video_data: dict, original_analysis: str, product_name: str, product_info: str) -> str:
+        """基于爆款视频分析和产品信息，生成复刻脚本（不使用缓存）"""
+        duration = video_data.get('duration', 0)
+        prompt = f"""角色设定：你是资深TikTok电商短视频编剧，擅长将爆款视频的成功逻辑应用到不同产品上。
+
+=== 爆款视频分析 ===
+{original_analysis}
+
+=== 目标产品 ===
+产品名称: {product_name}
+产品卖点:
+{product_info}
+
+=== 任务 ===
+1. 分析这个产品的核心卖点，找出与爆款视频成功逻辑的结合点
+2. 保留爆款视频的结构框架（开场方式、信任建立方式、转化节奏），但替换成你的产品
+3. 写出一个完整的复刻脚本
+
+请严格按照以下格式输出 Markdown：
+
+## 🎯 产品适配分析
+（分析爆款逻辑如何应用到你的产品，有哪些优势可以放大，哪些需要调整）
+
+## 📹 复刻脚本
+【时长】{duration}秒
+
+【开场】（前3秒：如何抓住注意力，与原视频开场逻辑类似但换成本产品）
+- 画面：
+- 台词：
+
+【信任建立】（中间部分，如何让人相信你的产品）
+- 画面：
+- 台词：
+
+【转化收割】（最后部分，如何推动购买决策）
+- 画面：
+- 台词：
+
+## 💡 注意事项
+（翻拍时需要注意的要点、可能踩的坑）"""
+
+        try:
+            msg = self.client.messages.create(
+                model=self.model,
+                max_tokens=8192,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            text = self._extract_text(msg)
+            result = text.strip() if text else "生成结果为空"
+            return result
+        except Exception as e:
+            return f"复刻脚本生成失败: {str(e)[:100]}"

@@ -91,6 +91,56 @@
             border-color: #4a4a4a;
         }
 
+        .product-section {
+            margin-bottom: 20px;
+        }
+
+        .product-section label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .product-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .product-input:focus {
+            outline: none;
+            border-color: #5a5a5a;
+            background: #333;
+        }
+
+        .product-textarea {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #e0e0e0;
+            font-size: 13px;
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .product-textarea:focus {
+            outline: none;
+            border-color: #5a5a5a;
+            background: #333;
+        }
+
         .buttons {
             display: flex;
             gap: 8px;
@@ -125,6 +175,21 @@
 
         .btn-secondary:hover {
             background: #333;
+        }
+
+        .remake-script {
+            margin-top: 16px;
+            padding: 16px;
+            background: #1a2a1a;
+            border: 1px solid #2a4a2a;
+            border-radius: 6px;
+        }
+
+        .remake-script h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #6fcf6f;
+            margin-bottom: 12px;
         }
 
         .main {
@@ -415,6 +480,16 @@
             <input type="text" id="keyword" class="search-input" placeholder="输入关键词..." value="outdoor lighting lamp">
         </div>
 
+        <div class="product-section">
+            <label>复刻产品名称</label>
+            <input type="text" id="product-name" class="product-input" placeholder="例如：便携式露营灯">
+        </div>
+
+        <div class="product-section">
+            <label>产品卖点（AI会润色）</label>
+            <textarea id="product-info" class="product-textarea" placeholder="输入产品的主要卖点、特点、优势..."></textarea>
+        </div>
+
         <div class="keywords-section">
             <label>缓存关键词</label>
             <div id="keywords-list"></div>
@@ -514,6 +589,8 @@
 
         async function analyze(refresh = false) {
             const keyword = document.getElementById('keyword').value;
+            const productName = document.getElementById('product-name').value;
+            const productInfo = document.getElementById('product-info').value;
             const loading = document.getElementById('loading');
             const results = document.getElementById('results');
             const error = document.getElementById('error');
@@ -540,7 +617,7 @@
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keyword, refresh })
+                    body: JSON.stringify({ keyword, refresh, product_name: productName, product_info: productInfo })
                 });
 
                 // 读取为文本，按 \n 分割，每行单独解析
@@ -570,10 +647,12 @@
                             const videoUrl = `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
                             const vidx = allVideos.length;
                             const analysisId = `analysis-${Date.now()}-${vidx}`;
+                            const remakeId = `remake-${Date.now()}-${vidx}`;
 
                             const card = document.createElement('div');
                             card.className = 'video-card';
-                            card.innerHTML = `
+
+                            let cardHtml = `
                                 <div class="video-title" onclick="window.open('${videoUrl}', '_blank')">
                                     ${vidx+1}. ${(video.title||'无标题').substring(0, 70)}
                                 </div>
@@ -583,9 +662,21 @@
                                     <div class="stat"><div class="stat-label">评论</div><div class="stat-value">${((video.comments||0)/1000).toFixed(1)}k</div></div>
                                     <div class="stat"><div class="stat-label">分享</div><div class="stat-value">${((video.shares||0)/1000).toFixed(1)}k</div></div>
                                 </div>
-                                <button class="analysis-btn" onclick="showAnalysis('${analysisId}')">查看 AI 深度拆解</button>
+                                <button class="analysis-btn" onclick="showAnalysis('${analysisId}')">🎯 查看爆款分析</button>
                                 <div id="${analysisId}" style="display:none;">${video.ai_analysis||''}</div>
                             `;
+
+                            if (video.remake_script) {
+                                cardHtml += `
+                                    <div class="remake-script">
+                                        <h4>📹 复刻脚本（基于你的产品）</h4>
+                                        <button class="analysis-btn" onclick="showAnalysis('${remakeId}')">查看完整复刻脚本</button>
+                                        <div id="${remakeId}" style="display:none;">${video.remake_script||''}</div>
+                                    </div>
+                                `;
+                            }
+
+                            card.innerHTML = cardHtml;
                             streamContainer.appendChild(card);
                             allVideos.push(video);
                         } else if (data.done || data.status === 'success') {
