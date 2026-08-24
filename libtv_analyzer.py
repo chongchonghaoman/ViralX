@@ -184,7 +184,14 @@ class LibTVAnalyzer:
         self.skill_dir = skill_dir or (
             Path(__file__).parent / ".agents" / "skills" / "libtv-skill"
         )
-        self.scripts_dir = self.skill_dir / "scripts"
+        configured_scripts_dir = os.environ.get("VIRALX_LIBTV_SCRIPTS_DIR", "")
+        self.scripts_dir = (
+            self.skill_dir / "scripts"
+            if skill_dir is not None
+            else Path(configured_scripts_dir)
+            if configured_scripts_dir
+            else self.skill_dir / "scripts"
+        )
         self._runner = runner
         self._sleep = sleeper
         self._clock = clock

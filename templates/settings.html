@@ -1,510 +1,264 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>设置 - ViralX</title>
-    <link rel="icon" href="data:,">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #0f0f0f;
-            color: #e0e0e0;
-            display: flex;
-            height: 100vh;
-        }
-
-        .sidebar {
-            width: 280px;
-            background: #1a1a1a;
-            border-right: 1px solid #2a2a2a;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .logo {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 32px;
-            color: #fff;
-        }
-
-        .nav-item {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-            text-decoration: none;
-            color: #e0e0e0;
-            display: block;
-        }
-
-        .nav-item:hover {
-            background: #2a2a2a;
-        }
-
-        .nav-item.active {
-            background: #333;
-            color: #fff;
-        }
-
-        .nav-item.settings {
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-        }
-
-        .main-content {
-            flex: 1;
-            padding: 32px;
-            overflow-y: auto;
-        }
-
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 32px;
-            color: #fff;
-        }
-
-        .section {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .section h2 {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: #fff;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            color: #888;
-            margin-bottom: 8px;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            padding: 12px;
-            color: #e0e0e0;
-            font-size: 14px;
-            font-family: monospace;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #5a5a5a;
-        }
-
-        .form-group input[type="number"] {
-            font-family: monospace;
-        }
-
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .form-group small {
-            display: block;
-            margin-top: 6px;
-            color: #666;
-            font-size: 12px;
-        }
-
-        .keywords-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .keyword-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 20px;
-            font-size: 13px;
-        }
-
-        .keyword-tag .remove {
-            cursor: pointer;
-            color: #888;
-            font-size: 16px;
-            line-height: 1;
-        }
-
-        .keyword-tag .remove:hover {
-            color: #ff6b6b;
-        }
-
-        .add-keyword {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .add-keyword input {
-            flex: 1;
-            margin: 0;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border-radius: 6px;
-            border: none;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: #5a5a5a;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: #6a6a6a;
-        }
-
-        .btn-secondary {
-            background: #2a2a2a;
-            color: #e0e0e0;
-            border: 1px solid #3a3a3a;
-        }
-
-        .btn-secondary:hover {
-            background: #333;
-        }
-
-        .btn-save {
-            background: #4a9eff;
-            color: #fff;
-            padding: 12px 32px;
-            font-size: 15px;
-        }
-
-        .btn-save:hover {
-            background: #5aafff;
-        }
-
-        .btn-save:disabled {
-            background: #3a3a3a;
-            color: #666;
-            cursor: not-allowed;
-        }
-
-        .status {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-        }
-
-        .status.success {
-            background: rgba(74, 222, 128, 0.15);
-            border: 1px solid rgba(74, 222, 128, 0.3);
-            color: #4ade80;
-            display: block;
-        }
-
-        .status.error {
-            background: rgba(255, 107, 107, 0.15);
-            border: 1px solid rgba(255, 107, 107, 0.3);
-            color: #ff6b6b;
-            display: block;
-        }
-
-        .actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .api-status {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .api-status.success { background: #4ade80; }
-        .api-status.error { background: #ff6b6b; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#EDEDED">
+  <title>ViralX · 设置</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='settings.js') }}"></script>
 </head>
-<body>
-    <div class="sidebar">
-        <div class="logo">ViralX</div>
-        <a href="/" class="nav-item">分析</a>
-        <a href="/settings" class="nav-item settings active">设置</a>
+<body class="settings-page">
+  <a class="skip-link" href="#settings-form">跳到设置表单</a>
+
+  <header class="site-header settings-header-nav" data-motion="nav">
+    <div class="nav-shell">
+      <div class="nav-primary">
+        <a class="brand" href="/" aria-label="ViralX 首页">
+          <span class="brand__spark" aria-hidden="true"></span>
+          <span>ViralX</span>
+        </a>
+        <nav class="desktop-nav" aria-label="主导航">
+          <a href="#runtime">运行模式</a>
+          <a href="#tk-note">TK Note</a>
+          <a href="#libtv">LibTV</a>
+          <a href="#models">模型</a>
+        </nav>
+      </div>
+      <div class="nav-actions">
+        <a class="nav-secondary" href="/">分析页</a>
+        <a class="nav-cta" href="/">返回拉片</a>
+        <a class="mobile-settings" href="/" aria-label="返回拉片">←</a>
+      </div>
     </div>
+  </header>
 
-    <div class="main-content">
-        <h1>设置</h1>
+  <main class="settings-main" id="main-content">
+    <header class="settings-hero" data-motion="reveal">
+      <p class="section-label">系统配置 · VIRALX</p>
+      <h1>把分析链，<br>配置清楚。</h1>
+      <p>ViralX 默认走 TK Note 证据采集与 LibTV 一键拉片。密钥和本地目录只保存在当前运行环境。</p>
+    </header>
 
-        <form id="settings-form" onsubmit="event.preventDefault(); saveSettings();">
-        <div id="status" class="status"></div>
+    <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
 
-        <div class="section">
-            <h2>TikTok API</h2>
-            <div class="form-group">
-                <label>RapidAPI Key</label>
-                <input type="password" id="rapidapi_key" placeholder="输入 RapidAPI Key">
-                <small>用于调用 TikTok API（RapidAPI 平台）</small>
+    <div class="settings-layout">
+      <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
+        <a href="#runtime">运行模式</a>
+        <a href="#tk-note">TK Note</a>
+        <a href="#libtv">LibTV</a>
+        <a href="#models">备用模型</a>
+        <a href="#topics">搜索主题</a>
+      </nav>
+
+      <form class="settings-form" id="settings-form" novalidate>
+        <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
+
+        <section class="settings-section" id="runtime" data-motion="reveal">
+          <div class="settings-section__head">
+            <span>01</span>
+            <div><h2>运行模式</h2><p>决定新任务默认走哪条分析链，以及关键词检索的最低热度。</p></div>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-field">
+              <label for="analysis_mode">默认分析模式</label>
+              <select id="analysis_mode">
+                <option value="libtv">LibTV 一键拉片</option>
+                <option value="gemini">Gemini 多模态分析</option>
+                <option value="openrouter">OpenRouter 免费模型</option>
+              </select>
+              <small class="field-note">LibTV 是主链；另外两种模式用于兼容。</small>
             </div>
+            <div class="settings-field">
+              <label for="min_likes">关键词检索最低点赞数</label>
+              <input type="number" id="min_likes" min="0" step="100" placeholder="5000">
+              <small class="field-note">直接视频链接不受这个阈值影响。</small>
+            </div>
+            <div class="settings-field">
+              <label for="rapidapi_key">RapidAPI Key</label>
+              <input type="password" id="rapidapi_key" autocomplete="off" placeholder="用于关键词检索">
+              <small class="field-note">仅关键词搜索需要。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="output_dir">分析输出目录</label>
+              <input type="text" id="output_dir" data-mono="true" placeholder="./data">
+              <small class="field-note">报告、缓存与导出前的本地工作目录。</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" id="tk-note" data-motion="reveal">
+          <div class="settings-section__head">
+            <span>02</span>
+            <div><h2>TK Note 采集层</h2><p>管理 TikTok 下载、字幕、ASR、Cookie 与证据复用策略。</p></div>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-field">
+              <label for="tk_note_asr_backend">字幕 / ASR 策略</label>
+              <select id="tk_note_asr_backend">
+                <option value="auto">字幕优先，ASR 兜底</option>
+                <option value="none">只下载与字幕</option>
+                <option value="qwen3-asr">固定 Qwen3-ASR</option>
+                <option value="whisper">固定 Whisper</option>
+              </select>
+              <small class="field-note">自动模式优先复用已有字幕与转写。</small>
+            </div>
+            <div class="settings-field">
+              <label for="tk_note_language">转写语言</label>
+              <input type="text" id="tk_note_language" placeholder="auto">
+              <small class="field-note">可填 Chinese、English、ja 等后端支持值。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="tk_note_cookies_from_browser">授权浏览器 Cookie</label>
+              <select id="tk_note_cookies_from_browser">
+                <option value="">不使用</option>
+                <option value="chrome">Chrome</option>
+                <option value="edge">Edge</option>
+                <option value="firefox">Firefox</option>
+                <option value="brave">Brave</option>
+              </select>
+              <small class="field-note">仅在公开视频被登录墙拦截时启用。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="tk_note_proxy">本地代理</label>
+              <input type="password" id="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
+              <small class="field-note">代理凭据不会写入视频资产或日志。</small>
+            </div>
+            <div class="settings-field">
+              <label for="tk_note_timeout">单条采集等待上限</label>
+              <input type="number" id="tk_note_timeout" min="120" max="7200" step="60" placeholder="1800">
+              <small class="field-note">单位为秒；长视频可适当提高。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="video_cache_dir">证据缓存目录</label>
+              <input type="text" id="video_cache_dir" data-mono="true" placeholder="./video_cache">
+              <small class="field-note">保存原片、元数据、转写和资产清单。</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" id="libtv" data-motion="reveal">
+          <div class="settings-section__head">
+            <span>03</span>
+            <div><h2>LibTV 一键拉片</h2><p>上传原视频、创建会话、轮询报告，并保留项目画布。</p></div>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-field settings-field--wide">
+              <label for="libtv_access_key">LibTV Access Key</label>
+              <input type="password" id="libtv_access_key" autocomplete="off" placeholder="LIBTV_ACCESS_KEY">
+              <small class="field-note">也可以通过系统环境变量配置。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="libtv_im_base">服务地址</label>
+              <input type="url" id="libtv_im_base" data-mono="true" placeholder="https://im.liblib.tv">
+              <small class="field-note">通常不需要修改。</small>
+            </div>
+            <div class="settings-field">
+              <label for="libtv_poll_interval">轮询间隔</label>
+              <input type="number" id="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
+              <small class="field-note">单位为秒。</small>
+            </div>
+            <div class="settings-field">
+              <label for="libtv_timeout">拉片等待上限</label>
+              <input type="number" id="libtv_timeout" min="30" max="900" step="10" placeholder="180">
+              <small class="field-note">超时后仍保留项目画布入口。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="libtv_concurrency">并发拉片数</label>
+              <input type="number" id="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
+              <small class="field-note">默认 2，避免同一 Key 创建过多会话。</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" id="models" data-motion="reveal">
+          <div class="settings-section__head">
+            <span>04</span>
+            <div><h2>备用模型</h2><p>Gemini 与 OpenRouter 用于兼容分析；MiniMax 用于生成复刻脚本。</p></div>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-field">
+              <label for="gemini_api_key">Gemini API Key</label>
+              <input type="password" id="gemini_api_key" autocomplete="off" placeholder="Google AI Studio API Key">
+              <small class="field-note">仅在 Gemini 模式下使用。</small>
+            </div>
+            <div class="settings-field">
+              <label for="gemini_model">Gemini 模型</label>
+              <input type="text" id="gemini_model" data-mono="true" placeholder="gemini-2.5-flash">
+              <small class="field-note">填写 API 支持的完整模型名。</small>
+            </div>
+            <div class="settings-field">
+              <label for="openrouter_api_key">OpenRouter API Key</label>
+              <input type="password" id="openrouter_api_key" autocomplete="off" placeholder="OpenRouter API Key">
+              <small class="field-note">仅在 OpenRouter 模式下使用。</small>
+            </div>
+            <div class="settings-field">
+              <label for="openrouter_model">OpenRouter 模型</label>
+              <input type="text" id="openrouter_model" data-mono="true" placeholder="model-name:free">
+              <small class="field-note">免费模型可能随平台可用性变化。</small>
+            </div>
+            <div class="settings-field">
+              <label for="minimax_api_key">MiniMax API Key</label>
+              <input type="password" id="minimax_api_key" autocomplete="off" placeholder="MiniMax API Key">
+              <small class="field-note">用于复刻脚本生成。</small>
+            </div>
+            <div class="settings-field" data-local-only>
+              <label for="minimax_base_url">MiniMax Base URL</label>
+              <input type="url" id="minimax_base_url" data-mono="true" placeholder="https://api.minimaxi.com/anthropic">
+              <small class="field-note">兼容 Anthropic 协议的接口地址。</small>
+            </div>
+            <div class="settings-field">
+              <label for="minimax_model">MiniMax 模型</label>
+              <input type="text" id="minimax_model" data-mono="true" placeholder="MiniMax-M2.7">
+              <small class="field-note">填写当前账户可用的模型名。</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" id="topics" data-motion="reveal">
+          <div class="settings-section__head">
+            <span>05</span>
+            <div><h2>搜索主题</h2><p>管理分析页会显示的常用主题；按回车添加。</p></div>
+          </div>
+          <div class="keyword-editor">
+            <div class="keywords-list" id="keywords-list" aria-live="polite"></div>
+            <div class="settings-field">
+              <label for="new-keyword">新主题</label>
+              <input type="text" id="new-keyword" autocomplete="off" placeholder="例如：camping light review">
+              <small class="field-note">输入后按 Enter 添加。</small>
+            </div>
+          </div>
+        </section>
+
+        <div class="settings-actions" data-motion="reveal">
+          <p>保存后，新任务立即使用这组配置。</p>
+          <div>
+            <button class="btn btn-primary" id="save-btn" type="submit">保存设置</button>
+            <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
+            <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
+          </div>
         </div>
-
-        <div class="section">
-            <h2>AI 分析模式</h2>
-            <div class="form-group">
-                <label>选择模式</label>
-                <select id="analysis_mode" style="width:100%;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;padding:12px;color:#e0e0e0;font-size:14px;">
-                    <option value="libtv">默认：LibTV 一键拉片</option>
-                    <option value="gemini">模式1：Gemini 多模态分析</option>
-                    <option value="openrouter">模式2：OpenRouter（免费模型）</option>
-                </select>
-                <small>默认使用 LibTV 上传原视频并执行一键拉片；Gemini 与 OpenRouter 保留为兼容模式。</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>LibTV 一键拉片</h2>
-            <div class="form-group">
-                <label for="libtv_access_key">LibTV Access Key</label>
-                <input type="password" id="libtv_access_key" placeholder="输入 LIBTV_ACCESS_KEY" autocomplete="off">
-                <small>也可通过系统环境变量 LIBTV_ACCESS_KEY 配置；视频会上传到 LibTV 后端完成拉片。</small>
-            </div>
-            <div class="form-group">
-                <label for="libtv_im_base">服务地址</label>
-                <input type="url" id="libtv_im_base" placeholder="https://im.liblib.tv">
-                <small>通常无需修改，对应 OPENAPI_IM_BASE。</small>
-            </div>
-            <div class="form-group">
-                <label for="libtv_poll_interval">轮询间隔（秒）</label>
-                <input type="number" id="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
-            </div>
-            <div class="form-group">
-                <label for="libtv_timeout">单条视频等待上限（秒）</label>
-                <input type="number" id="libtv_timeout" min="30" max="900" step="10" placeholder="180">
-                <small>超时后仍会保留 LibTV 项目画布入口，方便稍后继续查看。</small>
-            </div>
-            <div class="form-group">
-                <label for="libtv_concurrency">并发拉片数</label>
-                <input type="number" id="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
-                <small>默认 2，避免同一 Access Key 同时创建过多会话。</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>模式1：Gemini 设置</h2>
-            <div class="form-group">
-                <label>Gemini API Key</label>
-                <input type="password" id="gemini_api_key" placeholder="输入 Gemini API Key">
-                <small>用于 Gemini 多模态视频分析（从 aistudio.google.com 获取）</small>
-            </div>
-            <div class="form-group">
-                <label>Gemini 模型</label>
-                <input type="text" id="gemini_model" placeholder="gemini-2.5-flash">
-                <small>使用的 Gemini 模型名称</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>模式2：OpenRouter 设置</h2>
-            <div class="form-group">
-                <label>OpenRouter API Key</label>
-                <input type="password" id="openrouter_api_key" placeholder="输入 OpenRouter API Key">
-                <small>用于 OpenRouter 免费模型调用（从 openrouter.ai 获取）</small>
-            </div>
-            <div class="form-group">
-                <label>模型名称</label>
-                <input type="text" id="openrouter_model" placeholder="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free">
-                <small>使用的模型（如 nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free）</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>复刻脚本生成（MiniMax）</h2>
-            <div class="form-group">
-                <label>MiniMax API Key</label>
-                <input type="password" id="minimax_api_key" placeholder="输入 MiniMax API Key">
-                <small>用于生成复刻脚本（必填）</small>
-            </div>
-            <div class="form-group">
-                <label>Base URL</label>
-                <input type="text" id="minimax_base_url" placeholder="https://api.minimaxi.com/anthropic">
-                <small>AI API 的 base URL 地址</small>
-            </div>
-            <div class="form-group">
-                <label>模型名称</label>
-                <input type="text" id="minimax_model" placeholder="MiniMax-M2.7">
-                <small>使用的模型名称（如 MiniMax-M2.7、claude-3-5-sonnet 等）</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>搜索设置</h2>
-            <div class="form-group">
-                <label>最小点赞数</label>
-                <input type="number" id="min_likes" placeholder="5000">
-                <small>只分析点赞数高于此值的视频</small>
-            </div>
-            <div class="form-group">
-                <label>输出目录</label>
-                <input type="text" id="output_dir" placeholder="./data">
-                <small>分析结果保存目录</small>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>搜索关键词</h2>
-            <div id="keywords-list" class="keywords-list"></div>
-            <div class="add-keyword">
-                <input type="text" id="new-keyword" placeholder="输入新关键词，按回车添加">
-            </div>
-        </div>
-
-        <div class="actions">
-            <button class="btn btn-save" id="save-btn" type="submit">保存设置</button>
-            <button class="btn btn-secondary" type="button" onclick="loadSettings()">重置</button>
-        </div>
-        </form>
+      </form>
     </div>
+  </main>
 
-    <script>
-        let settings = {};
-
-        async function loadSettings() {
-            try {
-                const res = await fetch('/api/settings');
-                settings = await res.json();
-
-                document.getElementById('rapidapi_key').value = settings.rapidapi_key || '';
-                document.getElementById('analysis_mode').value = settings.analysis_mode || 'libtv';
-                document.getElementById('libtv_access_key').value = settings.libtv_access_key || '';
-                document.getElementById('libtv_im_base').value = settings.libtv_im_base || 'https://im.liblib.tv';
-                document.getElementById('libtv_poll_interval').value = settings.libtv_poll_interval || 8;
-                document.getElementById('libtv_timeout').value = settings.libtv_timeout || 180;
-                document.getElementById('libtv_concurrency').value = settings.libtv_concurrency || 2;
-                document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
-                document.getElementById('gemini_model').value = settings.gemini_model || 'gemini-2.5-flash';
-                document.getElementById('openrouter_api_key').value = settings.openrouter_api_key || '';
-                document.getElementById('openrouter_model').value = settings.openrouter_model || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free';
-                document.getElementById('minimax_api_key').value = settings.minimax_api_key || '';
-                document.getElementById('minimax_base_url').value = settings.minimax_base_url || 'https://api.minimaxi.com/anthropic';
-                document.getElementById('minimax_model').value = settings.minimax_model || 'MiniMax-M2.7';
-                document.getElementById('min_likes').value = settings.min_likes || 5000;
-                document.getElementById('output_dir').value = settings.output_dir || './data';
-
-                renderKeywords();
-            } catch (e) {
-                showStatus('加载配置失败: ' + e.message, 'error');
-            }
-        }
-
-        function renderKeywords() {
-            const container = document.getElementById('keywords-list');
-            container.innerHTML = (settings.search_keywords || []).map(kw =>
-                `<span class="keyword-tag">${kw}<span class="remove" onclick="removeKeyword('${kw}')">&times;</span></span>`
-            ).join('');
-        }
-
-        function addKeyword(kw) {
-            if (!kw.trim()) return;
-            if (!settings.search_keywords) settings.search_keywords = [];
-            if (!settings.search_keywords.includes(kw)) {
-                settings.search_keywords.push(kw);
-                renderKeywords();
-            }
-            document.getElementById('new-keyword').value = '';
-        }
-
-        function removeKeyword(kw) {
-            settings.search_keywords = settings.search_keywords.filter(k => k !== kw);
-            renderKeywords();
-        }
-
-        async function saveSettings() {
-            const btn = document.getElementById('save-btn');
-            btn.disabled = true;
-            btn.textContent = '保存中...';
-
-            settings.rapidapi_key = document.getElementById('rapidapi_key').value;
-            settings.analysis_mode = document.getElementById('analysis_mode').value;
-            settings.libtv_access_key = document.getElementById('libtv_access_key').value;
-            settings.libtv_im_base = document.getElementById('libtv_im_base').value || 'https://im.liblib.tv';
-            settings.libtv_poll_interval = parseInt(document.getElementById('libtv_poll_interval').value) || 8;
-            settings.libtv_timeout = parseInt(document.getElementById('libtv_timeout').value) || 180;
-            settings.libtv_concurrency = parseInt(document.getElementById('libtv_concurrency').value) || 2;
-            settings.gemini_api_key = document.getElementById('gemini_api_key').value;
-            settings.gemini_model = document.getElementById('gemini_model').value;
-            settings.openrouter_api_key = document.getElementById('openrouter_api_key').value;
-            settings.openrouter_model = document.getElementById('openrouter_model').value;
-            settings.minimax_api_key = document.getElementById('minimax_api_key').value;
-            settings.minimax_base_url = document.getElementById('minimax_base_url').value;
-            settings.minimax_model = document.getElementById('minimax_model').value;
-            settings.min_likes = parseInt(document.getElementById('min_likes').value) || 5000;
-            settings.output_dir = document.getElementById('output_dir').value;
-
-            try {
-                const res = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(settings)
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    showStatus('设置已保存并生效', 'success');
-                } else {
-                    showStatus('保存失败: ' + result.message, 'error');
-                }
-            } catch (e) {
-                showStatus('保存失败: ' + e.message, 'error');
-            }
-
-            btn.disabled = false;
-            btn.textContent = '保存设置';
-        }
-
-        function showStatus(msg, type) {
-            const el = document.getElementById('status');
-            el.textContent = msg;
-            el.className = 'status ' + type;
-            setTimeout(() => el.className = 'status', 3000);
-        }
-
-        document.getElementById('new-keyword').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addKeyword(e.target.value);
-            }
-        });
-
-        loadSettings();
-    </script>
+  <footer class="site-footer">
+    <div class="footer-lead">
+      <a class="brand brand--footer" href="/">ViralX</a>
+      <p>配置留在本地；证据留在你的工作区。</p>
+    </div>
+    <div class="footer-index" aria-label="设置页索引">
+      <div><span>运行</span><a href="#runtime">分析模式</a><a href="#tk-note">TK Note</a><a href="#libtv">LibTV</a></div>
+      <div><span>模型</span><a href="#models">Gemini</a><a href="#models">OpenRouter</a><a href="#models">MiniMax</a></div>
+      <div><span>返回</span><a href="/">分析首页</a><p>本地 Flask</p><p>静态 EdgeOne 展示</p></div>
+    </div>
+    <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>
+    <strong class="footer-wordmark" aria-hidden="true">ViralX</strong>
+  </footer>
 </body>
 </html>

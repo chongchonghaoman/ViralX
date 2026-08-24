@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """TikTok 分析工具 - Web 可视化界面"""
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 from flask import Flask, render_template, request, jsonify, Response
 import json
 import hashlib
@@ -17,7 +18,23 @@ from ai_analyzer import AIAnalyzer
 
 app = Flask(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
-MAX_ANALYZE_VIDEOS = 5  # 最多分析 5 个视频
+IS_EDGE_RUNTIME = os.environ.get('VIRALX_RUNTIME', '').lower() == 'edgeone'
+
+
+def _env_number(name, fallback, cast):
+    value = os.environ.get(name)
+    if value in (None, ''):
+        return fallback
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+MAX_ANALYZE_VIDEOS = max(
+    1,
+    min(_env_number('VIRALX_MAX_ANALYZE_VIDEOS', 5, int), 5),
+)
 
 DEFAULT_CONFIG = {
     'rapidapi_key': '',
@@ -27,6 +44,12 @@ DEFAULT_CONFIG = {
     'libtv_poll_interval': 8,
     'libtv_timeout': 180,
     'libtv_concurrency': 2,
+    'tk_note_asr_backend': 'auto',
+    'tk_note_language': 'auto',
+    'tk_note_cookies_from_browser': '',
+    'tk_note_proxy': '',
+    'tk_note_timeout': 1800,
+    'video_cache_dir': './video_cache',
     'gemini_api_key': '',
     'gemini_model': 'gemini-2.5-flash',
     'openrouter_api_key': '',
@@ -40,19 +63,62 @@ DEFAULT_CONFIG = {
 }
 
 def load_config():
-    """从 config.json 加载配置"""
+    """从本地配置和环境变量加载配置；环境变量始终优先。"""
     loaded = {}
     if CONFIG_PATH.exists():
         loaded = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
     merged = {**DEFAULT_CONFIG, **loaded}
-    if os.environ.get('LIBTV_ACCESS_KEY'):
-        merged['libtv_access_key'] = os.environ['LIBTV_ACCESS_KEY']
-    if os.environ.get('OPENAPI_IM_BASE'):
-        merged['libtv_im_base'] = os.environ['OPENAPI_IM_BASE']
+
+    env_map = {
+        'RAPIDAPI_KEY': ('rapidapi_key', str),
+        'ANALYSIS_MODE': ('analysis_mode', str),
+        'LIBTV_ACCESS_KEY': ('libtv_access_key', str),
+        'OPENAPI_IM_BASE': ('libtv_im_base', str),
+        'LIBTV_POLL_INTERVAL': ('libtv_poll_interval', float),
+        'LIBTV_TIMEOUT': ('libtv_timeout', float),
+        'LIBTV_CONCURRENCY': ('libtv_concurrency', int),
+        'TK_NOTE_ASR_BACKEND': ('tk_note_asr_backend', str),
+        'TK_NOTE_LANGUAGE': ('tk_note_language', str),
+        'TK_NOTE_COOKIES_FROM_BROWSER': ('tk_note_cookies_from_browser', str),
+        'TK_NOTE_PROXY': ('tk_note_proxy', str),
+        'TK_NOTE_TIMEOUT': ('tk_note_timeout', float),
+        'GEMINI_API_KEY': ('gemini_api_key', str),
+        'GEMINI_MODEL': ('gemini_model', str),
+        'OPENROUTER_API_KEY': ('openrouter_api_key', str),
+        'OPENROUTER_MODEL': ('openrouter_model', str),
+        'MINIMAX_API_KEY': ('minimax_api_key', str),
+        'MINIMAX_BASE_URL': ('minimax_base_url', str),
+        'MINIMAX_MODEL': ('minimax_model', str),
+        'MIN_LIKES': ('min_likes', int),
+        'VIRALX_OUTPUT_DIR': ('output_dir', str),
+        'VIRALX_VIDEO_CACHE_DIR': ('video_cache_dir', str),
+    }
+    for env_name, (config_name, cast) in env_map.items():
+        value = os.environ.get(env_name)
+        if value in (None, ''):
+            continue
+        try:
+            merged[config_name] = cast(value)
+        except (TypeError, ValueError):
+            continue
+
+    keyword_value = os.environ.get('VIRALX_SEARCH_KEYWORDS', '')
+    if keyword_value:
+        merged['search_keywords'] = [
+            item.strip() for item in keyword_value.split(',') if item.strip()
+        ]
+
+    if IS_EDGE_RUNTIME:
+        merged['output_dir'] = os.environ.get('VIRALX_OUTPUT_DIR', '/tmp/viralx/data')
+        merged['video_cache_dir'] = os.environ.get('VIRALX_VIDEO_CACHE_DIR', '/tmp/viralx/video_cache')
+        merged['libtv_timeout'] = min(float(merged.get('libtv_timeout', 100)), 100)
+        merged['tk_note_timeout'] = min(float(merged.get('tk_note_timeout', 90)), 90)
     return merged
 
 def save_config(data):
     """保存配置到 config.json"""
+    if IS_EDGE_RUNTIME:
+        raise RuntimeError('云端设置由 EdgeOne 环境变量管理，不能从网页写入')
     merged = {**DEFAULT_CONFIG, **(data or {})}
     CONFIG_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding='utf-8')
 
@@ -113,6 +179,37 @@ def save_settings():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    """返回不含密钥的运行状态，供本地与 EdgeOne 前端探活。"""
+    current_config = load_config()
+    runtime = 'edgeone' if IS_EDGE_RUNTIME else 'local'
+    provider = str(current_config.get('analysis_mode', 'libtv')).lower()
+    readiness = {
+        'libtv': bool(current_config.get('libtv_access_key')),
+        'gemini': bool(current_config.get('gemini_api_key')),
+        'openrouter': bool(current_config.get('openrouter_api_key')),
+        'minimax': bool(current_config.get('minimax_api_key')),
+    }
+    return jsonify({
+        'status': 'ok',
+        'runtime': runtime,
+        'analysis_provider': provider,
+        'analysis_ready': readiness.get(provider, False),
+        'configured': {
+            **readiness,
+            'keyword_search': bool(current_config.get('rapidapi_key')),
+        },
+        'limits': {
+            'max_videos': MAX_ANALYZE_VIDEOS,
+            'request_seconds': 120 if IS_EDGE_RUNTIME else None,
+        },
+        'exports': {
+            'obsidian': 'browser' if IS_EDGE_RUNTIME else 'filesystem',
+        },
+    })
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     """
@@ -164,11 +261,24 @@ def analyze():
                 libtv_im_base=current_config.get('libtv_im_base', 'https://im.liblib.tv'),
                 libtv_poll_interval=current_config.get('libtv_poll_interval', 8),
                 libtv_timeout=current_config.get('libtv_timeout', 180),
+                video_cache_dir=current_config.get('video_cache_dir', './video_cache'),
+                tk_note_asr_backend=current_config.get('tk_note_asr_backend', 'auto'),
+                tk_note_language=current_config.get('tk_note_language', 'auto'),
+                tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
+                tk_note_proxy=current_config.get('tk_note_proxy', ''),
+                tk_note_timeout=current_config.get('tk_note_timeout', 1800),
             )
 
             # 流式并发分析，结果边完成边推送
             results = []
-            for result in ai.batch_analyze_streaming(video_data, max_videos=MAX_ANALYZE_VIDEOS, video_urls=video_urls, product_name=product_name, product_info=product_info):
+            for result in ai.batch_analyze_streaming(
+                video_data,
+                max_videos=MAX_ANALYZE_VIDEOS,
+                video_urls=video_urls,
+                product_name=product_name,
+                product_info=product_info,
+                force_collect=bool(refresh),
+            ):
                 # 抓取评论（在主线程串行执行，不影响并发分析）
                 if tiktok:
                     try:

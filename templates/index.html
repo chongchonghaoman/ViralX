@@ -1,977 +1,221 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok 分析</title>
-    <link rel="icon" href="data:,">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #0f0f0f;
-            color: #e0e0e0;
-            display: flex;
-            height: 100vh;
-        }
-
-        .sidebar {
-            width: 280px;
-            background: #1a1a1a;
-            border-right: 1px solid #2a2a2a;
-            padding: 24px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .logo {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 32px;
-            color: #fff;
-        }
-
-        .search-section {
-            margin-bottom: 32px;
-        }
-
-        .field-help {
-            display: block;
-            color: #666;
-            font-size: 12px;
-            line-height: 1.5;
-            margin-top: 8px;
-        }
-
-        .search-section label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .search-input {
-            width: 100%;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: #e0e0e0;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #5a5a5a;
-            background: #333;
-        }
-
-        .keywords-section {
-            margin-bottom: 32px;
-        }
-
-        .keywords-section label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: block;
-            margin-bottom: 12px;
-        }
-
-        .keyword-item {
-            padding: 10px 12px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-
-        .keyword-item:hover {
-            background: #333;
-            border-color: #4a4a4a;
-        }
-
-        .product-section {
-            margin-bottom: 20px;
-        }
-
-        .product-section label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .product-input {
-            width: 100%;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: #e0e0e0;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        .product-input:focus {
-            outline: none;
-            border-color: #5a5a5a;
-            background: #333;
-        }
-
-        .product-textarea {
-            width: 100%;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            padding: 10px 12px;
-            color: #e0e0e0;
-            font-size: 13px;
-            resize: vertical;
-            min-height: 80px;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-
-        .product-textarea:focus {
-            outline: none;
-            border-color: #5a5a5a;
-            background: #333;
-        }
-
-        .buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 10px 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: #5a5a5a;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: #6a6a6a;
-        }
-
-        .btn-secondary {
-            background: #2a2a2a;
-            color: #e0e0e0;
-            border: 1px solid #3a3a3a;
-        }
-
-        .btn-secondary:hover {
-            background: #333;
-        }
-
-        .btn:focus-visible,
-        .analysis-btn:focus-visible,
-        .video-title:focus-visible,
-        .modal-close:focus-visible,
-        .export-btn:focus-visible {
-            outline: 2px solid #86bfff;
-            outline-offset: 2px;
-        }
-
-        .btn:disabled {
-            cursor: wait;
-            opacity: 0.55;
-        }
-
-        .remake-script {
-            margin-top: 16px;
-            padding: 16px;
-            background: #1a2a1a;
-            border: 1px solid #2a4a2a;
-            border-radius: 6px;
-        }
-
-        .remake-script h4 {
-            font-size: 13px;
-            font-weight: 600;
-            color: #6fcf6f;
-            margin-bottom: 12px;
-        }
-
-        .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .header {
-            padding: 24px;
-            border-bottom: 1px solid #2a2a2a;
-            background: #0f0f0f;
-        }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .header p {
-            font-size: 13px;
-            color: #888;
-        }
-
-        .content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-        }
-
-        .loading {
-            padding: 16px;
-            margin-bottom: 16px;
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
-            color: #888;
-            font-size: 13px;
-        }
-
-        .progress-track {
-            height: 8px;
-            margin-top: 12px;
-            overflow: hidden;
-            border-radius: 999px;
-            background: #2a2a2a;
-        }
-
-        .progress-bar {
-            width: 8%;
-            height: 100%;
-            border-radius: inherit;
-            background: #4a9eff;
-            transition: width 0.25s ease-out;
-        }
-
-        .error {
-            background: #3a2a2a;
-            border: 1px solid #5a3a3a;
-            color: #ff6b6b;
-            padding: 16px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-            font-size: 13px;
-        }
-
-        .video-card {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 16px;
-            transition: all 0.2s;
-        }
-
-        .video-card:hover {
-            border-color: #3a3a3a;
-            background: #222;
-        }
-
-        .video-title {
-            font-size: 15px;
-            font-weight: 500;
-            margin-bottom: 12px;
-            cursor: pointer;
-            color: #fff;
-            transition: color 0.2s;
-        }
-
-        .video-title:hover {
-            color: #aaa;
-        }
-
-        .video-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-            font-size: 12px;
-        }
-
-        .stat {
-            background: #2a2a2a;
-            padding: 8px 12px;
-            border-radius: 4px;
-            color: #aaa;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 11px;
-            margin-bottom: 2px;
-        }
-
-        .stat-value {
-            color: #e0e0e0;
-            font-weight: 500;
-        }
-
-        .analysis-btn {
-            margin-top: 16px;
-            padding: 10px 12px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            color: #aaa;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-
-        .analysis-btn:hover {
-            background: #333;
-            border-color: #4a4a4a;
-            color: #e0e0e0;
-        }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            animation: fadeIn 0.2s;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .modal {
-            background: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 800px;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
-            animation: slideUp 0.3s;
-        }
-
-        @keyframes slideUp {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid #2a2a2a;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h2 {
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .export-btn {
-            background: none;
-            border: 1px solid #3a3a3a;
-            color: #aaa;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .export-btn:hover {
-            background: #2a2a2a;
-            border-color: #4a4a4a;
-            color: #e0e0e0;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: #888;
-            font-size: 24px;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .modal-close:hover {
-            color: #e0e0e0;
-        }
-
-        .modal-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-        }
-
-        .markdown-content h2 {
-            font-size: 16px;
-            font-weight: 600;
-            margin-top: 20px;
-            margin-bottom: 12px;
-            color: #e0e0e0;
-            border-bottom: 1px solid #2a2a2a;
-            padding-bottom: 8px;
-        }
-
-        .markdown-content h3 {
-            font-size: 14px;
-            font-weight: 500;
-            margin-top: 12px;
-            margin-bottom: 8px;
-            color: #aaa;
-        }
-
-        .markdown-content ul, .markdown-content ol {
-            margin-left: 20px;
-            margin-bottom: 12px;
-        }
-
-        .markdown-content li {
-            margin-bottom: 6px;
-            line-height: 1.6;
-        }
-
-        .markdown-content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 12px 0;
-            font-size: 12px;
-        }
-
-        .markdown-content table th, .markdown-content table td {
-            border: 1px solid #2a2a2a;
-            padding: 8px;
-            text-align: left;
-        }
-
-        .markdown-content table th {
-            background: #2a2a2a;
-            font-weight: 600;
-        }
-
-        .markdown-content p {
-            margin-bottom: 10px;
-            line-height: 1.6;
-        }
-
-        .source-badge {
-            display: inline-block;
-            font-size: 11px;
-            padding: 4px 8px;
-            background: #2a2a2a;
-            border-radius: 4px;
-            color: #888;
-            margin-bottom: 16px;
-        }
-
-        .provider-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-            margin-top: 14px;
-        }
-
-        .empty-state {
-            max-width: 760px;
-            margin: 8vh auto 0;
-            padding: 32px;
-            border: 1px solid #2a2a2a;
-            border-radius: 12px;
-            background: #151515;
-        }
-
-        .empty-state h2 {
-            color: #fff;
-            font-size: 22px;
-            margin-bottom: 10px;
-        }
-
-        .empty-state > p {
-            max-width: 580px;
-            color: #888;
-            font-size: 14px;
-            line-height: 1.7;
-        }
-
-        .workflow-steps {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 28px;
-        }
-
-        .workflow-step {
-            min-height: 128px;
-            padding: 16px;
-            border-radius: 8px;
-            background: #1d1d1d;
-        }
-
-        .workflow-step strong {
-            display: block;
-            margin-bottom: 8px;
-            color: #86bfff;
-            font-size: 12px;
-            letter-spacing: 0.06em;
-        }
-
-        .workflow-step h3 {
-            margin-bottom: 6px;
-            color: #eaeaea;
-            font-size: 14px;
-        }
-
-        .workflow-step p {
-            color: #777;
-            font-size: 12px;
-            line-height: 1.55;
-        }
-
-        .provider-badge {
-            display: inline-flex;
-            align-items: center;
-            min-height: 28px;
-            padding: 4px 9px;
-            border-radius: 999px;
-            background: rgba(74, 158, 255, 0.12);
-            border: 1px solid rgba(74, 158, 255, 0.3);
-            color: #86bfff;
-            font-size: 12px;
-        }
-
-        .provider-badge.timeout,
-        .provider-badge.error {
-            background: rgba(255, 184, 77, 0.12);
-            border-color: rgba(255, 184, 77, 0.3);
-            color: #ffc46b;
-        }
-
-        .project-link {
-            display: inline-flex;
-            align-items: center;
-            min-height: 36px;
-            padding: 7px 10px;
-            border: 1px solid #3a3a3a;
-            border-radius: 6px;
-            color: #d0d0d0;
-            font-size: 12px;
-            text-decoration: none;
-        }
-
-        .project-link:hover,
-        .project-link:focus-visible {
-            border-color: #5a5a5a;
-            color: #fff;
-            outline: none;
-        }
-
-        @media (max-width: 760px) {
-            body { display: block; height: auto; min-height: 100vh; }
-            .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid #2a2a2a; }
-            .main { min-height: 65vh; }
-            .video-stats { grid-template-columns: repeat(2, 1fr); }
-            .empty-state { margin: 24px 0 0; padding: 24px; }
-            .workflow-steps { grid-template-columns: 1fr; }
-            .workflow-step { min-height: auto; }
-            .modal { width: calc(100% - 24px); max-height: calc(100vh - 24px); }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#EDEDED">
+  <meta name="description" content="ViralX 把短视频拆成可验证、可复用、可执行的结构证据。">
+  <title>ViralX · 把爆款拆到每一秒</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='viralx.js') }}"></script>
 </head>
 <body>
-    <div class="sidebar">
-        <div class="logo">ViralX</div>
+  <a class="skip-link" href="#analysis-studio">跳到分析入口</a>
 
-        <nav style="margin-bottom: 24px; display: flex; gap: 8px;">
-            <a href="/" style="flex:1; padding: 8px 12px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; text-align: center; text-decoration: none; color: #e0e0e0; font-size: 13px;">分析</a>
-            <a href="/settings" style="flex:1; padding: 8px 12px; background: #333; border: 1px solid #4a4a4a; border-radius: 6px; text-align: center; text-decoration: none; color: #fff; font-size: 13px;">设置</a>
+  <header class="site-header" data-motion="nav">
+    <div class="nav-shell">
+      <div class="nav-primary">
+        <a class="brand" href="/" aria-label="ViralX 首页">
+          <span class="brand__spark" aria-hidden="true"></span>
+          <span>ViralX</span>
+        </a>
+        <nav class="desktop-nav" aria-label="主导航">
+          <a href="#method">方法</a>
+          <a href="#evidence">证据</a>
+          <a href="#workflow-title">流程</a>
+          <a href="#results-title">记录</a>
         </nav>
+      </div>
+      <div class="nav-actions">
+        <a class="nav-secondary" href="/settings">设置</a>
+        <a class="nav-cta" href="#analysis-studio">开始拉片</a>
+        <a class="mobile-settings" href="/settings" aria-label="打开设置">•••</a>
+      </div>
+    </div>
+  </header>
 
-        <div class="search-section">
-            <label for="keyword">关键词或视频链接</label>
-            <input type="text" id="keyword" class="search-input" placeholder="输入关键词，或粘贴抖音 / TikTok 链接" value="outdoor lighting lamp">
-            <small class="field-help">粘贴单条视频链接时，将直接下载原视频并交给 LibTV 一键拉片。</small>
+  <main id="main-content">
+    <section class="hero" aria-labelledby="hero-title">
+      <figure class="hero-visual" data-motion="hero-object">
+        <img src="{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}" alt="由视频帧、播放镜片、信号波形和数据轨道组成的 ViralX 分析主视觉" fetchpriority="high">
+        <figcaption>来源、证据、结构与脚本，在同一条轨道上。</figcaption>
+      </figure>
+
+      <div class="hero-copy" data-motion="hero-copy">
+        <p class="kicker">短视频证据引擎 · VIRALX</p>
+        <h1 id="hero-title">把爆款拆到每一秒</h1>
+        <p class="hero-lede">ViralX 从原片、字幕和评论证据出发，解释钩子、镜头、声音与转化路径，再生成可以直接执行的复刻脚本。</p>
+        <a class="hero-cta" href="#analysis-studio">开始分析</a>
+      </div>
+
+      <section class="analysis-studio" id="analysis-studio" aria-labelledby="studio-title" data-motion="hero-form">
+        <div class="studio-heading">
+          <div>
+            <span class="section-label">视频来源 · 01</span>
+            <h2 id="studio-title">从一条真实视频开始</h2>
+          </div>
+          <span class="runtime-chip" id="runtime-chip" data-state="checking"><i aria-hidden="true"></i><span id="runtime-label">本地分析服务</span></span>
         </div>
 
-        <div class="product-section">
-            <label>复刻产品名称</label>
-            <input type="text" id="product-name" class="product-input" placeholder="例如：便携式露营灯">
+        <div class="source-row">
+          <div class="source-field">
+            <label for="keyword">视频链接或搜索主题</label>
+            <input type="text" id="keyword" autocomplete="off" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
+          </div>
+          <button class="btn btn-primary" id="analyze-btn" type="button">开始拉片</button>
         </div>
 
-        <div class="product-section">
-            <label>产品卖点（AI会润色）</label>
-            <textarea id="product-info" class="product-textarea" placeholder="输入产品的主要卖点、特点、优势..."></textarea>
+        <div class="source-tools">
+          <details class="remake-options">
+            <summary>生成产品复刻脚本</summary>
+            <div class="remake-grid">
+              <div class="field">
+                <label for="product-name">产品名称</label>
+                <input type="text" id="product-name" autocomplete="off" placeholder="例如：便携式露营灯">
+              </div>
+              <div class="field">
+                <label for="product-info">产品卖点</label>
+                <textarea id="product-info" placeholder="写下特点、使用场景与必须保留的表达。"></textarea>
+              </div>
+            </div>
+          </details>
+          <button class="refresh-link" id="refresh-btn" type="button">刷新证据后重跑</button>
         </div>
 
-        <div class="keywords-section">
-            <label>缓存关键词</label>
-            <div id="keywords-list"></div>
+        <div class="cached-topics">
+          <span>最近主题</span>
+          <div class="keyword-list" id="keywords-list" aria-live="polite"></div>
         </div>
 
-        <div class="buttons">
-            <button class="btn btn-primary" id="analyze-btn" onclick="analyze()">开始拉片</button>
-            <button class="btn btn-secondary" id="refresh-btn" onclick="analyze(true)">刷新数据</button>
+        <div class="pipeline-panel" aria-labelledby="pipeline-title">
+          <div class="pipeline-head">
+            <h3 id="pipeline-title">分析进度</h3>
+            <span id="progress-label" aria-live="polite">等待视频来源</span>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="分析进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+          <div class="pipeline-stages" aria-label="任务阶段">
+            <div class="stage" data-state="idle"><span>01</span><strong>保存证据</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-state="idle"><span>02</span><strong>拆解视听结构</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-state="idle"><span>03</span><strong>生成执行脚本</strong><small class="stage__state">等待</small></div>
+          </div>
+          <div class="error" id="error" role="alert" tabindex="-1" hidden></div>
+          <div class="loading" id="loading" role="status" hidden>正在建立证据包并提交拉片。视频较长时可能需要几分钟。</div>
         </div>
+      </section>
+    </section>
+
+    <div class="signal-strip" aria-label="ViralX 分析流程">
+      <div class="signal-strip__track">
+        <span>来源</span><i></i><span>证据</span><i></i><span>镜头</span><i></i><span>声音</span><i></i><span>脚本</span><i></i>
+        <span>来源</span><i></i><span>证据</span><i></i><span>镜头</span><i></i><span>声音</span><i></i><span>脚本</span>
+      </div>
     </div>
 
-    <div class="main">
-        <div class="header">
-            <h1>ViralX 拉片工作台</h1>
-            <p id="header-desc">LibTV 一键拉片 · 支持关键词批量检索与抖音/TikTok 单条链接</p>
-        </div>
+    <section class="manifesto story-section" id="method" aria-labelledby="manifesto-title">
+      <p class="section-label">分析方法 · 02</p>
+      <h2 id="manifesto-title">不是凭感觉猜。<br>每个结论，都能回到证据。</h2>
+      <p>先保存原片、元数据、字幕与评论，再把开场钩子、镜头切换、声音节拍和转化动作放回同一条时间线。</p>
+    </section>
 
-        <div class="content">
-            <div id="error" class="error" role="alert" style="display:none;"></div>
-            <div id="loading" class="loading" role="status" aria-live="polite" style="display:none;">
-                <div id="progress-label">准备下载视频...</div>
-                <div class="progress-track" aria-hidden="true">
-                    <div id="progress-bar" class="progress-bar"></div>
-                </div>
-            </div>
-            <div id="results">
-                <section class="empty-state" aria-labelledby="empty-state-title">
-                    <h2 id="empty-state-title">把一条爆款视频真正看懂</h2>
-                    <p>ViralX 会下载原视频并交给 LibTV 后端 Agent 完成镜头、节奏与视听结构拉片，而不是只根据标题和互动数据猜测内容。</p>
-                    <div class="workflow-steps">
-                        <div class="workflow-step">
-                            <strong>01 · 输入</strong>
-                            <h3>粘贴链接或搜索关键词</h3>
-                            <p>单条抖音/TikTok 链接直接拉片；关键词自动筛选高热视频。</p>
-                        </div>
-                        <div class="workflow-step">
-                            <strong>02 · 分析</strong>
-                            <h3>上传原视频到 LibTV</h3>
-                            <p>创建独立会话并增量轮询，最长等待时间可在设置里调整。</p>
-                        </div>
-                        <div class="workflow-step">
-                            <strong>03 · 复用</strong>
-                            <h3>查看报告与项目画布</h3>
-                            <p>拉片结果以 Markdown 展示，也可继续进入 LibTV 画布深挖。</p>
-                        </div>
-                    </div>
-                </section>
-            </div>
+    <section class="evidence-stage story-section" id="evidence" aria-labelledby="evidence-title">
+      <header class="stage-intro">
+        <p class="section-label">证据时间线 · 03</p>
+        <h2 id="evidence-title">从看见视频，<br>到看见结构。</h2>
+      </header>
+
+      <div class="evidence-demo" aria-label="分析时间线示意">
+        <div class="demo-topline">
+          <span>00:00 — 00:18</span>
+          <span>TK NOTE + LIBTV</span>
         </div>
+        <div class="frame-row" aria-hidden="true">
+          <div class="frame frame--lime"><span>HOOK</span></div>
+          <div class="frame frame--ink"><span>PROOF</span></div>
+          <div class="frame frame--coral"><span>TURN</span></div>
+          <div class="frame frame--cream"><span>CTA</span></div>
+        </div>
+        <div class="waveform" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <ol class="evidence-notes">
+          <li><span>0–3s</span><strong>先给冲突，再解释产品</strong><p>开场没有铺垫，第一帧直接建立观看理由。</p></li>
+          <li><span>4–11s</span><strong>镜头跟着证据推进</strong><p>每次切镜都回答一个新的购买疑问。</p></li>
+          <li><span>12–18s</span><strong>转化动作有明确落点</strong><p>脚本把视觉证据收束成下一步行动。</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="workflow story-section" aria-labelledby="workflow-title">
+      <header>
+        <p class="section-label">分析链路 · 04</p>
+        <h2 id="workflow-title">从来源，<br>一路走到执行。</h2>
+      </header>
+      <div class="workflow-list">
+        <article><span>01</span><h3>保存证据</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
+        <article><span>02</span><h3>拆解结构</h3><p>钩子、镜头、声音、节奏与转化动作逐段对齐。</p></article>
+        <article><span>03</span><h3>生成脚本</h3><p>把有效结构换成你的产品、卖点和拍摄场景。</p></article>
+        <article><span>04</span><h3>导出工作区</h3><p>报告、LibTV 画布与 Obsidian 笔记回到你的工作流。</p></article>
+      </div>
+    </section>
+
+    <section class="results-zone story-section" aria-labelledby="results-title">
+      <div class="results-heading">
+        <div>
+          <p class="section-label">分析记录 · 05</p>
+          <h2 id="results-title">拉片记录</h2>
+        </div>
+        <span class="result-count" id="result-count">等待输入</span>
+      </div>
+      <div class="results-list" id="results">
+        <section class="empty-state" aria-labelledby="empty-title">
+          <div>
+            <h3 id="empty-title">先给 ViralX 一条真实视频。</h3>
+            <p>它不会从空白模板编结论。分析完成后，报告、LibTV 画布和 Obsidian 导出会出现在这里。</p>
+            <button class="empty-action" id="focus-source" type="button">粘贴视频来源</button>
+          </div>
+          <div class="empty-proof" aria-label="空状态下的输出说明">
+            <span>INPUT</span><strong>视频链接 / 搜索主题</strong>
+            <span>PROCESS</span><strong>TK Note → LibTV</strong>
+            <span>OUTPUT</span><strong>报告 / 脚本 / Obsidian</strong>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-lead">
+      <a class="brand brand--footer" href="/">ViralX</a>
+      <p>把短视频还原成可验证、可复用、可执行的结构证据。</p>
     </div>
-
-    <div class="modal-overlay" id="modal">
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-            <div class="modal-header">
-                <h2 id="modal-title">AI 深度拆解</h2>
-                <div class="modal-actions">
-                    <button class="export-btn" onclick="exportToObsidian()">📤 导出到 Obsidian</button>
-                    <button class="modal-close" onclick="closeModal()" aria-label="关闭拉片报告">&times;</button>
-                </div>
-            </div>
-            <div class="modal-content markdown-content" id="modal-content"></div>
-        </div>
+    <div class="footer-index" aria-label="页脚索引">
+      <div><span>产品</span><a href="#method">分析方法</a><a href="#evidence">证据时间线</a><a href="#results-title">拉片记录</a></div>
+      <div><span>工作流</span><a href="#analysis-studio">视频来源</a><a href="/settings">TK Note / LibTV</a><a href="/settings">本地设置</a></div>
+      <div><span>输出</span><p>拉片报告</p><p>复刻脚本</p><p>Obsidian 笔记</p></div>
     </div>
+    <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>
+    <strong class="footer-wordmark" aria-hidden="true">ViralX</strong>
+  </footer>
 
-    <script>
-        let currentModalTitle = '';
-        let currentModalContent = '';
-        let lastModalTrigger = null;
-
-        function escapeHtml(value) {
-            return String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
-        }
-
-        function openExternal(encodedUrl) {
-            const url = decodeURIComponent(encodedUrl);
-            if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener');
-        }
-
-        function openModal(title, content) {
-            lastModalTrigger = document.activeElement;
-            currentModalTitle = title;
-            currentModalContent = content;
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-content').innerHTML = marked.parse(content);
-            document.getElementById('modal').classList.add('active');
-            document.querySelector('.modal-close').focus();
-        }
-
-        function closeModal() {
-            document.getElementById('modal').classList.remove('active');
-            if (lastModalTrigger) lastModalTrigger.focus();
-        }
-
-        async function exportToObsidian() {
-            try {
-                const response = await fetch('/api/export-obsidian', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: currentModalTitle,
-                        content: currentModalContent
-                    })
-                });
-
-                const data = await response.json();
-                if (data.status === 'success') {
-                    alert(`✓ 已导出到 Obsidian\n${data.file_path}`);
-                } else {
-                    alert(`✗ 导出失败: ${data.message}`);
-                }
-            } catch (err) {
-                alert(`✗ 导出失败: ${err.message}`);
-            }
-        }
-
-        document.getElementById('modal').addEventListener('click', (e) => {
-            if (e.target.id === 'modal') closeModal();
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && document.getElementById('modal').classList.contains('active')) {
-                closeModal();
-            }
-        });
-
-        async function loadKeywords() {
-            try {
-                const resp = await fetch('/api/keywords');
-                const data = await resp.json();
-                const list = document.getElementById('keywords-list');
-                if (data.keywords.length > 0) {
-                    list.innerHTML = data.keywords.map(k =>
-                        `<div class="keyword-item" onclick="setKeyword('${k.keyword}')">${k.keyword}</div>`
-                    ).join('');
-                }
-            } catch (e) {}
-        }
-
-        function setKeyword(kw) {
-            document.getElementById('keyword').value = kw;
-            analyze();
-        }
-
-        function setBusy(isBusy) {
-            document.getElementById('analyze-btn').disabled = isBusy;
-            document.getElementById('refresh-btn').disabled = isBusy;
-            document.getElementById('analyze-btn').textContent = isBusy ? '拉片中...' : '开始拉片';
-        }
-
-        function updateProgress(label, percent) {
-            document.getElementById('progress-label').textContent = label;
-            document.getElementById('progress-bar').style.width = `${Math.max(8, Math.min(percent, 100))}%`;
-        }
-
-        function renderVideoCard(video, index) {
-            const videoUrl = video.source_url || `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
-            const analysisId = `analysis-${Date.now()}-${index}`;
-            const remakeId = `remake-${Date.now()}-${index}`;
-            const provider = video.analysis_provider || 'ai';
-            const status = video.libtv_status || '';
-            const providerLabel = provider === 'libtv'
-                ? (status === 'timeout' ? 'LibTV · 仍在处理' : status === 'error' ? 'LibTV · 失败' : 'LibTV · 已完成')
-                : provider;
-            const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || '')
-                ? video.libtv_project_url
-                : '';
-
-            const card = document.createElement('article');
-            card.className = 'video-card';
-            card.innerHTML = `
-                <button class="video-title" style="display:block;background:none;border:0;text-align:left;padding:0;width:100%;" onclick="openExternal('${encodeURIComponent(videoUrl)}')">
-                    ${index + 1}. ${escapeHtml((video.title || '无标题').substring(0, 70))}
-                </button>
-                <div class="video-stats">
-                    <div class="stat"><div class="stat-label">作者</div><div class="stat-value">${escapeHtml(video.author || '未知')}</div></div>
-                    <div class="stat"><div class="stat-label">赞</div><div class="stat-value">${((video.likes || 0) / 1000).toFixed(1)}k</div></div>
-                    <div class="stat"><div class="stat-label">评论</div><div class="stat-value">${((video.comments || 0) / 1000).toFixed(1)}k</div></div>
-                    <div class="stat"><div class="stat-label">分享</div><div class="stat-value">${((video.shares || 0) / 1000).toFixed(1)}k</div></div>
-                </div>
-                <div class="provider-row">
-                    <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(providerLabel)}</span>
-                    ${status === 'error' ? '<a class="project-link" href="/settings">检查 LibTV 设置</a>' : ''}
-                    ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开 LibTV 项目画布</a>` : ''}
-                </div>
-                <button class="analysis-btn" onclick="showAnalysis('${analysisId}', '${escapeHtml(provider)}')">查看拉片报告</button>
-                <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || '')}</div>
-            `;
-
-            if (video.remake_script) {
-                const remake = document.createElement('div');
-                remake.className = 'remake-script';
-                remake.innerHTML = `
-                    <h4>📹 复刻脚本（基于你的产品）</h4>
-                    <button class="analysis-btn" onclick="showAnalysis('${remakeId}', 'remake')">查看完整复刻脚本</button>
-                    <div id="${remakeId}" hidden>${escapeHtml(video.remake_script)}</div>
-                `;
-                card.appendChild(remake);
-            }
-            return card;
-        }
-
-        async function analyze(refresh = false) {
-            const keyword = document.getElementById('keyword').value.trim();
-            const productName = document.getElementById('product-name').value;
-            const productInfo = document.getElementById('product-info').value;
-            const loading = document.getElementById('loading');
-            const results = document.getElementById('results');
-            const error = document.getElementById('error');
-            const headerDesc = document.getElementById('header-desc');
-
-            if (!keyword) {
-                error.textContent = '请输入关键词或抖音/TikTok 视频链接';
-                error.style.display = 'block';
-                document.getElementById('keyword').focus();
-                return;
-            }
-
-            setBusy(true);
-            loading.style.display = 'block';
-            results.innerHTML = '';
-            error.style.display = 'none';
-            headerDesc.textContent = /^https?:\/\//i.test(keyword) ? '正在对视频执行一键拉片...' : `正在检索并拉片 “${keyword}”...`;
-            updateProgress('准备下载视频并提交 LibTV...', 8);
-
-            const streamContainer = document.createElement('div');
-            streamContainer.id = 'stream-results';
-            results.appendChild(streamContainer);
-
-            let received = 0;
-            let done = false;
-
-            const handlePayload = (data) => {
-                if (data.status === 'error') {
-                    error.textContent = data.message;
-                    error.style.display = 'block';
-                    headerDesc.textContent = '拉片失败';
-                    return;
-                }
-                if (data.status === 'progress' && !data.done) {
-                    received += 1;
-                    const total = Math.max(data.total || 1, 1);
-                    updateProgress(`LibTV 拉片中 (${data.current}/${total})...`, (data.current / total) * 100);
-                    streamContainer.appendChild(renderVideoCard(data.video, received - 1));
-                    return;
-                }
-                if (data.done || data.status === 'success') {
-                    done = true;
-                    const failed = data.failed_videos || 0;
-                    const pending = data.pending_videos || 0;
-                    const completed = data.total_videos - failed - pending;
-                    const summary = failed || pending
-                        ? `处理结束：${completed} 个完成，${pending} 个仍在处理，${failed} 个失败`
-                        : `拉片完成，共 ${data.total_videos} 个视频`;
-                    updateProgress(summary, 100);
-                    headerDesc.textContent = summary;
-                }
-            };
-
-            const parseLine = (line) => {
-                const cleanLine = line.replace(/\r/g, '').trim();
-                if (!cleanLine) return;
-                try {
-                    handlePayload(JSON.parse(cleanLine));
-                } catch (parseErr) {
-                    console.warn('NDJSON parse error:', parseErr, cleanLine.substring(0, 120));
-                }
-            };
-
-            try {
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keyword, refresh, product_name: productName, product_info: productInfo })
-                });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                if (response.body && response.body.getReader) {
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder('utf-8');
-                    let buffer = '';
-                    while (true) {
-                        const { value, done: readerDone } = await reader.read();
-                        buffer += decoder.decode(value || new Uint8Array(), { stream: !readerDone });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop() || '';
-                        lines.forEach(parseLine);
-                        if (readerDone) break;
-                    }
-                    parseLine(buffer);
-                } else {
-                    (await response.text()).split('\n').forEach(parseLine);
-                }
-
-                if (!done && received === 0 && error.style.display === 'none') {
-                    error.textContent = '未收到有效数据，请重试';
-                    error.style.display = 'block';
-                }
-            } catch (err) {
-                error.textContent = '拉片失败: ' + err.message;
-                error.style.display = 'block';
-                headerDesc.textContent = '拉片失败';
-            } finally {
-                setBusy(false);
-                if (done || error.style.display !== 'none') loading.style.display = 'none';
-            }
-        }
-
-        function displayResults(videos) {
-            const results = document.getElementById('results');
-            results.innerHTML = '';
-            videos.forEach((video, index) => results.appendChild(renderVideoCard(video, index)));
-        }
-
-        function showAnalysis(id, provider = 'ai') {
-            const content = document.getElementById(id).textContent;
-            const title = provider === 'libtv' ? 'LibTV 一键拉片报告' : provider === 'remake' ? '复刻脚本' : 'AI 深度拆解';
-            openModal(title, content);
-        }
-
-        window.onload = loadKeywords;
-    </script>
+  <dialog class="report-dialog" id="modal" aria-labelledby="modal-title">
+    <div class="report-shell">
+      <header class="modal-header">
+        <div><span>VIRALX REPORT</span><h2 id="modal-title">拉片报告</h2></div>
+        <div class="modal-actions">
+          <button class="export-btn" id="export-btn" type="button">导出 Obsidian</button>
+          <button class="modal-close" type="button" aria-label="关闭拉片报告">×</button>
+        </div>
+      </header>
+      <div class="modal-content markdown-content" id="modal-content"></div>
+    </div>
+  </dialog>
 </body>
 </html>

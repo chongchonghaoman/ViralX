@@ -14,6 +14,14 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(self.client.get('/').status_code, 200)
         self.assertEqual(self.client.get('/settings').status_code, 200)
 
+    def test_health_returns_readiness_without_secret_values(self):
+        response = self.client.get('/api/health')
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload['runtime'], 'local')
+        self.assertIsInstance(payload['analysis_ready'], bool)
+        self.assertTrue(all(isinstance(value, bool) for value in payload['configured'].values()))
+
     def test_direct_douyin_url_uses_libtv_and_reports_missing_key(self):
         config = {**web_app.DEFAULT_CONFIG, 'libtv_access_key': ''}
         with patch.object(web_app, 'load_config', return_value=config), patch.dict(

@@ -1,0 +1,4 @@
+interface:
+  display_name: "TK Note"
+  short_description: "TikTok video, transcript, comments, and evidence assets"
+  default_prompt: "Use tk-note to extract this TikTok URL into reusable video, metadata, transcript, comment, and evidence assets before analysis."

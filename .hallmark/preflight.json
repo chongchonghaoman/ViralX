@@ -1,0 +1,20 @@
+{
+  "date": "2026-08-24",
+  "framework": "Flask templates with vanilla HTML, CSS, GSAP and a static EdgeOne export",
+  "reference": "direct public component-system mapping from https://www.butter.video/ without copying brand assets, copy, imagery or licensed font binaries",
+  "font_stack": "Butter uses commercial Die Grotesk and ABC Diatype; ViralX uses OFL Hanken Grotesk plus Noto Sans SC",
+  "palette": "observed Butter values #EDEDED page, #FAFAFA floating surfaces, #0F0F0F/#1E1E1E ink and editor, #4DC5E5 signal with restrained #F9ABFF, #E9D352 and #63AD45 punctuation",
+  "motion": "GSAP entrance, visible-by-default one-time scroll translation, real streamed progress and reduced-motion fallback",
+  "spacing": "shared named four-point scale with Butter-like detached navigation, centred marquee and wide chapter intervals",
+  "preserve": [
+    "Flask routes and API contracts",
+    "TK Note and LibTV workflow",
+    "existing form field ids",
+    "Obsidian export"
+  ],
+  "validation": {
+    "playwright": "desktop, 320px, 375px, 390px, 414px, 768px, 1280x800, 1920px, settings, reduced motion and EdgeOne static boundary passed",
+    "slop_audit": "passed after lifting ad hoc colours into tokens, moving the desktop object into the fold, flattening settings headings and shortening mobile summary copy",
+    "runtime_boundary": "EdgeOne is static presentation; Flask remains the full local product"
+  }
+}

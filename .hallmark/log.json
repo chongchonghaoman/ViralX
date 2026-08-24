@@ -1,0 +1,44 @@
+[
+  {
+    "date": "2026-08-24",
+    "scope": "website, embedded studio and settings",
+    "macrostructure": "Centered Marquee + Embedded Studio",
+    "theme": "studied-DNA (source: https://www.butter.video/)",
+    "genre": "playful product editorial",
+    "enrichment": "original ViralX signal-orbit product visual, centred and page-blended",
+    "brief": "Directly map Butter's detached pill navigation, grey canvas, monumental centred claim, dark editor surface, four-step workflow and index footer while preserving every ViralX runtime contract",
+    "validation": "Playwright desktop/mobile/settings matrix, 1280x800 fold, reduced motion, Flask tests and static runtime-boundary checks passed",
+    "slop_audit": "passed with exact reference neutrals retained by explicit user request"
+  },
+  {
+    "date": "2026-08-24",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "Midnight",
+    "genre": "atmospheric",
+    "enrichment": "none",
+    "brief": "ViralX analysis workstation and settings redesign"
+  },
+  {
+    "date": "2026-08-24",
+    "scope": "website and settings",
+    "macrostructure": "Product Story + Embedded Studio",
+    "theme": "studied-DNA (source: butter.video)",
+    "genre": "playful product editorial",
+    "enrichment": "original ViralX signal-orbit product visual",
+    "brief": "Butter-inspired public website with preserved local analysis workflow and EdgeOne static boundary",
+    "validation": "Playwright responsive, console, reduced-motion and deployed-page checks passed",
+    "slop_audit": "passed"
+  },
+  {
+    "date": "2026-08-24",
+    "scope": "website and settings refinement",
+    "macrostructure": "Product Story + Embedded Studio",
+    "theme": "Butter observed colour and typography roles",
+    "genre": "refined product editorial",
+    "enrichment": "blue-and-ink duotone ViralX signal object",
+    "brief": "Replace the warm acid-lime direction with Butter's current neutral and blue system; use licensed font substitutes",
+    "validation": "desktop, iPhone 15, settings and static runtime-boundary screenshots passed; browser console clean",
+    "slop_audit": "passed after reducing display scale, radii, shadows and colour distribution"
+  }
+]

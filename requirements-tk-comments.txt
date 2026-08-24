@@ -1,0 +1,3 @@
+# Optional: only needed for TK Note comment collection, never for video -> LibTV.
+TikTokApi
+playwright

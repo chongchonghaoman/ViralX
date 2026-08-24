@@ -8,7 +8,10 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "build:edgeone": "node scripts/build-edgeone.mjs",
+    "preview:edgeone": "python -m http.server 4173 --bind 127.0.0.1 --directory public",
+    "deploy:edgeone": "npm run build:edgeone && npx edgeone makers deploy public -n viralx"
   },
   "build": {
     "appId": "com.viralx.app",

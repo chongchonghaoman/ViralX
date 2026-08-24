@@ -1,78 +1,52 @@
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 import json
 import os
 import time
 import hashlib
 import subprocess
-import pathlib
 import requests
 import anthropic
 import google.genai as genai
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from libtv_analyzer import LibTVAnalyzer, LibTVError
+from video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
 
 def load_config():
     config_path = Path(__file__).parent / "config.json"
+    config = {}
     if config_path.exists():
-        return json.loads(config_path.read_text(encoding='utf-8'))
-    return {}
-
-
-class VideoDownloader:
-    """使用 yt-dlp 下载 TikTok 视频"""
-
-    def __init__(self, output_dir: str = None):
-        if output_dir is None:
-            output_dir = Path(__file__).parent / "video_cache"
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
-
-    def download(self, video_url: str, video_id: str) -> str | None:
-        """下载 TikTok 视频到本地，返回文件路径"""
-        output_path = self.output_dir / f"{video_id}.mp4"
-        if output_path.exists():
-            print(f"[视频缓存] {video_id} 已存在")
-            return str(output_path)
-
-        print(f"[视频下载] {video_id}...")
-        try:
-            cmd = [
-                sys.executable, "-m", "yt_dlp",
-                "--no-playlist",
-                "--quiet",
-                "--no-warnings",
-                "-o", str(output_path),
-                "--merge-output-format", "mp4",
-                video_url
-            ]
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-            if result.returncode == 0 and output_path.exists():
-                size = output_path.stat().st_size
-                print(f"[视频下载成功] {video_id} ({size/1024/1024:.1f}MB)")
-                return str(output_path)
-            else:
-                print(f"[视频下载失败] {video_id}: {result.stderr[:200]}")
-        except subprocess.TimeoutExpired:
-            print(f"[视频下载超时] {video_id}")
-        except Exception as e:
-            print(f"[视频下载异常] {video_id}: {e}")
-        return None
+        config = json.loads(config_path.read_text(encoding='utf-8'))
+    env_map = {
+        'GEMINI_API_KEY': 'gemini_api_key',
+        'GEMINI_MODEL': 'gemini_model',
+        'OPENROUTER_API_KEY': 'openrouter_api_key',
+        'OPENROUTER_MODEL': 'openrouter_model',
+        'VIRALX_VIDEO_CACHE_DIR': 'video_cache_dir',
+    }
+    for env_name, config_name in env_map.items():
+        if os.environ.get(env_name):
+            config[config_name] = os.environ[env_name]
+    if os.environ.get('VIRALX_RUNTIME', '').lower() == 'edgeone':
+        config.setdefault('video_cache_dir', '/tmp/viralx/video_cache')
+    return config
 
 
 class AICache:
     """AI 分析结果缓存"""
     def __init__(self, cache_dir: str = None):
         if cache_dir is None:
-            cache_dir = Path(__file__).parent / "cache"
+            cache_dir = os.environ.get('VIRALX_CACHE_DIR')
+        if cache_dir is None:
+            cache_dir = (
+                Path('/tmp/viralx/cache')
+                if os.environ.get('VIRALX_RUNTIME', '').lower() == 'edgeone'
+                else Path(__file__).parent / "cache"
+            )
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
+        self.cache_dir.mkdir(exist_ok=True, parents=True)
 
     def _cache_key(self, video_id: str, analysis_type: str = "video_script") -> str:
         key_str = f"{video_id}_{analysis_type}"
@@ -108,8 +82,7 @@ class OpenRouterAnalyzer:
         self.api_key = api_key or config.get('openrouter_api_key', '')
         self.model_name = model
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
-        self.video_dir.mkdir(exist_ok=True)
-        self.downloader = VideoDownloader(str(self.video_dir))
+        self.video_dir.mkdir(exist_ok=True, parents=True)
 
     def extract_frames(self, video_path: str, output_dir: str = None) -> list:
         """从视频每1秒提取1帧，返回帧文件路径列表"""
@@ -454,7 +427,6 @@ class GeminiAnalyzer:
         self.model_name = model or config.get('gemini_model', 'gemini-2.5-flash')
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
         self.video_dir.mkdir(exist_ok=True)
-        self.downloader = VideoDownloader(str(self.video_dir))
         self.client = genai.Client(api_key=self.api_key)
 
     def analyze(self, video_data: dict, video_file_path: str = None) -> str:
@@ -863,12 +835,21 @@ class AIAnalyzer:
         base_url: str = None,
         model: str = None,
         analysis_mode: str = 'libtv',
+        gemini_api_key: str = '',
+        gemini_model: str = '',
         openrouter_api_key: str = '',
         openrouter_model: str = '',
         libtv_access_key: str = '',
         libtv_im_base: str = '',
         libtv_poll_interval: float = None,
         libtv_timeout: float = None,
+        video_collector=None,
+        video_cache_dir: str = '',
+        tk_note_asr_backend: str = '',
+        tk_note_language: str = '',
+        tk_note_cookies_from_browser: str = '',
+        tk_note_proxy: str = '',
+        tk_note_timeout: float = None,
     ):
         config = load_config()
 
@@ -883,9 +864,24 @@ class AIAnalyzer:
         self.libtv_poll_interval = libtv_poll_interval if libtv_poll_interval is not None else config.get('libtv_poll_interval', 8)
         self.libtv_timeout = libtv_timeout if libtv_timeout is not None else config.get('libtv_timeout', 180)
         self.libtv_concurrency = max(1, min(int(config.get('libtv_concurrency', 2)), 5))
+        self.video_collector = video_collector or VideoAssetCollector(
+            cache_dir=video_cache_dir or config.get('video_cache_dir', './video_cache'),
+            tk_note_asr_backend=tk_note_asr_backend or config.get('tk_note_asr_backend', 'auto'),
+            tk_note_language=tk_note_language or config.get('tk_note_language', 'auto'),
+            tk_note_cookies_from_browser=(
+                tk_note_cookies_from_browser
+                or config.get('tk_note_cookies_from_browser', '')
+            ),
+            tk_note_proxy=tk_note_proxy or config.get('tk_note_proxy', ''),
+            tk_note_timeout=(
+                tk_note_timeout
+                if tk_note_timeout is not None
+                else config.get('tk_note_timeout', 1800)
+            ),
+        )
 
-        self.gemini_key = config.get('gemini_api_key', '')
-        self.gemini_model = config.get('gemini_model', 'gemini-2.5-flash')
+        self.gemini_key = gemini_api_key or config.get('gemini_api_key', '')
+        self.gemini_model = gemini_model or config.get('gemini_model', 'gemini-2.5-flash')
         self.use_libtv = self.analysis_mode == 'libtv'
         self.use_gemini = self.analysis_mode == 'gemini' and bool(self.gemini_key)
         self.use_openrouter = self.analysis_mode == 'openrouter' and bool(self.openrouter_api_key)
@@ -897,11 +893,9 @@ class AIAnalyzer:
                 poll_interval=self.libtv_poll_interval,
                 timeout=self.libtv_timeout,
             )
-            self.video_downloader = VideoDownloader()
             print("[AIAnalyzer] 模式0: LibTV 一键拉片")
         else:
             self.libtv = None
-            self.video_downloader = None
 
         if self.use_gemini:
             self.gemini = GeminiAnalyzer(api_key=self.gemini_key, model=self.gemini_model)
@@ -945,16 +939,17 @@ class AIAnalyzer:
                     text += block.thinking
         return text.strip()
 
-    def analyze_video_script(self, video_data: dict, video_url: str = None, use_cache: bool = False) -> str:
+    def analyze_video_script(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False) -> str:
         """分析视频并返回报告文本；详细提供方状态由 details 方法返回。"""
         return self.analyze_video_script_details(
-            video_data, video_url=video_url, use_cache=use_cache
+            video_data, video_url=video_url, use_cache=use_cache, force_collect=force_collect
         )['analysis']
 
-    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False) -> dict:
+    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False) -> dict:
         """分析视频并返回报告、提供方、会话与画布元数据。"""
         video_id = video_data.get('video_id', '')
         video_file_path = None
+        acquisition_details = {}
 
         if self.use_libtv:
             if not self.libtv.access_key:
@@ -969,12 +964,21 @@ class AIAnalyzer:
                     'analysis_provider': 'libtv',
                     'libtv_status': 'error',
                 }
-            video_file_path = self.video_downloader.download(video_url, video_id)
-            if not video_file_path:
+            try:
+                asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+                video_file_path = asset.video_file
+                acquisition_details = asset.analysis_details()
+                video_data.update(asset.video_fields())
+            except VideoIngestError as exc:
+                ingest_error = {
+                    'acquisition_provider': 'tk-note' if is_tiktok_url(video_url) else 'yt-dlp',
+                    ('tk_note_status' if is_tiktok_url(video_url) else 'video_ingest_status'): 'error',
+                }
                 return {
-                    'analysis': 'LibTV 拉片失败：无法下载原视频，请检查链接或网络后重试',
+                    'analysis': f'LibTV 拉片失败：{exc}',
                     'analysis_provider': 'libtv',
                     'libtv_status': 'error',
+                    **ingest_error,
                 }
             try:
                 result = self.libtv.analyze(video_file_path, user_request='一键拉片')
@@ -987,28 +991,42 @@ class AIAnalyzer:
                     'libtv_project_uuid': details.pop('project_uuid'),
                     'libtv_project_url': details.pop('project_url'),
                     'libtv_result_urls': details.pop('result_urls'),
+                    **acquisition_details,
                 }
             except LibTVError as exc:
                 return {
                     'analysis': f'LibTV 拉片失败：{exc}',
                     'analysis_provider': 'libtv',
                     'libtv_status': 'error',
+                    **acquisition_details,
                 }
 
         if self.use_gemini and video_url:
-            video_file_path = self.gemini.downloader.download(video_url, video_id)
+            try:
+                asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+                video_file_path = asset.video_file
+                acquisition_details = asset.analysis_details()
+                video_data.update(asset.video_fields())
+            except VideoIngestError as exc:
+                print(f"[视频采集失败，fallback] {exc}")
             if video_file_path:
                 result = self.gemini.analyze(video_data, video_file_path)
                 if "失败" not in result:
-                    return {'analysis': result, 'analysis_provider': 'gemini'}
+                    return {'analysis': result, 'analysis_provider': 'gemini', **acquisition_details}
                 print(f"[Gemini 失败，fallback] {result[:100]}")
 
         elif self.use_openrouter and video_url:
-            video_file_path = self.openrouter.downloader.download(video_url, video_id)
+            try:
+                asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+                video_file_path = asset.video_file
+                acquisition_details = asset.analysis_details()
+                video_data.update(asset.video_fields())
+            except VideoIngestError as exc:
+                print(f"[视频采集失败，fallback] {exc}")
             if video_file_path:
                 result = self.openrouter.analyze(video_data, video_file_path)
                 if "失败" not in result:
-                    return {'analysis': result, 'analysis_provider': 'openrouter'}
+                    return {'analysis': result, 'analysis_provider': 'openrouter', **acquisition_details}
                 print(f"[OpenRouter 失败，fallback] {result[:100]}")
 
         return {
@@ -1036,7 +1054,7 @@ class AIAnalyzer:
         except Exception as e:
             return f"分析失败: {str(e)[:100]}"
 
-    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = ''):
+    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = '', force_collect: bool = False):
         """并发分析多个视频，视频分析并发，复刻脚本串行生成"""
         def hot_score(v):
             return v.get('likes', 0) * 1 + v.get('comments', 0) * 5 + v.get('shares', 0) * 2
@@ -1047,7 +1065,7 @@ class AIAnalyzer:
         workers = self.libtv_concurrency if self.use_libtv else self.MAX_CONCURRENT
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_video = {
-                executor.submit(self._analyze_video_only, v, urls.get(v['video_id'])): v
+                executor.submit(self._analyze_video_only, v, urls.get(v['video_id']), force_collect): v
                 for v in sorted_videos
             }
             for future in as_completed(future_to_video):
@@ -1080,10 +1098,10 @@ class AIAnalyzer:
                 except Exception as e:
                     yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}", 'remake_script': ''}
 
-    def _analyze_video_only(self, video: dict, video_url: str = None) -> dict:
+    def _analyze_video_only(self, video: dict, video_url: str = None, force_collect: bool = False) -> dict:
         """仅分析视频，不生成复刻脚本"""
         return self.analyze_video_script_details(
-            video, video_url=video_url, use_cache=False
+            video, video_url=video_url, use_cache=False, force_collect=force_collect
         )
 
     def _generate_remake_with_retry(self, video: dict, analysis: str, product_name: str, product_info: str, max_retries: int = 3) -> str:
