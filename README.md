@@ -130,6 +130,8 @@ npm run preview:edgeone
 npm run deploy:edgeone
 ```
 
+公开站点：[https://viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。`deploy:edgeone` 默认更新绑定该域名的海外生产项目。
+
 EdgeOne 版本通过 Python Cloud Functions 提供同源分析 API，并复用 TK Note / yt-dlp、LibTV 和现有 NDJSON 前端合同。网页设置页位于 `/settings.html`：API Key 只保存在当前标签页的 `sessionStorage`，经 HTTPS 随同源请求临时发送，关闭标签页后自动清除；不会写进静态文件或公开接口。云端函数最多处理 1 条视频，使用临时 `/tmp` 资产，并受 120 秒与 6MB 响应限制；本地 Flask 仍负责持久化设置、持久缓存、长任务和 Obsidian 文件系统直写。部署记录和当前配置状态见 `DEPLOYMENT.md`。
 
 ## API 端点
