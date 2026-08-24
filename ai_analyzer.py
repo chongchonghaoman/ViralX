@@ -11,6 +11,7 @@ import anthropic
 import google.genai as genai
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from libtv_analyzer import LibTVAnalyzer, LibTVError
 
 def load_config():
     config_path = Path(__file__).parent / "config.json"
@@ -850,26 +851,57 @@ class MiniMaxAnalyzer:
 
 
 class AIAnalyzer:
-    """统一分析器：支持 Gemini 多模态 / OpenRouter 免费模型"""
+    """统一分析器：默认使用 LibTV 一键拉片，并保留旧分析模式。"""
 
     _cache = None
     MAX_CONCURRENT = 5
     REQUEST_TIMEOUT = 120
 
-    def __init__(self, api_key: str = "", base_url: str = None, model: str = None, analysis_mode: str = 'gemini', openrouter_api_key: str = '', openrouter_model: str = ''):
+    def __init__(
+        self,
+        api_key: str = "",
+        base_url: str = None,
+        model: str = None,
+        analysis_mode: str = 'libtv',
+        openrouter_api_key: str = '',
+        openrouter_model: str = '',
+        libtv_access_key: str = '',
+        libtv_im_base: str = '',
+        libtv_poll_interval: float = None,
+        libtv_timeout: float = None,
+    ):
         config = load_config()
 
         self.api_key = api_key or config.get('minimax_api_key', '')
         self.base_url = base_url or config.get('minimax_base_url', 'https://api.minimaxi.com/anthropic')
         self.model = model or config.get('minimax_model', 'MiniMax-M2.7')
-        self.analysis_mode = analysis_mode or config.get('analysis_mode', 'gemini')
+        self.analysis_mode = analysis_mode or config.get('analysis_mode', 'libtv')
         self.openrouter_api_key = openrouter_api_key or config.get('openrouter_api_key', '')
         self.openrouter_model = openrouter_model or config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')
+        self.libtv_access_key = libtv_access_key or config.get('libtv_access_key', '')
+        self.libtv_im_base = libtv_im_base or config.get('libtv_im_base', 'https://im.liblib.tv')
+        self.libtv_poll_interval = libtv_poll_interval if libtv_poll_interval is not None else config.get('libtv_poll_interval', 8)
+        self.libtv_timeout = libtv_timeout if libtv_timeout is not None else config.get('libtv_timeout', 180)
+        self.libtv_concurrency = max(1, min(int(config.get('libtv_concurrency', 2)), 5))
 
         self.gemini_key = config.get('gemini_api_key', '')
         self.gemini_model = config.get('gemini_model', 'gemini-2.5-flash')
+        self.use_libtv = self.analysis_mode == 'libtv'
         self.use_gemini = self.analysis_mode == 'gemini' and bool(self.gemini_key)
         self.use_openrouter = self.analysis_mode == 'openrouter' and bool(self.openrouter_api_key)
+
+        if self.use_libtv:
+            self.libtv = LibTVAnalyzer(
+                access_key=self.libtv_access_key,
+                im_base=self.libtv_im_base,
+                poll_interval=self.libtv_poll_interval,
+                timeout=self.libtv_timeout,
+            )
+            self.video_downloader = VideoDownloader()
+            print("[AIAnalyzer] 模式0: LibTV 一键拉片")
+        else:
+            self.libtv = None
+            self.video_downloader = None
 
         if self.use_gemini:
             self.gemini = GeminiAnalyzer(api_key=self.gemini_key, model=self.gemini_model)
@@ -885,11 +917,13 @@ class AIAnalyzer:
 
         os.environ["ANTHROPIC_BASE_URL"] = self.base_url
         os.environ["ANTHROPIC_API_KEY"] = self.api_key
-        self.client = anthropic.Anthropic(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.REQUEST_TIMEOUT,
-        )
+        self.client = None
+        if self.api_key:
+            self.client = anthropic.Anthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.REQUEST_TIMEOUT,
+            )
 
         if AIAnalyzer._cache is None:
             AIAnalyzer._cache = AICache()
@@ -912,16 +946,61 @@ class AIAnalyzer:
         return text.strip()
 
     def analyze_video_script(self, video_data: dict, video_url: str = None, use_cache: bool = False) -> str:
-        """分析视频：根据模式选择 Gemini 或 OpenRouter"""
+        """分析视频并返回报告文本；详细提供方状态由 details 方法返回。"""
+        return self.analyze_video_script_details(
+            video_data, video_url=video_url, use_cache=use_cache
+        )['analysis']
+
+    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False) -> dict:
+        """分析视频并返回报告、提供方、会话与画布元数据。"""
         video_id = video_data.get('video_id', '')
         video_file_path = None
+
+        if self.use_libtv:
+            if not self.libtv.access_key:
+                return {
+                    'analysis': 'LibTV 拉片失败：未配置 LIBTV_ACCESS_KEY，请先在设置页填写',
+                    'analysis_provider': 'libtv',
+                    'libtv_status': 'error',
+                }
+            if not video_url:
+                return {
+                    'analysis': 'LibTV 拉片失败：缺少可下载的视频链接',
+                    'analysis_provider': 'libtv',
+                    'libtv_status': 'error',
+                }
+            video_file_path = self.video_downloader.download(video_url, video_id)
+            if not video_file_path:
+                return {
+                    'analysis': 'LibTV 拉片失败：无法下载原视频，请检查链接或网络后重试',
+                    'analysis_provider': 'libtv',
+                    'libtv_status': 'error',
+                }
+            try:
+                result = self.libtv.analyze(video_file_path, user_request='一键拉片')
+                details = result.to_dict()
+                return {
+                    'analysis': details.pop('analysis'),
+                    'analysis_provider': 'libtv',
+                    'libtv_status': details.pop('status'),
+                    'libtv_session_id': details.pop('session_id'),
+                    'libtv_project_uuid': details.pop('project_uuid'),
+                    'libtv_project_url': details.pop('project_url'),
+                    'libtv_result_urls': details.pop('result_urls'),
+                }
+            except LibTVError as exc:
+                return {
+                    'analysis': f'LibTV 拉片失败：{exc}',
+                    'analysis_provider': 'libtv',
+                    'libtv_status': 'error',
+                }
 
         if self.use_gemini and video_url:
             video_file_path = self.gemini.downloader.download(video_url, video_id)
             if video_file_path:
                 result = self.gemini.analyze(video_data, video_file_path)
                 if "失败" not in result:
-                    return result
+                    return {'analysis': result, 'analysis_provider': 'gemini'}
                 print(f"[Gemini 失败，fallback] {result[:100]}")
 
         elif self.use_openrouter and video_url:
@@ -929,13 +1008,18 @@ class AIAnalyzer:
             if video_file_path:
                 result = self.openrouter.analyze(video_data, video_file_path)
                 if "失败" not in result:
-                    return result
+                    return {'analysis': result, 'analysis_provider': 'openrouter'}
                 print(f"[OpenRouter 失败，fallback] {result[:100]}")
 
-        return self._analyze_minimax(video_data)
+        return {
+            'analysis': self._analyze_minimax(video_data),
+            'analysis_provider': 'minimax',
+        }
 
     def _analyze_minimax(self, video_data: dict) -> str:
         """MiniMax 纯文本分析"""
+        if not self.client:
+            return "分析失败：未配置可用的 MiniMax API Key"
         analyzer = MiniMaxAnalyzer(self.api_key, self.base_url, self.model)
         prompt = analyzer._build_prompt(video_data)
 
@@ -960,7 +1044,8 @@ class AIAnalyzer:
         sorted_videos = sorted(videos, key=hot_score, reverse=True)[:max_videos]
         urls = video_urls or {}
 
-        with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT) as executor:
+        workers = self.libtv_concurrency if self.use_libtv else self.MAX_CONCURRENT
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_video = {
                 executor.submit(self._analyze_video_only, v, urls.get(v['video_id'])): v
                 for v in sorted_videos
@@ -970,19 +1055,36 @@ class AIAnalyzer:
                 try:
                     result = future.result()
                     analysis = result['analysis']
+                    provider_details = {
+                        key: value for key, value in result.items() if key != 'analysis'
+                    }
                     remake_script = ''
 
-                    if product_name and product_info and analysis and '分析异常' not in analysis:
+                    can_remake = (
+                        self.client
+                        and product_name
+                        and product_info
+                        and analysis
+                        and '分析异常' not in analysis
+                        and result.get('libtv_status') not in {'error', 'timeout'}
+                    )
+                    if can_remake:
                         remake_script = self._generate_remake_with_retry(video, analysis, product_name, product_info)
 
-                    yield {**video, 'ai_analysis': analysis, 'remake_script': remake_script}
+                    yield {
+                        **video,
+                        'ai_analysis': analysis,
+                        'remake_script': remake_script,
+                        **provider_details,
+                    }
                 except Exception as e:
                     yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}", 'remake_script': ''}
 
     def _analyze_video_only(self, video: dict, video_url: str = None) -> dict:
         """仅分析视频，不生成复刻脚本"""
-        analysis = self.analyze_video_script(video, video_url=video_url, use_cache=False)
-        return {'analysis': analysis}
+        return self.analyze_video_script_details(
+            video, video_url=video_url, use_cache=False
+        )
 
     def _generate_remake_with_retry(self, video: dict, analysis: str, product_name: str, product_info: str, max_retries: int = 3) -> str:
         """带重试的复刻脚本生成"""
@@ -1001,6 +1103,8 @@ class AIAnalyzer:
 
     def generate_viral_variants(self, video_data: dict, original_analysis: str) -> str:
         """用 MiniMax 生成裂变变体"""
+        if not self.client:
+            return "裂变脚本生成失败：未配置 MiniMax API Key"
         prompt = f"""角色设定：你是资深 TikTok 电商短视频裂变策划专家。
 
 === 原始视频信息 ===
@@ -1029,6 +1133,8 @@ class AIAnalyzer:
 
     def generate_remake_script(self, video_data: dict, original_analysis: str, product_name: str, product_info: str) -> str:
         """基于爆款视频分析和产品信息，生成复刻脚本（不使用缓存）"""
+        if not self.client:
+            return "复刻脚本生成失败：未配置 MiniMax API Key"
         duration = video_data.get('duration', 0)
         prompt = f"""角色设定：你是资深TikTok电商短视频编剧，擅长将爆款视频的成功逻辑应用到不同产品上。
 

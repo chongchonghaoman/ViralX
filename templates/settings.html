@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>设置 - ViralX</title>
+    <link rel="icon" href="data:,">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -265,6 +266,7 @@
     <div class="main-content">
         <h1>设置</h1>
 
+        <form id="settings-form" onsubmit="event.preventDefault(); saveSettings();">
         <div id="status" class="status"></div>
 
         <div class="section">
@@ -281,10 +283,39 @@
             <div class="form-group">
                 <label>选择模式</label>
                 <select id="analysis_mode" style="width:100%;background:#2a2a2a;border:1px solid #3a3a3a;border-radius:6px;padding:12px;color:#e0e0e0;font-size:14px;">
+                    <option value="libtv">默认：LibTV 一键拉片</option>
                     <option value="gemini">模式1：Gemini 多模态分析</option>
                     <option value="openrouter">模式2：OpenRouter（免费模型）</option>
                 </select>
-                <small>模式1使用 Gemini 直接分析视频；模式2使用 OpenRouter 免费模型（视频分析不佳时每1秒取1帧）</small>
+                <small>默认使用 LibTV 上传原视频并执行一键拉片；Gemini 与 OpenRouter 保留为兼容模式。</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>LibTV 一键拉片</h2>
+            <div class="form-group">
+                <label for="libtv_access_key">LibTV Access Key</label>
+                <input type="password" id="libtv_access_key" placeholder="输入 LIBTV_ACCESS_KEY" autocomplete="off">
+                <small>也可通过系统环境变量 LIBTV_ACCESS_KEY 配置；视频会上传到 LibTV 后端完成拉片。</small>
+            </div>
+            <div class="form-group">
+                <label for="libtv_im_base">服务地址</label>
+                <input type="url" id="libtv_im_base" placeholder="https://im.liblib.tv">
+                <small>通常无需修改，对应 OPENAPI_IM_BASE。</small>
+            </div>
+            <div class="form-group">
+                <label for="libtv_poll_interval">轮询间隔（秒）</label>
+                <input type="number" id="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
+            </div>
+            <div class="form-group">
+                <label for="libtv_timeout">单条视频等待上限（秒）</label>
+                <input type="number" id="libtv_timeout" min="30" max="900" step="10" placeholder="180">
+                <small>超时后仍会保留 LibTV 项目画布入口，方便稍后继续查看。</small>
+            </div>
+            <div class="form-group">
+                <label for="libtv_concurrency">并发拉片数</label>
+                <input type="number" id="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
+                <small>默认 2，避免同一 Access Key 同时创建过多会话。</small>
             </div>
         </div>
 
@@ -358,9 +389,10 @@
         </div>
 
         <div class="actions">
-            <button class="btn btn-save" id="save-btn" onclick="saveSettings()">保存设置</button>
-            <button class="btn btn-secondary" onclick="loadSettings()">重置</button>
+            <button class="btn btn-save" id="save-btn" type="submit">保存设置</button>
+            <button class="btn btn-secondary" type="button" onclick="loadSettings()">重置</button>
         </div>
+        </form>
     </div>
 
     <script>
@@ -372,7 +404,12 @@
                 settings = await res.json();
 
                 document.getElementById('rapidapi_key').value = settings.rapidapi_key || '';
-                document.getElementById('analysis_mode').value = settings.analysis_mode || 'gemini';
+                document.getElementById('analysis_mode').value = settings.analysis_mode || 'libtv';
+                document.getElementById('libtv_access_key').value = settings.libtv_access_key || '';
+                document.getElementById('libtv_im_base').value = settings.libtv_im_base || 'https://im.liblib.tv';
+                document.getElementById('libtv_poll_interval').value = settings.libtv_poll_interval || 8;
+                document.getElementById('libtv_timeout').value = settings.libtv_timeout || 180;
+                document.getElementById('libtv_concurrency').value = settings.libtv_concurrency || 2;
                 document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
                 document.getElementById('gemini_model').value = settings.gemini_model || 'gemini-2.5-flash';
                 document.getElementById('openrouter_api_key').value = settings.openrouter_api_key || '';
@@ -418,6 +455,11 @@
 
             settings.rapidapi_key = document.getElementById('rapidapi_key').value;
             settings.analysis_mode = document.getElementById('analysis_mode').value;
+            settings.libtv_access_key = document.getElementById('libtv_access_key').value;
+            settings.libtv_im_base = document.getElementById('libtv_im_base').value || 'https://im.liblib.tv';
+            settings.libtv_poll_interval = parseInt(document.getElementById('libtv_poll_interval').value) || 8;
+            settings.libtv_timeout = parseInt(document.getElementById('libtv_timeout').value) || 180;
+            settings.libtv_concurrency = parseInt(document.getElementById('libtv_concurrency').value) || 2;
             settings.gemini_api_key = document.getElementById('gemini_api_key').value;
             settings.gemini_model = document.getElementById('gemini_model').value;
             settings.openrouter_api_key = document.getElementById('openrouter_api_key').value;
