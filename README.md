@@ -6,14 +6,16 @@ AI驱动的 TikTok 美区爆款视频分析工具
 
 ## 核心功能
 
-### AI 多模态分析
-- **OpenRouter (NVIDIA)** - 视频帧逐秒分析，免费使用
-- **Gemini 2.5 Flash** - 视频帧多模态理解
-- **MiniMax M2.7** - 纯文本深度分析
+### LibTV 一键拉片（默认）
+- 使用官方 [`libtv-skill`](https://github.com/libtv-labs/libtv-skills) 上传原视频
+- 自动创建会话、增量轮询拉片结果，并返回 LibTV 项目画布
+- 8 秒轮询、3 分钟超时、连续查询失败保护均可配置
+- Gemini / OpenRouter 保留为兼容分析模式，MiniMax 继续用于复刻脚本
 
 ### 视频分析
 - 爆款视频搜索（RapidAPI TikTok 数据，5000+ 点赞过滤）
-- 视频一键下载（yt-dlp）
+- 支持直接粘贴抖音 / TikTok 单条视频链接
+- 视频一键下载（yt-dlp）并交给 LibTV 拉片
 - 评论抓取与情感分析
 
 ### 流式分析
@@ -35,6 +37,8 @@ Linear 风格的深色主题 UI，支持设置页面配置 API 密钥。
 
 ## 快速开始
 
+环境要求：Python 3.10+、Node.js 18+（仅桌面版需要 Node.js）。
+
 ### 1. 安装依赖
 
 ```bash
@@ -44,19 +48,41 @@ npm install
 
 ### 2. 配置
 
-编辑 `config.json`：
+复制示例并编辑 `config.json`：
+
+```bash
+cp config.json.example config.json
+```
 
 ```json
 {
   "rapidapi_key": "YOUR_RAPIDAPI_KEY",
+  "analysis_mode": "libtv",
+  "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY",
+  "libtv_im_base": "https://im.liblib.tv",
+  "libtv_poll_interval": 8,
+  "libtv_timeout": 180,
+  "libtv_concurrency": 2,
   "minimax_api_key": "YOUR_MINIMAX_API_KEY",
-  "openrouter_api_key": "YOUR_OPENROUTER_KEY",
   "search_keywords": ["outdoor lighting lamp"],
   "min_likes": 5000
 }
 ```
 
+也可以不把 LibTV Key 写入文件，而是设置环境变量：
+
+```bash
+export LIBTV_ACCESS_KEY="your-access-key"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:LIBTV_ACCESS_KEY = "your-access-key"
+```
+
 API 获取地址：
+- LibTV: https://www.liblib.tv/
 - RapidAPI: https://rapidapi.com/DataFanatic/api/tiktok-scraper7
 - MiniMax: https://www.minimaxi.com/
 - OpenRouter: https://openrouter.ai/
@@ -89,7 +115,7 @@ npm start
 
 ## 技术栈
 
-- **AI**: MiniMax M2.7, Google Gemini 2.5 Flash, OpenRouter (NVIDIA)
+- **AI**: LibTV Agent-IM, MiniMax M2.7, Google Gemini 2.5 Flash, OpenRouter (NVIDIA)
 - **后端**: Python Flask
 - **前端**: HTML/CSS/JavaScript (Linear 风格深色主题)
 - **桌面**: Electron
@@ -99,6 +125,8 @@ npm start
 
 ```
 ViralX/
+├── .agents/skills/libtv-skill/ # 官方 LibTV Skill
+├── libtv_analyzer.py        # LibTV 上传/会话/轮询适配器
 ├── ai_analyzer.py          # AI 分析引擎
 ├── tiktok_viral_analyzer.py # TikTok 数据获取
 ├── web_app.py              # Web 服务 + API
@@ -110,6 +138,15 @@ ViralX/
 ├── package.json
 └── requirements.txt
 ```
+
+## 验证
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+单元测试使用模拟的 LibTV 响应，不需要真实 Access Key。真实联调需配置
+`LIBTV_ACCESS_KEY`，并确保输入视频不超过 200MB。
 
 ## License
 

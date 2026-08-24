@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TikTok 分析</title>
+    <link rel="icon" href="data:,">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,6 +35,14 @@
 
         .search-section {
             margin-bottom: 32px;
+        }
+
+        .field-help {
+            display: block;
+            color: #666;
+            font-size: 12px;
+            line-height: 1.5;
+            margin-top: 8px;
         }
 
         .search-section label {
@@ -177,6 +186,20 @@
             background: #333;
         }
 
+        .btn:focus-visible,
+        .analysis-btn:focus-visible,
+        .video-title:focus-visible,
+        .modal-close:focus-visible,
+        .export-btn:focus-visible {
+            outline: 2px solid #86bfff;
+            outline-offset: 2px;
+        }
+
+        .btn:disabled {
+            cursor: wait;
+            opacity: 0.55;
+        }
+
         .remake-script {
             margin-top: 16px;
             padding: 16px;
@@ -223,9 +246,29 @@
         }
 
         .loading {
-            text-align: center;
-            padding: 48px 24px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
             color: #888;
+            font-size: 13px;
+        }
+
+        .progress-track {
+            height: 8px;
+            margin-top: 12px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #2a2a2a;
+        }
+
+        .progress-bar {
+            width: 8%;
+            height: 100%;
+            border-radius: inherit;
+            background: #4a9eff;
+            transition: width 0.25s ease-out;
         }
 
         .error {
@@ -464,11 +507,124 @@
             color: #888;
             margin-bottom: 16px;
         }
+
+        .provider-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .empty-state {
+            max-width: 760px;
+            margin: 8vh auto 0;
+            padding: 32px;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            background: #151515;
+        }
+
+        .empty-state h2 {
+            color: #fff;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .empty-state > p {
+            max-width: 580px;
+            color: #888;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .workflow-step {
+            min-height: 128px;
+            padding: 16px;
+            border-radius: 8px;
+            background: #1d1d1d;
+        }
+
+        .workflow-step strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #86bfff;
+            font-size: 12px;
+            letter-spacing: 0.06em;
+        }
+
+        .workflow-step h3 {
+            margin-bottom: 6px;
+            color: #eaeaea;
+            font-size: 14px;
+        }
+
+        .workflow-step p {
+            color: #777;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .provider-badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(74, 158, 255, 0.12);
+            border: 1px solid rgba(74, 158, 255, 0.3);
+            color: #86bfff;
+            font-size: 12px;
+        }
+
+        .provider-badge.timeout,
+        .provider-badge.error {
+            background: rgba(255, 184, 77, 0.12);
+            border-color: rgba(255, 184, 77, 0.3);
+            color: #ffc46b;
+        }
+
+        .project-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 36px;
+            padding: 7px 10px;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            color: #d0d0d0;
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .project-link:hover,
+        .project-link:focus-visible {
+            border-color: #5a5a5a;
+            color: #fff;
+            outline: none;
+        }
+
+        @media (max-width: 760px) {
+            body { display: block; height: auto; min-height: 100vh; }
+            .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid #2a2a2a; }
+            .main { min-height: 65vh; }
+            .video-stats { grid-template-columns: repeat(2, 1fr); }
+            .empty-state { margin: 24px 0 0; padding: 24px; }
+            .workflow-steps { grid-template-columns: 1fr; }
+            .workflow-step { min-height: auto; }
+            .modal { width: calc(100% - 24px); max-height: calc(100vh - 24px); }
+        }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <div class="logo">TikTok 分析</div>
+        <div class="logo">ViralX</div>
 
         <nav style="margin-bottom: 24px; display: flex; gap: 8px;">
             <a href="/" style="flex:1; padding: 8px 12px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; text-align: center; text-decoration: none; color: #e0e0e0; font-size: 13px;">分析</a>
@@ -476,8 +632,9 @@
         </nav>
 
         <div class="search-section">
-            <label>搜索</label>
-            <input type="text" id="keyword" class="search-input" placeholder="输入关键词..." value="outdoor lighting lamp">
+            <label for="keyword">关键词或视频链接</label>
+            <input type="text" id="keyword" class="search-input" placeholder="输入关键词，或粘贴抖音 / TikTok 链接" value="outdoor lighting lamp">
+            <small class="field-help">粘贴单条视频链接时，将直接下载原视频并交给 LibTV 一键拉片。</small>
         </div>
 
         <div class="product-section">
@@ -496,31 +653,58 @@
         </div>
 
         <div class="buttons">
-            <button class="btn btn-primary" onclick="analyze()">分析</button>
-            <button class="btn btn-secondary" onclick="analyze(true)">刷新</button>
+            <button class="btn btn-primary" id="analyze-btn" onclick="analyze()">开始拉片</button>
+            <button class="btn btn-secondary" id="refresh-btn" onclick="analyze(true)">刷新数据</button>
         </div>
     </div>
 
     <div class="main">
         <div class="header">
-            <h1>分析结果</h1>
-            <p id="header-desc">选择关键词开始分析</p>
+            <h1>ViralX 拉片工作台</h1>
+            <p id="header-desc">LibTV 一键拉片 · 支持关键词批量检索与抖音/TikTok 单条链接</p>
         </div>
 
         <div class="content">
-            <div id="error" class="error" style="display:none;"></div>
-            <div id="loading" class="loading" style="display:none;">分析中...</div>
-            <div id="results"></div>
+            <div id="error" class="error" role="alert" style="display:none;"></div>
+            <div id="loading" class="loading" role="status" aria-live="polite" style="display:none;">
+                <div id="progress-label">准备下载视频...</div>
+                <div class="progress-track" aria-hidden="true">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+            </div>
+            <div id="results">
+                <section class="empty-state" aria-labelledby="empty-state-title">
+                    <h2 id="empty-state-title">把一条爆款视频真正看懂</h2>
+                    <p>ViralX 会下载原视频并交给 LibTV 后端 Agent 完成镜头、节奏与视听结构拉片，而不是只根据标题和互动数据猜测内容。</p>
+                    <div class="workflow-steps">
+                        <div class="workflow-step">
+                            <strong>01 · 输入</strong>
+                            <h3>粘贴链接或搜索关键词</h3>
+                            <p>单条抖音/TikTok 链接直接拉片；关键词自动筛选高热视频。</p>
+                        </div>
+                        <div class="workflow-step">
+                            <strong>02 · 分析</strong>
+                            <h3>上传原视频到 LibTV</h3>
+                            <p>创建独立会话并增量轮询，最长等待时间可在设置里调整。</p>
+                        </div>
+                        <div class="workflow-step">
+                            <strong>03 · 复用</strong>
+                            <h3>查看报告与项目画布</h3>
+                            <p>拉片结果以 Markdown 展示，也可继续进入 LibTV 画布深挖。</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
     </div>
 
     <div class="modal-overlay" id="modal">
-        <div class="modal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <div class="modal-header">
                 <h2 id="modal-title">AI 深度拆解</h2>
                 <div class="modal-actions">
                     <button class="export-btn" onclick="exportToObsidian()">📤 导出到 Obsidian</button>
-                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                    <button class="modal-close" onclick="closeModal()" aria-label="关闭拉片报告">&times;</button>
                 </div>
             </div>
             <div class="modal-content markdown-content" id="modal-content"></div>
@@ -530,17 +714,35 @@
     <script>
         let currentModalTitle = '';
         let currentModalContent = '';
+        let lastModalTrigger = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function openExternal(encodedUrl) {
+            const url = decodeURIComponent(encodedUrl);
+            if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener');
+        }
 
         function openModal(title, content) {
+            lastModalTrigger = document.activeElement;
             currentModalTitle = title;
             currentModalContent = content;
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-content').innerHTML = marked.parse(content);
             document.getElementById('modal').classList.add('active');
+            document.querySelector('.modal-close').focus();
         }
 
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+            if (lastModalTrigger) lastModalTrigger.focus();
         }
 
         async function exportToObsidian() {
@@ -569,6 +771,12 @@
             if (e.target.id === 'modal') closeModal();
         });
 
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('modal').classList.contains('active')) {
+                closeModal();
+            }
+        });
+
         async function loadKeywords() {
             try {
                 const resp = await fetch('/api/keywords');
@@ -587,8 +795,66 @@
             analyze();
         }
 
+        function setBusy(isBusy) {
+            document.getElementById('analyze-btn').disabled = isBusy;
+            document.getElementById('refresh-btn').disabled = isBusy;
+            document.getElementById('analyze-btn').textContent = isBusy ? '拉片中...' : '开始拉片';
+        }
+
+        function updateProgress(label, percent) {
+            document.getElementById('progress-label').textContent = label;
+            document.getElementById('progress-bar').style.width = `${Math.max(8, Math.min(percent, 100))}%`;
+        }
+
+        function renderVideoCard(video, index) {
+            const videoUrl = video.source_url || `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
+            const analysisId = `analysis-${Date.now()}-${index}`;
+            const remakeId = `remake-${Date.now()}-${index}`;
+            const provider = video.analysis_provider || 'ai';
+            const status = video.libtv_status || '';
+            const providerLabel = provider === 'libtv'
+                ? (status === 'timeout' ? 'LibTV · 仍在处理' : status === 'error' ? 'LibTV · 失败' : 'LibTV · 已完成')
+                : provider;
+            const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || '')
+                ? video.libtv_project_url
+                : '';
+
+            const card = document.createElement('article');
+            card.className = 'video-card';
+            card.innerHTML = `
+                <button class="video-title" style="display:block;background:none;border:0;text-align:left;padding:0;width:100%;" onclick="openExternal('${encodeURIComponent(videoUrl)}')">
+                    ${index + 1}. ${escapeHtml((video.title || '无标题').substring(0, 70))}
+                </button>
+                <div class="video-stats">
+                    <div class="stat"><div class="stat-label">作者</div><div class="stat-value">${escapeHtml(video.author || '未知')}</div></div>
+                    <div class="stat"><div class="stat-label">赞</div><div class="stat-value">${((video.likes || 0) / 1000).toFixed(1)}k</div></div>
+                    <div class="stat"><div class="stat-label">评论</div><div class="stat-value">${((video.comments || 0) / 1000).toFixed(1)}k</div></div>
+                    <div class="stat"><div class="stat-label">分享</div><div class="stat-value">${((video.shares || 0) / 1000).toFixed(1)}k</div></div>
+                </div>
+                <div class="provider-row">
+                    <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(providerLabel)}</span>
+                    ${status === 'error' ? '<a class="project-link" href="/settings">检查 LibTV 设置</a>' : ''}
+                    ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开 LibTV 项目画布</a>` : ''}
+                </div>
+                <button class="analysis-btn" onclick="showAnalysis('${analysisId}', '${escapeHtml(provider)}')">查看拉片报告</button>
+                <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || '')}</div>
+            `;
+
+            if (video.remake_script) {
+                const remake = document.createElement('div');
+                remake.className = 'remake-script';
+                remake.innerHTML = `
+                    <h4>📹 复刻脚本（基于你的产品）</h4>
+                    <button class="analysis-btn" onclick="showAnalysis('${remakeId}', 'remake')">查看完整复刻脚本</button>
+                    <div id="${remakeId}" hidden>${escapeHtml(video.remake_script)}</div>
+                `;
+                card.appendChild(remake);
+            }
+            return card;
+        }
+
         async function analyze(refresh = false) {
-            const keyword = document.getElementById('keyword').value;
+            const keyword = document.getElementById('keyword').value.trim();
             const productName = document.getElementById('product-name').value;
             const productInfo = document.getElementById('product-info').value;
             const loading = document.getElementById('loading');
@@ -596,22 +862,63 @@
             const error = document.getElementById('error');
             const headerDesc = document.getElementById('header-desc');
 
+            if (!keyword) {
+                error.textContent = '请输入关键词或抖音/TikTok 视频链接';
+                error.style.display = 'block';
+                document.getElementById('keyword').focus();
+                return;
+            }
+
+            setBusy(true);
             loading.style.display = 'block';
             results.innerHTML = '';
             error.style.display = 'none';
-            headerDesc.textContent = `正在分析 "${keyword}"...`;
+            headerDesc.textContent = /^https?:\/\//i.test(keyword) ? '正在对视频执行一键拉片...' : `正在检索并拉片 “${keyword}”...`;
+            updateProgress('准备下载视频并提交 LibTV...', 8);
 
-            // 流式显示的中间结果容器
             const streamContainer = document.createElement('div');
             streamContainer.id = 'stream-results';
             results.appendChild(streamContainer);
-            const progressInfo = document.createElement('div');
-            progressInfo.style.cssText = 'color:#888;font-size:13px;margin-bottom:16px;';
-            progressInfo.textContent = '准备中...';
-            streamContainer.appendChild(progressInfo);
 
-            let allVideos = [];
+            let received = 0;
             let done = false;
+
+            const handlePayload = (data) => {
+                if (data.status === 'error') {
+                    error.textContent = data.message;
+                    error.style.display = 'block';
+                    headerDesc.textContent = '拉片失败';
+                    return;
+                }
+                if (data.status === 'progress' && !data.done) {
+                    received += 1;
+                    const total = Math.max(data.total || 1, 1);
+                    updateProgress(`LibTV 拉片中 (${data.current}/${total})...`, (data.current / total) * 100);
+                    streamContainer.appendChild(renderVideoCard(data.video, received - 1));
+                    return;
+                }
+                if (data.done || data.status === 'success') {
+                    done = true;
+                    const failed = data.failed_videos || 0;
+                    const pending = data.pending_videos || 0;
+                    const completed = data.total_videos - failed - pending;
+                    const summary = failed || pending
+                        ? `处理结束：${completed} 个完成，${pending} 个仍在处理，${failed} 个失败`
+                        : `拉片完成，共 ${data.total_videos} 个视频`;
+                    updateProgress(summary, 100);
+                    headerDesc.textContent = summary;
+                }
+            };
+
+            const parseLine = (line) => {
+                const cleanLine = line.replace(/\r/g, '').trim();
+                if (!cleanLine) return;
+                try {
+                    handlePayload(JSON.parse(cleanLine));
+                } catch (parseErr) {
+                    console.warn('NDJSON parse error:', parseErr, cleanLine.substring(0, 120));
+                }
+            };
 
             try {
                 const response = await fetch('/api/analyze', {
@@ -619,138 +926,49 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ keyword, refresh, product_name: productName, product_info: productInfo })
                 });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-                // 读取为文本，按 \n 分割，每行单独解析
-                const text = await response.text();
-                const lines = text.trim().split('\n');
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-                    // 移除可能的 \r 字符
-                    const cleanLine = line.replace(/\r/g, '').trim();
-                    if (!cleanLine) continue;
-                    try {
-                        const data = JSON.parse(cleanLine);
-
-                        if (data.status === 'error') {
-                            error.textContent = data.message;
-                            error.style.display = 'block';
-                            headerDesc.textContent = '分析失败';
-                            loading.style.display = 'none';
-                            return;
-                        }
-
-                        if (data.status === 'progress' && !data.done) {
-                            // 流式中间结果：追加单个视频卡片
-                            progressInfo.textContent = `分析中 (${data.current}/${data.total})...`;
-                            const video = data.video;
-                            const videoUrl = `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
-                            const vidx = allVideos.length;
-                            const analysisId = `analysis-${Date.now()}-${vidx}`;
-                            const remakeId = `remake-${Date.now()}-${vidx}`;
-
-                            const card = document.createElement('div');
-                            card.className = 'video-card';
-
-                            let cardHtml = `
-                                <div class="video-title" onclick="window.open('${videoUrl}', '_blank')">
-                                    ${vidx+1}. ${(video.title||'无标题').substring(0, 70)}
-                                </div>
-                                <div class="video-stats">
-                                    <div class="stat"><div class="stat-label">作者</div><div class="stat-value">@${video.author}</div></div>
-                                    <div class="stat"><div class="stat-label">赞</div><div class="stat-value">${((video.likes||0)/1000).toFixed(1)}k</div></div>
-                                    <div class="stat"><div class="stat-label">评论</div><div class="stat-value">${((video.comments||0)/1000).toFixed(1)}k</div></div>
-                                    <div class="stat"><div class="stat-label">分享</div><div class="stat-value">${((video.shares||0)/1000).toFixed(1)}k</div></div>
-                                </div>
-                                <button class="analysis-btn" onclick="showAnalysis('${analysisId}')">🎯 查看爆款分析</button>
-                                <div id="${analysisId}" style="display:none;">${video.ai_analysis||''}</div>
-                            `;
-
-                            if (video.remake_script) {
-                                cardHtml += `
-                                    <div class="remake-script">
-                                        <h4>📹 复刻脚本（基于你的产品）</h4>
-                                        <button class="analysis-btn" onclick="showAnalysis('${remakeId}')">查看完整复刻脚本</button>
-                                        <div id="${remakeId}" style="display:none;">${video.remake_script||''}</div>
-                                    </div>
-                                `;
-                            }
-
-                            card.innerHTML = cardHtml;
-                            streamContainer.appendChild(card);
-                            allVideos.push(video);
-                        } else if (data.done || data.status === 'success') {
-                            // 最终结果
-                            done = true;
-                            headerDesc.textContent = `找到 ${data.total_videos} 个视频`;
-                            // 移除临时进度信息
-                            if (progressInfo.parentNode) {
-                                progressInfo.textContent = `分析完成，共 ${data.total_videos} 个视频`;
-                            }
-                        }
-                    } catch (parseErr) {
-                        console.warn('JSON parse error for line:', parseErr, 'Line preview:', cleanLine.substring(0, 100));
+                if (response.body && response.body.getReader) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    while (true) {
+                        const { value, done: readerDone } = await reader.read();
+                        buffer += decoder.decode(value || new Uint8Array(), { stream: !readerDone });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        lines.forEach(parseLine);
+                        if (readerDone) break;
                     }
+                    parseLine(buffer);
+                } else {
+                    (await response.text()).split('\n').forEach(parseLine);
                 }
 
-                loading.style.display = 'none';
-                if (!done && allVideos.length === 0) {
+                if (!done && received === 0 && error.style.display === 'none') {
                     error.textContent = '未收到有效数据，请重试';
                     error.style.display = 'block';
                 }
             } catch (err) {
-                loading.style.display = 'none';
-                error.textContent = '分析失败: ' + err.message;
+                error.textContent = '拉片失败: ' + err.message;
                 error.style.display = 'block';
-                headerDesc.textContent = '分析失败';
+                headerDesc.textContent = '拉片失败';
+            } finally {
+                setBusy(false);
+                if (done || error.style.display !== 'none') loading.style.display = 'none';
             }
         }
 
-        function displayResults(videos, source) {
+        function displayResults(videos) {
             const results = document.getElementById('results');
-            const sourceLabel = source === 'cache' ? '缓存数据' : '实时分析';
-
-            results.innerHTML = `<div class="source-badge">${sourceLabel}</div>` +
-                videos.map((v, i) => {
-                    const videoUrl = `https://www.tiktok.com/@${v.author}/video/${v.video_id}`;
-                    const analysis = v.ai_analysis || '';
-                    const analysisId = `analysis-${i}`;
-
-                    return `
-                    <div class="video-card">
-                        <div class="video-title" onclick="window.open('${videoUrl}', '_blank')">
-                            ${i+1}. ${v.title.substring(0, 70)}
-                        </div>
-                        <div class="video-stats">
-                            <div class="stat">
-                                <div class="stat-label">作者</div>
-                                <div class="stat-value">${v.author}</div>
-                            </div>
-                            <div class="stat">
-                                <div class="stat-label">赞</div>
-                                <div class="stat-value">${(v.likes/1000).toFixed(1)}k</div>
-                            </div>
-                            <div class="stat">
-                                <div class="stat-label">评论</div>
-                                <div class="stat-value">${(v.comments/1000).toFixed(1)}k</div>
-                            </div>
-                            <div class="stat">
-                                <div class="stat-label">分享</div>
-                                <div class="stat-value">${(v.shares/1000).toFixed(1)}k</div>
-                            </div>
-                        </div>
-                        <button class="analysis-btn" onclick="showAnalysis('${analysisId}')">
-                            查看 AI 深度拆解
-                        </button>
-                        <div id="${analysisId}" style="display:none;">${analysis}</div>
-                    </div>
-                `;
-                }).join('');
+            results.innerHTML = '';
+            videos.forEach((video, index) => results.appendChild(renderVideoCard(video, index)));
         }
 
-        function showAnalysis(id) {
+        function showAnalysis(id, provider = 'ai') {
             const content = document.getElementById(id).textContent;
-            openModal('AI 深度拆解', content);
+            const title = provider === 'libtv' ? 'LibTV 一键拉片报告' : provider === 'remake' ? '复刻脚本' : 'AI 深度拆解';
+            openModal(title, content);
         }
 
         window.onload = loadKeywords;

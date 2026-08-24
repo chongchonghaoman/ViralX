@@ -1,11 +1,24 @@
 {
   "rapidapi_key": "YOUR_RAPIDAPI_KEY_HERE",
+  "analysis_mode": "libtv",
+  "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY_HERE",
+  "libtv_im_base": "https://im.liblib.tv",
+  "libtv_poll_interval": 8,
+  "libtv_timeout": 180,
+  "libtv_concurrency": 2,
+  "gemini_api_key": "",
+  "gemini_model": "gemini-2.5-flash",
+  "openrouter_api_key": "",
+  "openrouter_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   "minimax_api_key": "YOUR_MINIMAX_API_KEY_HERE",
+  "minimax_base_url": "https://api.minimaxi.com/anthropic",
+  "minimax_model": "MiniMax-M2.7",
   "search_keywords": [
     "outdoor lighting lamp",
     "camping light",
     "portable LED light"
   ],
   "min_likes": 5000,
-  "output_dir": "./data"
+  "output_dir": "./data",
+  "video_cache_dir": "./video_cache"
 }

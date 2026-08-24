@@ -5,8 +5,11 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 from flask import Flask, render_template, request, jsonify, Response
 import json
+import hashlib
+import os
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse
 import threading
 import queue
 from tiktok_viral_analyzer import TikTokViralAnalyzer
@@ -16,13 +19,71 @@ app = Flask(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
 MAX_ANALYZE_VIDEOS = 5  # 最多分析 5 个视频
 
+DEFAULT_CONFIG = {
+    'rapidapi_key': '',
+    'analysis_mode': 'libtv',
+    'libtv_access_key': '',
+    'libtv_im_base': 'https://im.liblib.tv',
+    'libtv_poll_interval': 8,
+    'libtv_timeout': 180,
+    'libtv_concurrency': 2,
+    'gemini_api_key': '',
+    'gemini_model': 'gemini-2.5-flash',
+    'openrouter_api_key': '',
+    'openrouter_model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+    'minimax_api_key': '',
+    'minimax_base_url': 'https://api.minimaxi.com/anthropic',
+    'minimax_model': 'MiniMax-M2.7',
+    'search_keywords': [],
+    'min_likes': 5000,
+    'output_dir': './data',
+}
+
 def load_config():
     """从 config.json 加载配置"""
-    return json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+    loaded = {}
+    if CONFIG_PATH.exists():
+        loaded = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+    merged = {**DEFAULT_CONFIG, **loaded}
+    if os.environ.get('LIBTV_ACCESS_KEY'):
+        merged['libtv_access_key'] = os.environ['LIBTV_ACCESS_KEY']
+    if os.environ.get('OPENAPI_IM_BASE'):
+        merged['libtv_im_base'] = os.environ['OPENAPI_IM_BASE']
+    return merged
 
 def save_config(data):
     """保存配置到 config.json"""
-    CONFIG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+    merged = {**DEFAULT_CONFIG, **(data or {})}
+    CONFIG_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding='utf-8')
+
+
+def is_video_url(value):
+    """判断输入是否为可交给 yt-dlp 的 HTTP(S) 视频链接。"""
+    try:
+        parsed = urlparse((value or '').strip())
+        return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)
+    except ValueError:
+        return False
+
+
+def direct_video_data(video_url):
+    """为抖音/TikTok 直链构建统一的视频数据结构。"""
+    video_id = hashlib.sha256(video_url.encode('utf-8')).hexdigest()[:20]
+    host = urlparse(video_url).netloc.lower()
+    if host.startswith('www.'):
+        host = host[4:]
+    return {
+        'video_id': video_id,
+        'title': f'视频链接 · {host}',
+        'author': host,
+        'likes': 0,
+        'comments': 0,
+        'shares': 0,
+        'views': 0,
+        'cover': '',
+        'duration': 0,
+        'source_url': video_url,
+    }
 
 # 全局配置
 config = load_config()
@@ -47,7 +108,7 @@ def save_settings():
         data = request.json
         save_config(data)
         global config
-        config = data
+        config = load_config()
         return jsonify({'status': 'success'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -59,7 +120,7 @@ def analyze():
     边并发分析视频边返回结果，前端逐个看到分析完成。
     """
     data = request.json
-    keyword = data.get('keyword', 'outdoor lighting lamp')
+    keyword = (data.get('keyword') or '').strip()
     refresh = data.get('refresh', False)
     product_name = data.get('product_name', '')
     product_info = data.get('product_info', '')
@@ -68,12 +129,24 @@ def analyze():
         try:
             current_config = load_config()
 
-            # 搜索视频
-            tiktok = TikTokViralAnalyzer(current_config['output_dir'])
-            tiktok.api_key = current_config['rapidapi_key']
+            if not keyword:
+                yield json.dumps({'status': 'error', 'message': '请输入关键词或抖音/TikTok 视频链接', 'done': True}, ensure_ascii=False) + '\n'
+                return
 
-            videos = tiktok.search_viral_videos(keyword, current_config['min_likes'], count=30)
-            video_data = [tiktok.extract_video_info(v) for v in videos]
+            # 支持直接粘贴抖音/TikTok 链接；关键词则保留原有榜单搜索。
+            tiktok = None
+            if is_video_url(keyword):
+                video_data = [direct_video_data(keyword)]
+                video_urls = {video_data[0]['video_id']: keyword}
+            else:
+                tiktok = TikTokViralAnalyzer(current_config['output_dir'])
+                tiktok.api_key = current_config['rapidapi_key']
+                videos = tiktok.search_viral_videos(keyword, current_config['min_likes'], count=30)
+                video_data = [tiktok.extract_video_info(v) for v in videos]
+                video_urls = {
+                    v['video_id']: f"https://www.tiktok.com/@{v['author']}/video/{v['video_id']}"
+                    for v in video_data
+                }
 
             if not video_data:
                 yield json.dumps({'status': 'error', 'message': '未找到相关视频', 'done': True}, ensure_ascii=False) + '\n'
@@ -84,26 +157,27 @@ def analyze():
                 api_key=current_config.get('minimax_api_key'),
                 base_url=current_config.get('minimax_base_url'),
                 model=current_config.get('minimax_model'),
-                analysis_mode=current_config.get('analysis_mode', 'gemini'),
+                analysis_mode=current_config.get('analysis_mode', 'libtv'),
                 openrouter_api_key=current_config.get('openrouter_api_key', ''),
-                openrouter_model=current_config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')
+                openrouter_model=current_config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'),
+                libtv_access_key=current_config.get('libtv_access_key', ''),
+                libtv_im_base=current_config.get('libtv_im_base', 'https://im.liblib.tv'),
+                libtv_poll_interval=current_config.get('libtv_poll_interval', 8),
+                libtv_timeout=current_config.get('libtv_timeout', 180),
             )
-
-            # 构建视频 URL 映射
-            video_urls = {
-                v['video_id']: f"https://www.tiktok.com/@{v['author']}/video/{v['video_id']}"
-                for v in video_data
-            }
 
             # 流式并发分析，结果边完成边推送
             results = []
             for result in ai.batch_analyze_streaming(video_data, max_videos=MAX_ANALYZE_VIDEOS, video_urls=video_urls, product_name=product_name, product_info=product_info):
                 # 抓取评论（在主线程串行执行，不影响并发分析）
-                try:
-                    comments = tiktok.get_video_comments(result['video_id'])
-                    result['comments_data'] = comments
-                except Exception as e:
-                    print(f"[评论抓取失败] {e}")
+                if tiktok:
+                    try:
+                        comments = tiktok.get_video_comments(result['video_id'])
+                        result['comments_data'] = comments
+                    except Exception as e:
+                        print(f"[评论抓取失败] {e}")
+                        result['comments_data'] = []
+                else:
                     result['comments_data'] = []
 
                 results.append(result)
@@ -113,14 +187,22 @@ def analyze():
                     'status': 'progress',
                     'done': False,
                     'current': len(results),
-                    'total': MAX_ANALYZE_VIDEOS,
+                    'total': min(len(video_data), MAX_ANALYZE_VIDEOS),
                     'video': result
                 }, ensure_ascii=False) + '\n'
 
             # 推送完成信号
+            failed_videos = sum(
+                1 for item in results if item.get('libtv_status') == 'error'
+            )
+            pending_videos = sum(
+                1 for item in results if item.get('libtv_status') == 'timeout'
+            )
             yield json.dumps({
                 'status': 'success',
                 'total_videos': len(results),
+                'failed_videos': failed_videos,
+                'pending_videos': pending_videos,
                 'videos': results,
                 'source': 'live',
                 'done': True
@@ -129,7 +211,7 @@ def analyze():
         except Exception as e:
             yield json.dumps({'status': 'error', 'message': str(e), 'done': True}, ensure_ascii=False) + '\n'
 
-    return Response(generate(), mimetype='application/json', headers={
+    return Response(generate(), mimetype='application/x-ndjson', headers={
         'X-Accel-Buffering': 'no',
         'Cache-Control': 'no-cache'
     })
