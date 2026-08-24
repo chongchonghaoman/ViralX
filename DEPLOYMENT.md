@@ -1,21 +1,50 @@
 # ViralX EdgeOne deployment
 
-## Production deployment
+## Public production deployment
 
 - Date: 2026-08-25
 - Account: `metro` (`100046117544`)
-- Area: Global
+- Area: Overseas (China mainland excluded)
 - Environment: Production
+- Project: `viralx-overseas`
+- Project ID: `makers-9ujwycmolg3g`
+- Production deployment ID: `dpiap6td6czw`
+- Public URL: `https://viralx.metrolabs.mobi`
+- Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpiap6td6czw`
+
+The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
+
+### DNS and HTTPS
+
+- DNS zone: `metrolabs.mobi` (Tencent Cloud DNSPod)
+- Record: `viralx` / `CNAME` / default line / TTL `600`
+- Target: `viralx.metrolabs.mobi.pages.dnsoe4.com`
+- Edge HTTPS certificate: free EdgeOne certificate, RSA 2048, automatic renewal enabled
+- Current certificate expiry: 2026-11-22 07:59:59
+- Force HTTPS: enabled with an HTTP `302` redirect
+
+Verified on the public custom domain:
+
+- `GET /` -> `200 text/html`
+- `GET /settings.html` -> `200 text/html`
+- `GET /api/health` -> `200 application/json`
+- `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
+- TLS hostname validation succeeds for `viralx.metrolabs.mobi`
+
+The home page and settings page were visually checked from the live HTTPS domain. The same production build had already passed desktop and 390px mobile Chromium review before the custom-domain binding.
+
+## Original protected deployment
+
+The earlier global-area project is retained as deployment history:
+
 - Project: `viralx`
 - Project ID: `makers-frd9jhx0avrj`
 - Production deployment ID: `dparge5yigjw`
 - Preview deployment ID: `dp0nthl3djt2`
-- Preview host: `https://viralx-zocsxxpd.edgeone.cool`
-- Protected production host: `https://viralx-zocsxxpd.edgeone.cool` (access token intentionally not committed)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-frd9jhx0avrj/deployment/dparge5yigjw`
-- Preview console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-frd9jhx0avrj/deployment/dp0nthl3djt2`
+- Protected host: `https://viralx-zocsxxpd.edgeone.cool`
 
-The production deployment completed successfully. Its page, full `/static/viralx.js`, `/settings.html`, `/api/health`, session-BYOK readiness contract, and private-route boundary were verified from the public EdgeOne host; the page was also visually checked in desktop and 390px mobile Chromium before deployment. `/api/settings` and `/api/cache/clear` return 404 by design. The generated `edgeone.cool` host still uses EdgeOne preview access protection, so a valid preview token or authenticated console session is required; preview tokens are short-lived and the un-tokened host returns 401. EdgeOne signs the provided token for the root entry: open the protected production URL first, then use the in-page `设置` link to reach `/settings.html` with the established access cookie.
+The generated host requires EdgeOne preview access protection and is not the public production URL. Access tokens are intentionally not committed.
 
 ## Runtime boundary
 
@@ -49,10 +78,13 @@ npm run preview:edgeone
 npm run deploy:edgeone
 ```
 
+To deploy explicitly to the public overseas project:
+
+```bash
+npm run build:edgeone
+npx edgeone makers deploy public -n viralx-overseas -e production -a overseas --json
+```
+
 `public/` is generated and ignored by Git. The source of truth is the Flask template, shared static assets, `cloud-functions/`, and `scripts/build-edgeone.mjs`. The build stages only the public-safe cloud entrypoint, backend modules, and vendored TK Note / LibTV helper scripts; it never copies `config.json`.
-
-## Custom `.mobi` domain
-
-Binding is intentionally not guessed. The exact `.mobi` hostname was not present in the repository, environment, or prior task context. Once the hostname is supplied, bind it to project `makers-frd9jhx0avrj` in EdgeOne Pages and complete the DNS / HTTPS verification shown by the console.
 
 Reference: [EdgeOne custom domain documentation](https://pages.edgeone.ai/document/custom-domain) and [HTTPS configuration overview](https://pages.edgeone.ai/document/https-configuration-overview).
