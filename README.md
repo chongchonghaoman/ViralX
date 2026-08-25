@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://viralx.metrolabs.mobi"><img alt="Live website" src="https://img.shields.io/badge/Live-viralx.metrolabs.mobi-4DC5E5?style=flat-square"></a>
-  <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=main&style=flat-square&label=web%20%2B%20api"></a>
+  <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=master&style=flat-square&label=web%20%2B%20api"></a>
   <a href=".agents/skills/viralx"><img alt="Codex Skill" src="https://img.shields.io/badge/Codex-Skill-4DC5E5?style=flat-square"></a>
   <img alt="Web" src="https://img.shields.io/badge/Product-Web-111111?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10--3.12-3776AB?style=flat-square">
@@ -37,12 +37,24 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - 本地开发通过 Flask 提供同一套浏览器页面和 API。
 - 产品只通过浏览器交付，不提供独立桌面应用。
 
+## 现在到底需要哪些 API
+
+默认主链是 **TK Note 采集 + LibTV 拉片**，MiniMax 不参与网页的默认分析流程。
+
+| 你要做的事 | 实际调用 | 需要的凭据 |
+| --- | --- | --- |
+| 粘贴 TikTok / 抖音视频链接并拉片 | TK Note → LibTV | `LIBTV_ACCESS_KEY` |
+| 输入关键词搜索后拉片 | API23 → TK Note → LibTV | `RAPIDAPI_KEY` + `LIBTV_ACCESS_KEY` |
+| 调用旧版脚本变体扩展接口 | MiniMax | 可选的 `MINIMAX_API_KEY` |
+
+因此：**RapidAPI 只用于你已选定的 API23 关键词搜索；直链分析不需要它。MiniMax 只是兼容保留项，不是启动网站、搜索视频或默认拉片的必需依赖。**
+
 ## 在 Codex 中直接调用 ViralX
 
 ViralX 同时作为一个可安装的 Codex Skill 发布。另一台电脑不需要安装桌面客户端，也不需要复制整个项目；把下面的 Skill 链接发给 Codex，让它安装即可：
 
 ```text
-https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx
+https://github.com/chongchonghaoman/ViralX/tree/master/.agents/skills/viralx
 ```
 
 可以直接对 Codex 说：
@@ -107,7 +119,7 @@ $env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
 
 ### 2. 网页设置
 
-设置页集中管理 API23、TK Note、LibTV 和备用模型。在线环境只显示云端安全字段；本地目录、浏览器 Cookie、代理和持久缓存设置只在本地 Flask 开发运行时出现。
+设置页集中管理 API23、TK Note、LibTV 和可选兼容项。在线环境只显示云端安全字段；本地目录、浏览器 Cookie、代理和持久缓存设置只在本地 Flask 开发运行时出现。
 
 ![ViralX 网页设置页](docs/assets/viralx-settings.png)
 
@@ -216,7 +228,7 @@ python web_app.py
 | --- | --- | --- |
 | `RAPIDAPI_KEY` / `rapidapi_key` | API23 关键词搜索 | 仅搜索关键词时需要 |
 | `LIBTV_ACCESS_KEY` / `libtv_access_key` | 默认的一键拉片分析 | 使用 LibTV 时需要 |
-| `MINIMAX_API_KEY` / `minimax_api_key` | 脚本生成与变体 API | 可选 |
+| `MINIMAX_API_KEY` / `minimax_api_key` | 仅旧版 `/api/generate_variants` 脚本变体扩展 | 可选；网页默认主链不调用 |
 | `GEMINI_API_KEY` / `gemini_api_key` | Gemini 兼容分析模式 | 可选 |
 | `OPENROUTER_API_KEY` / `openrouter_api_key` | OpenRouter 兼容分析模式 | 可选 |
 

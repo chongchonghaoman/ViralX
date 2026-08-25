@@ -27,7 +27,7 @@
           <a href="#runtime">运行模式</a>
           <a href="#tk-note">TK Note</a>
           <a href="#libtv">LibTV</a>
-          <a href="#models">模型</a>
+          <a href="#models">兼容项</a>
         </nav>
       </div>
       <div class="nav-actions">
@@ -52,7 +52,7 @@
         <a href="#runtime">运行模式</a>
         <a href="#tk-note">TK Note</a>
         <a href="#libtv">LibTV</a>
-        <a href="#models">备用模型</a>
+        <a href="#models">可选兼容项</a>
         <a href="#topics">搜索主题</a>
       </nav>
 
@@ -179,7 +179,7 @@
         <section class="settings-section" id="models" data-motion="reveal">
           <div class="settings-section__head">
             <span>04</span>
-            <div><h2>备用模型</h2><p>Gemini 与 OpenRouter 用于兼容分析；MiniMax 用于生成复刻脚本。</p></div>
+            <div><h2>可选兼容项</h2><p>网页默认走 LibTV；Gemini 与 OpenRouter 仅用于兼容分析，MiniMax 只服务旧版脚本变体扩展。</p></div>
           </div>
           <div class="settings-grid">
             <div class="settings-field">
@@ -205,7 +205,7 @@
             <div class="settings-field">
               <label for="minimax_api_key">MiniMax API Key</label>
               <input type="password" id="minimax_api_key" autocomplete="off" placeholder="MiniMax API Key">
-              <small class="field-note">用于复刻脚本生成。</small>
+              <small class="field-note">网页默认分析不调用；仅旧版脚本变体扩展需要。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="minimax_base_url">MiniMax Base URL</label>
