@@ -1,0 +1,5 @@
+interface:
+  display_name: "ViralX"
+  short_description: "Search, collect evidence, and run ViralX shot analysis"
+  brand_color: "#4DC5E5"
+  default_prompt: "Use $viralx to analyze a TikTok or Douyin video and return an evidence-backed shot report."

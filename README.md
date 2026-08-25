@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://viralx.metrolabs.mobi"><img alt="Live website" src="https://img.shields.io/badge/Live-viralx.metrolabs.mobi-4DC5E5?style=flat-square"></a>
   <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=main&style=flat-square&label=web%20%2B%20api"></a>
+  <a href=".agents/skills/viralx"><img alt="Codex Skill" src="https://img.shields.io/badge/Codex-Skill-4DC5E5?style=flat-square"></a>
   <img alt="Web" src="https://img.shields.io/badge/Product-Web-111111?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10--3.12-3776AB?style=flat-square">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-111111?style=flat-square"></a>
@@ -35,6 +36,53 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - 生产环境运行在 EdgeOne Pages + Python Cloud Functions。
 - 本地开发通过 Flask 提供同一套浏览器页面和 API。
 - 产品只通过浏览器交付，不提供独立桌面应用。
+
+## 在 Codex 中直接调用 ViralX
+
+ViralX 同时作为一个可安装的 Codex Skill 发布。另一台电脑不需要安装桌面客户端，也不需要复制整个项目；把下面的 Skill 链接发给 Codex，让它安装即可：
+
+```text
+https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx
+```
+
+可以直接对 Codex 说：
+
+```text
+请从这个 GitHub 仓库安装 .agents/skills/viralx，然后使用 $viralx 分析视频：
+https://github.com/chongchonghaoman/ViralX
+```
+
+也可以使用 Codex 内置的 `skill-installer`：
+
+```bash
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo chongchonghaoman/ViralX \
+  --path .agents/skills/viralx
+```
+
+Windows PowerShell：
+
+```powershell
+python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
+  --repo chongchonghaoman/ViralX `
+  --path .agents/skills/viralx
+```
+
+安装后的下一轮对话即可调用：
+
+```text
+$viralx 分析这个 TikTok 视频：https://www.tiktok.com/@creator/video/123
+$viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
+```
+
+Skill 默认调用线上 `https://viralx.metrolabs.mobi/api/*`，因此只需要 Python 3。凭据从目标电脑的环境变量读取，不要把 Key 发到聊天里：
+
+```powershell
+$env:LIBTV_ACCESS_KEY = "your-libtv-key"
+$env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
+```
+
+仓库内的入口位于 [`.agents/skills/viralx`](.agents/skills/viralx)。如果直接克隆仓库并用 Codex 打开，根目录 `AGENTS.md` 也会把 ViralX 调用请求路由到同一个 Skill。
 
 ## 网页里现在能做什么
 
@@ -201,6 +249,8 @@ python web_app.py
 
 ```text
 ViralX/
+├── .agents/skills/viralx/          Codex 可安装、可直接调用的 ViralX Skill
+├── AGENTS.md                       仓库级 Codex 调用入口
 ├── templates/
 │   ├── index.html                 网页分析首页
 │   └── settings.html              网页设置页
@@ -229,7 +279,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集共 23 项，覆盖 API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界和浏览器版 Obsidian 导出。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集共 26 项，覆盖 ViralX Skill 客户端、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界和浏览器版 Obsidian 导出。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 
