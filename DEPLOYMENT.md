@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dpctpv0yzdj1`
+- Production deployment ID: `dpbir5qqtfuo`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpctpv0yzdj1`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpbir5qqtfuo`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -30,11 +30,14 @@ Verified on the public custom domain:
 - `GET /settings.html` -> `200 text/html`
 - `GET /api/health` -> `200 application/json`
 - `GET /api/health` -> `keyword_search_provider: api23`
+- `/` and `/settings.html` include the production CSP, pinned CDN assets with SRI, and the `edgeone` deployment marker
+- The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
+- Responsive WebP hero assets return `200 image/webp` with immutable caching
 - `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 
-The home page and settings page were visually checked from the live HTTPS domain. The same production build had already passed desktop and 390px mobile Chromium review before the custom-domain binding.
+The home page and settings page were visually checked from the live HTTPS domain. The production build passed desktop and 320px, 390px, and 414px mobile Chromium review without horizontal overflow. The live browser console showed no JavaScript or CSP errors.
 
 ## Original protected deployment
 

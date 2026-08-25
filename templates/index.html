@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#EDEDED">
   <meta name="description" content="ViralX 把短视频拆成可验证、可复用、可执行的结构证据。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ViralX · 把爆款拆到每一秒</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
-  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='viralx.js') }}"></script>
 </head>
@@ -34,7 +36,7 @@
       </div>
       <div class="nav-actions">
         <a class="nav-secondary" href="/settings">设置</a>
-        <a class="nav-cta" href="#analysis-studio">开始拉片</a>
+        <a class="nav-cta" href="/settings" data-runtime-action>连接分析服务</a>
         <a class="mobile-settings" href="/settings" aria-label="打开设置">•••</a>
       </div>
     </div>
@@ -43,7 +45,10 @@
   <main id="main-content">
     <section class="hero" aria-labelledby="hero-title">
       <figure class="hero-visual" data-motion="hero-object">
-        <img src="{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}" width="1536" height="1024" alt="由视频帧、播放镜片、信号波形和数据轨道组成的 ViralX 分析主视觉" fetchpriority="high">
+        <picture>
+          <source type="image/webp" srcset="{{ url_for('static', filename='assets/viralx-signal-orbit-640.webp') }} 640w, {{ url_for('static', filename='assets/viralx-signal-orbit-1024.webp') }} 1024w" sizes="(min-width: 52rem) 32rem, min(100vw - 2rem, 32rem)">
+          <img src="{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}" width="1536" height="1024" alt="由视频帧、播放镜片、信号波形和数据轨道组成的 ViralX 分析主视觉" fetchpriority="high" decoding="async">
+        </picture>
         <figcaption>来源、证据、结构与脚本，在同一条轨道上。</figcaption>
       </figure>
 
@@ -57,7 +62,7 @@
           <span class="visually-hidden">把爆款拆到每一秒</span>
         </h1>
         <p class="hero-lede">ViralX 从原片、字幕和评论证据出发，解释钩子、镜头、声音与转化路径，再生成可以直接执行的复刻脚本。</p>
-        <a class="hero-cta" href="#analysis-studio">开始分析</a>
+        <a class="hero-cta" href="/settings" data-runtime-action>连接分析服务</a>
       </div>
 
       <section class="analysis-studio" id="analysis-studio" aria-labelledby="studio-title" data-motion="hero-form">
@@ -72,9 +77,10 @@
         <div class="source-row">
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
-            <input type="text" id="keyword" autocomplete="off" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
+            <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
+            <small class="source-help" id="source-help">视频直链不需要 API23；搜索主题需要 API23；拉片需连接 LibTV 或模型 API。</small>
           </div>
-          <button class="btn btn-primary" id="analyze-btn" type="button">开始拉片</button>
+          <button class="btn btn-primary" id="analyze-btn" type="button">打开设置</button>
         </div>
 
         <div class="source-tools">
@@ -83,11 +89,11 @@
             <div class="remake-grid">
               <div class="field">
                 <label for="product-name">产品名称</label>
-                <input type="text" id="product-name" autocomplete="off" placeholder="例如：便携式露营灯">
+                <input type="text" id="product-name" name="product_name" autocomplete="off" placeholder="例如：便携式露营灯">
               </div>
               <div class="field">
                 <label for="product-info">产品卖点</label>
-                <textarea id="product-info" placeholder="写下特点、使用场景与必须保留的表达。"></textarea>
+                <textarea id="product-info" name="product_info" placeholder="写下特点、使用场景与必须保留的表达。"></textarea>
               </div>
             </div>
           </details>

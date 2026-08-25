@@ -12,8 +12,11 @@ await mkdir(join(publicStatic, "assets"), { recursive: true });
 
 let html = await readFile(join(projectRoot, "templates", "index.html"), "utf8");
 html = html
+  .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
   .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
+  .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-640.webp') }}", "/static/assets/viralx-signal-orbit-640.webp")
+  .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-1024.webp') }}", "/static/assets/viralx-signal-orbit-1024.webp")
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}", "/static/assets/viralx-signal-orbit.png")
   .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}", "/static/assets/viralx-title-shuei-wide.svg")
   .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}", "/static/assets/viralx-title-shuei-stacked.svg")
@@ -29,6 +32,7 @@ await writeFile(join(publicDir, "index.html"), html, "utf8");
 
 let settingsHtml = await readFile(join(projectRoot, "templates", "settings.html"), "utf8");
 settingsHtml = settingsHtml
+  .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
   .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
   .replaceAll("{{ url_for('static', filename='settings.css') }}", "/static/settings.css")
@@ -48,6 +52,12 @@ await cp(
   join(projectRoot, "static", "assets", "viralx-signal-orbit.png"),
   join(publicStatic, "assets", "viralx-signal-orbit.png"),
 );
+for (const width of [640, 1024]) {
+  await cp(
+    join(projectRoot, "static", "assets", `viralx-signal-orbit-${width}.webp`),
+    join(publicStatic, "assets", `viralx-signal-orbit-${width}.webp`),
+  );
+}
 await cp(
   join(projectRoot, "static", "assets", "viralx-title-shuei-wide.svg"),
   join(publicStatic, "assets", "viralx-title-shuei-wide.svg"),

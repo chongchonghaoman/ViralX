@@ -34,6 +34,14 @@
     ? window.ViralXCloudConfig.apiFetch(url, options)
     : window.fetch(url, options);
 
+  class SettingsValidationError extends Error {
+    constructor(fieldId, message) {
+      super(message);
+      this.name = "SettingsValidationError";
+      this.fieldId = fieldId;
+    }
+  }
+
   function setValue(id, value) {
     const field = byId(id);
     if (field) field.value = value ?? "";
@@ -80,6 +88,15 @@
     });
   }
 
+  function syncAnalysisMode() {
+    const mode = byId("analysis_mode")?.value || "libtv";
+    document.querySelectorAll("[data-mode-details]").forEach((details) => {
+      const active = details.dataset.modeDetails === mode;
+      details.open = active;
+      details.closest(".settings-section")?.classList.toggle("is-active", active);
+    });
+  }
+
   function selectProvider(provider, { restore = true, userInitiated = false } = {}) {
     const next = PROVIDERS[provider] ? provider : "openai";
     if (restore && activeProvider) providerDrafts[activeProvider] = providerDraft();
@@ -99,7 +116,10 @@
     setValue("model_base_url", draft.baseUrl || preset.baseUrl);
     setValue("model_protocol", draft.protocol || preset.protocol);
     renderProvider(next);
-    if (userInitiated) byId("analysis_mode").value = "model";
+    if (userInitiated) {
+      byId("analysis_mode").value = "model";
+      syncAnalysisMode();
+    }
   }
 
   function applySettings() {
@@ -118,6 +138,8 @@
     };
     selectProvider(activeProvider, { restore: false });
     renderKeywords();
+    clearFieldErrors();
+    syncAnalysisMode();
   }
 
   function collectSettings() {
@@ -144,17 +166,17 @@
     settings.min_likes = Number.parseInt(byId("min_likes").value, 10) || DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
     if (settings.analysis_mode === "model") {
-      if (!settings.model_api_key) throw new Error("模型 API 模式需要填写 API Key");
-      if (!settings.model_name) throw new Error("模型 API 模式需要填写模型名称");
+      if (!settings.model_api_key) throw new SettingsValidationError("model_api_key", "模型 API 模式需要填写 API Key");
+      if (!settings.model_name) throw new SettingsValidationError("model_name", "模型 API 模式需要填写模型名称");
       if (selectedProvider === "custom") {
         let endpoint;
         try { endpoint = new URL(settings.model_base_url); }
-        catch (_) { throw new Error("自定义 Base URL 不是有效的完整地址"); }
+        catch (_) { throw new SettingsValidationError("model_base_url", "自定义 Base URL 不是有效的完整地址"); }
         if (!(["http:", "https:"].includes(endpoint.protocol)) || endpoint.search || endpoint.hash) {
-          throw new Error("自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
+          throw new SettingsValidationError("model_base_url", "自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
         }
         if (runtimeMode === "edgeone" && endpoint.protocol !== "https:") {
-          throw new Error("网页端的自定义 Base URL 必须使用 HTTPS");
+          throw new SettingsValidationError("model_base_url", "网页端的自定义 Base URL 必须使用 HTTPS");
         }
       }
     }
@@ -174,12 +196,54 @@
     });
   }
 
-  function showStatus(message, type = "success") {
+  function clearFieldError(id) {
+    const control = byId(id);
+    if (!control) return;
+    const errorId = `${id}-error`;
+    byId(errorId)?.remove();
+    control.removeAttribute("aria-invalid");
+    control.removeAttribute("aria-errormessage");
+    const describedBy = (control.getAttribute("aria-describedby") || "")
+      .split(/\s+/)
+      .filter((token) => token && token !== errorId);
+    if (describedBy.length) control.setAttribute("aria-describedby", describedBy.join(" "));
+    else control.removeAttribute("aria-describedby");
+    control.closest(".settings-field")?.querySelectorAll(".field-note").forEach((note) => { note.hidden = false; });
+  }
+
+  function clearFieldErrors() {
+    document.querySelectorAll("[aria-invalid='true']").forEach((control) => clearFieldError(control.id));
+  }
+
+  function showFieldError(id, message) {
+    const control = byId(id);
+    if (!control) return;
+    clearFieldError(id);
+    const details = control.closest("details");
+    if (details) details.open = true;
+    const field = control.closest(".settings-field");
+    field?.querySelectorAll(".field-note").forEach((note) => { note.hidden = true; });
+    const error = document.createElement("small");
+    error.className = "field-error";
+    error.id = `${id}-error`;
+    error.textContent = message;
+    field?.appendChild(error);
+    control.setAttribute("aria-invalid", "true");
+    control.setAttribute("aria-errormessage", error.id);
+    const describedBy = new Set((control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+    describedBy.add(error.id);
+    control.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
+    control.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    control.focus({ preventScroll: true });
+  }
+
+  function showStatus(message, type = "success", { focus = true } = {}) {
     const status = byId("status");
     status.textContent = message;
     status.className = `settings-status ${type}`;
+    status.setAttribute("role", type === "error" ? "alert" : "status");
     status.hidden = false;
-    status.focus({ preventScroll: true });
+    if (focus) status.focus({ preventScroll: true });
     if (type === "success") window.setTimeout(() => { status.hidden = true; }, 4500);
   }
 
@@ -297,6 +361,7 @@
     button.setAttribute("aria-busy", "true");
     button.textContent = "正在保存";
     try {
+      clearFieldErrors();
       collectSettings();
       if (runtimeMode === "edgeone") {
         settings.libtv_timeout = Math.min(Math.max(settings.libtv_timeout, 30), 100);
@@ -314,7 +379,12 @@
         showStatus("设置已保存，新的分析任务会立即使用这组配置。", "success");
       }
     } catch (error) {
-      showStatus(`设置没有保存：${error.message}。检查字段后重试。`, "error");
+      if (error instanceof SettingsValidationError) {
+        showStatus(`设置没有保存：${error.message}。`, "error", { focus: false });
+        showFieldError(error.fieldId, error.message);
+      } else {
+        showStatus(`设置没有保存：${error.message}。检查字段后重试。`, "error");
+      }
     } finally {
       button.disabled = false;
       button.removeAttribute("aria-busy");
@@ -359,6 +429,14 @@
       });
     });
     byId("model_base_url").addEventListener("input", () => renderProvider("custom"));
+    byId("analysis_mode").addEventListener("change", syncAnalysisMode);
+    document.querySelectorAll(".settings-field input, .settings-field select, .settings-field textarea").forEach((control) => {
+      const clear = () => {
+        if (control.getAttribute("aria-invalid") === "true") clearFieldError(control.id);
+      };
+      control.addEventListener("input", clear);
+      control.addEventListener("change", clear);
+    });
     settings = { ...DEFAULTS };
     applySettings();
     initMotion();
