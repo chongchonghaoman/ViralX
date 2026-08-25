@@ -49,7 +49,13 @@
 
       <div class="hero-copy" data-motion="hero-copy">
         <p class="kicker">短视频证据引擎 · VIRALX</p>
-        <h1 id="hero-title"><span class="hero-title__line">把爆款拆到</span><span class="hero-title__line">每一秒</span></h1>
+        <h1 id="hero-title">
+          <picture class="hero-title-art" aria-hidden="true">
+            <source media="(min-width: 40rem)" srcset="{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}">
+            <img src="{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}" width="5069" height="2070" alt="" fetchpriority="high">
+          </picture>
+          <span class="visually-hidden">把爆款拆到每一秒</span>
+        </h1>
         <p class="hero-lede">ViralX 从原片、字幕和评论证据出发，解释钩子、镜头、声音与转化路径，再生成可以直接执行的复刻脚本。</p>
         <a class="hero-cta" href="#analysis-studio">开始分析</a>
       </div>

@@ -44,15 +44,19 @@ The canonical values live in static/tokens.css.
 - ViralX does not copy or hotlink those licensed font binaries.
 - Display and Latin UI: Hanken Grotesk (SIL OFL), weights 400–700, roman.
 - Chinese fallback and body: Noto Sans SC, weights 400–700.
-- The homepage claim alone targets DNP Shuei Mincho (the FTT/FOT/DNP/A-OTF family aliases)
-  as its graceful Mincho outlier. The public build currently falls back to Noto Serif SC
-  until a licensed DNP webfont kit or WOFF2 is supplied. The face never appears in
-  navigation, body copy, forms, settings, reports, or evidence labels.
-- Marketing display scale tops out around 6.75rem on wide screens; product controls stay at
-  normal reading size.
+- The homepage claim alone uses exact path outlines generated from the user-supplied
+  `DNPShueiMinPr6N B` face. The repository and public build contain only the two finished SVG
+  artworks; they do not contain, embed, convert, or redistribute the source font program.
+  A semantic, visually hidden H1 preserves the title for assistive technology and search.
+  The Shuei face never appears in navigation, body copy, forms, settings, reports, or evidence
+  labels.
+- Text-based section display scale tops out around 6.75rem on wide screens; the outlined hero
+  claim is controlled by artwork width (21rem stacked, 58rem wide), while product controls stay
+  at normal reading size.
 - Chinese display tracking is tuned more conservatively than English display tracking.
-- Display headings use overflow-wrap: anywhere and remain complete compositions at
-  320px, 375px, 414px, 768px, and 1280x800.
+- Text-based display headings use overflow-wrap: anywhere. The hero claim switches from its
+  exact stacked artwork to its exact wide artwork at 40rem. Both remain complete compositions
+  at 320px, 375px, 414px, 768px, and 1280x800.
 
 ## Spacing and shape
 
@@ -74,6 +78,10 @@ frames, signal waveforms, timeline rails, and a play lens. The website masks it 
 floating signal object and blends its dark field into the neutral page. It replaces Butter's
 signature hanging object rather than imitating or copying it. The accessible alternative text
 explains its role in the product story.
+
+The two `viralx-title-shuei-*.svg` files are title artwork, not webfonts. They are generated
+locally with `scripts/generate-outlined-title.py`; the source TTF remains outside the project.
+Install the pinned build-only dependency from `requirements-dev.txt` before regeneration.
 
 ## Motion
 
@@ -133,3 +141,5 @@ change this sequence.
 - static/settings.css: settings-only layout.
 - static/viralx.js: full Flask interaction and GSAP.
 - static/settings.js: settings interaction and route entrance motion.
+- static/assets/viralx-title-shuei-wide.svg: exact one-line outlined homepage claim.
+- static/assets/viralx-title-shuei-stacked.svg: exact two-line outlined mobile claim.

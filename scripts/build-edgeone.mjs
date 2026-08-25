@@ -15,6 +15,8 @@ html = html
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
   .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}", "/static/assets/viralx-signal-orbit.png")
+  .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}", "/static/assets/viralx-title-shuei-wide.svg")
+  .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}", "/static/assets/viralx-title-shuei-stacked.svg")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
   .replaceAll("{{ url_for('static', filename='viralx.js') }}", "/static/viralx.js")
   .replaceAll('href="/settings"', 'href="/settings.html"')
@@ -45,6 +47,14 @@ await cp(join(projectRoot, "static", "settings.js"), join(publicStatic, "setting
 await cp(
   join(projectRoot, "static", "assets", "viralx-signal-orbit.png"),
   join(publicStatic, "assets", "viralx-signal-orbit.png"),
+);
+await cp(
+  join(projectRoot, "static", "assets", "viralx-title-shuei-wide.svg"),
+  join(publicStatic, "assets", "viralx-title-shuei-wide.svg"),
+);
+await cp(
+  join(projectRoot, "static", "assets", "viralx-title-shuei-stacked.svg"),
+  join(publicStatic, "assets", "viralx-title-shuei-stacked.svg"),
 );
 await cp(join(projectRoot, "static", "viralx.js"), join(publicStatic, "viralx.js"));
 

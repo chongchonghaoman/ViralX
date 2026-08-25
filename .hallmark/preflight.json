@@ -1,9 +1,9 @@
 {
-  "date": "2026-08-24",
-  "framework": "Flask templates with vanilla HTML, CSS, GSAP and a static EdgeOne export",
+  "date": "2026-08-25",
+  "framework": "Flask templates with vanilla HTML, CSS and GSAP, exported to EdgeOne Pages with constrained cloud functions",
   "reference": "direct public component-system mapping from https://www.butter.video/ without copying brand assets, copy, imagery or licensed font binaries",
-  "font_stack": "UI uses OFL Hanken Grotesk plus Noto Sans SC; the hero targets licensed DNP Shuei Mincho aliases and falls back publicly to Noto Serif SC",
-  "font_license_boundary": "Do not commit or deploy DNP font binaries without a licensed webfont kit or redistributable WOFF2 grant",
+  "font_stack": "UI uses OFL Hanken Grotesk plus Noto Sans SC; the hero title uses exact path outlines generated from the user-supplied DNPShueiMinPr6N B face",
+  "font_license_boundary": "Only finished title outlines are committed; the source DNP TTF is neither embedded, copied, converted into a webfont nor deployed",
   "palette": "observed Butter values #EDEDED page, #FAFAFA floating surfaces, #0F0F0F/#1E1E1E ink and editor, #4DC5E5 signal with restrained #F9ABFF, #E9D352 and #63AD45 punctuation",
   "motion": "GSAP entrance, visible-by-default one-time scroll translation, real streamed progress and reduced-motion fallback",
   "spacing": "shared named four-point scale with detached navigation, explicit hero-nav clearance, centred marquee and wide chapter intervals",
@@ -15,7 +15,7 @@
   ],
   "validation": {
     "playwright": "1440x1024 desktop, 1280x800 laptop fold, 320px, 375px, 414px, 768px and reduced motion passed; no horizontal overflow and mobile title remains a deliberate two-line composition",
-    "slop_audit": "58/58 passed after separating navigation and visual lanes, restoring the laptop fold, locking the mobile title composition and keeping the Mincho face to one outlier role",
-    "runtime_boundary": "EdgeOne is static presentation; Flask remains the full local product"
+    "slop_audit": "58/58 passed after separating navigation and visual lanes, restoring the laptop fold, locking the mobile title composition and keeping the exact outlined Mincho face to one outlier role",
+    "runtime_boundary": "EdgeOne provides browser-safe analysis through constrained cloud functions; Flask remains the full local product with persistent local cache and Obsidian access"
   }
 }
