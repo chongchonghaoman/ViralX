@@ -11,7 +11,7 @@ Use ViralX as a remote web capability. The installed skill does not need the ful
 
 - For a TikTok or Douyin URL, call `analyze` directly. API23 is not involved.
 - For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for API23 discovery; the discovered video then continues to the active analysis provider.
-- The default provider is LibTV and requires `LIBTV_ACCESS_KEY`. Other supported mappings are: `gemini` requires `GEMINI_API_KEY`, `openrouter` requires `OPENROUTER_API_KEY`, and `minimax` requires `MINIMAX_API_KEY`. Select one with `ANALYSIS_MODE`.
+- The default provider is LibTV and requires `LIBTV_ACCESS_KEY`. For model analysis, set `ANALYSIS_MODE=model`, choose `MODEL_PROVIDER` (`openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom`), and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
 - Use `health` before analysis when credential or service readiness is unknown.
 - Use `keywords` only when the user asks for existing or suggested topics.
 

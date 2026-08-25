@@ -8,14 +8,14 @@
   "motion": "GSAP entrance, visible-by-default one-time scroll translation, real streamed progress and reduced-motion fallback",
   "spacing": "shared named four-point scale with detached navigation, explicit hero-nav clearance, centred marquee and wide chapter intervals",
   "preserve": [
-    "Flask routes and API contracts",
-    "TK Note and LibTV workflow",
-    "existing form field ids",
-    "Obsidian export"
+    "Flask and EdgeOne route and streaming contracts",
+    "TK Note, LibTV and API23 workflow",
+    "Obsidian export",
+    "legacy MiniMax generate_variants endpoint"
   ],
   "validation": {
-    "playwright": "1440x1024 desktop, 1280x800 laptop fold, 320px, 375px, 414px, 768px and reduced motion passed; no horizontal overflow and mobile title remains a deliberate two-line composition",
-    "slop_audit": "58/58 passed after separating navigation and visual lanes, restoring the laptop fold, locking the mobile title composition and keeping the exact outlined Mincho face to one outlier role",
-    "runtime_boundary": "EdgeOne provides browser-safe analysis through constrained cloud functions; Flask remains the full local product with persistent local cache and Obsidian access"
+    "playwright": "settings model section passed at 1440x1024, 390px and 320px; custom-only fields disclose correctly and no horizontal overflow was found",
+    "slop_audit": "58/58 passed after adding explicit provider focus, active and disabled states, replacing an ad hoc micro-gap with the shared spacing token, and confirming contrast and reduced motion",
+    "runtime_boundary": "EdgeOne custom model endpoints require public HTTPS and session keys are never echoed; Flask remains the full local product and may reach user-owned HTTP or private endpoints"
   }
 }

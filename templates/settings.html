@@ -27,7 +27,7 @@
           <a href="#runtime">运行模式</a>
           <a href="#tk-note">TK Note</a>
           <a href="#libtv">LibTV</a>
-          <a href="#models">兼容项</a>
+          <a href="#models">模型 API</a>
         </nav>
       </div>
       <div class="nav-actions">
@@ -52,7 +52,7 @@
         <a href="#runtime">运行模式</a>
         <a href="#tk-note">TK Note</a>
         <a href="#libtv">LibTV</a>
-        <a href="#models">可选兼容项</a>
+        <a href="#models">模型 API</a>
         <a href="#topics">搜索主题</a>
       </nav>
 
@@ -69,10 +69,9 @@
               <label for="analysis_mode">默认分析模式</label>
               <select id="analysis_mode">
                 <option value="libtv">LibTV 一键拉片</option>
-                <option value="gemini">Gemini 多模态分析</option>
-                <option value="openrouter">OpenRouter 免费模型</option>
+                <option value="model">模型 API 分析</option>
               </select>
-              <small class="field-note">LibTV 是主链；另外两种模式用于兼容。</small>
+              <small class="field-note">LibTV 负责完整拉片；模型 API 使用下方选定的服务商。</small>
             </div>
             <div class="settings-field">
               <label for="min_likes">关键词检索最低点赞数</label>
@@ -179,44 +178,71 @@
         <section class="settings-section" id="models" data-motion="reveal">
           <div class="settings-section__head">
             <span>04</span>
-            <div><h2>可选兼容项</h2><p>网页默认走 LibTV；Gemini 与 OpenRouter 仅用于兼容分析，MiniMax 只服务旧版脚本变体扩展。</p></div>
+            <div><h2>模型 API</h2><p>先选服务商，再填写一组 Key 与模型名。切换服务商时会带入官方接口地址，你仍可以修改模型。</p></div>
           </div>
-          <div class="settings-grid">
-            <div class="settings-field">
-              <label for="gemini_api_key">Gemini API Key</label>
-              <input type="password" id="gemini_api_key" autocomplete="off" placeholder="Google AI Studio API Key">
-              <small class="field-note">仅在 Gemini 模式下使用。</small>
+          <fieldset class="provider-picker" aria-describedby="provider-help">
+            <legend>选择模型服务商</legend>
+            <p class="field-note" id="provider-help">这里只决定分析模型；API23 搜索、TK Note 采集和 LibTV 拉片保持独立。</p>
+            <div class="provider-grid">
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="openai">
+                <span><strong>OpenAI</strong><small>通用视觉与文本分析</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="anthropic">
+                <span><strong>Claude</strong><small>Anthropic Messages API</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="gemini">
+                <span><strong>Gemini</strong><small>原生视频多模态分析</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="deepseek">
+                <span><strong>DeepSeek</strong><small>低成本文本证据分析</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="openrouter">
+                <span><strong>OpenRouter</strong><small>一个 Key 切换多家模型</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="model_provider" value="custom">
+                <span><strong>自定义</strong><small>自己的协议、地址与模型</small></span>
+              </label>
             </div>
-            <div class="settings-field">
-              <label for="gemini_model">Gemini 模型</label>
-              <input type="text" id="gemini_model" data-mono="true" placeholder="gemini-2.5-flash">
-              <small class="field-note">填写 API 支持的完整模型名。</small>
+          </fieldset>
+
+          <div class="provider-config" id="provider-config">
+            <div class="provider-summary" aria-live="polite">
+              <span>当前接口</span>
+              <strong id="provider-name">OpenAI</strong>
+              <code id="provider-endpoint">https://api.openai.com/v1</code>
             </div>
-            <div class="settings-field">
-              <label for="openrouter_api_key">OpenRouter API Key</label>
-              <input type="password" id="openrouter_api_key" autocomplete="off" placeholder="OpenRouter API Key">
-              <small class="field-note">仅在 OpenRouter 模式下使用。</small>
+            <div class="settings-grid">
+              <div class="settings-field settings-field--wide">
+                <label for="model_api_key">API Key</label>
+                <input type="password" id="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴当前服务商的 API Key">
+                <small class="field-note" id="model-key-note">网页端只保存在当前标签页；本地 Flask 写入本机 config.json。</small>
+              </div>
+              <div class="settings-field settings-field--wide">
+                <label for="model_name">模型名称</label>
+                <input type="text" id="model_name" data-mono="true" aria-describedby="model-name-note" placeholder="model-id">
+                <small class="field-note" id="model-name-note">使用账户实际可调用的完整模型 ID。</small>
+              </div>
+              <div class="settings-field" data-custom-model hidden>
+                <label for="model_protocol">接口协议</label>
+                <select id="model_protocol">
+                  <option value="openai">OpenAI Chat Completions 兼容</option>
+                  <option value="anthropic">Anthropic Messages 兼容</option>
+                </select>
+                <small class="field-note">决定请求体、鉴权和响应解析方式。</small>
+              </div>
+              <div class="settings-field" data-custom-model hidden>
+                <label for="model_base_url">Base URL</label>
+                <input type="url" id="model_base_url" data-mono="true" aria-describedby="model-url-note" placeholder="https://api.example.com/v1">
+                <small class="field-note" id="model-url-note">填 API 根地址，不要包含 /chat/completions 或查询参数。</small>
+              </div>
             </div>
-            <div class="settings-field">
-              <label for="openrouter_model">OpenRouter 模型</label>
-              <input type="text" id="openrouter_model" data-mono="true" placeholder="model-name:free">
-              <small class="field-note">免费模型可能随平台可用性变化。</small>
-            </div>
-            <div class="settings-field">
-              <label for="minimax_api_key">MiniMax API Key</label>
-              <input type="password" id="minimax_api_key" autocomplete="off" placeholder="MiniMax API Key">
-              <small class="field-note">网页默认分析不调用；仅旧版脚本变体扩展需要。</small>
-            </div>
-            <div class="settings-field" data-local-only>
-              <label for="minimax_base_url">MiniMax Base URL</label>
-              <input type="url" id="minimax_base_url" data-mono="true" placeholder="https://api.minimaxi.com/anthropic">
-              <small class="field-note">兼容 Anthropic 协议的接口地址。</small>
-            </div>
-            <div class="settings-field">
-              <label for="minimax_model">MiniMax 模型</label>
-              <input type="text" id="minimax_model" data-mono="true" placeholder="MiniMax-M2.7">
-              <small class="field-note">填写当前账户可用的模型名。</small>
-            </div>
+            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。云端自定义地址仅允许公网 HTTPS；本地 Flask 可连接你自己的 HTTP / 内网服务。</p>
           </div>
         </section>
 
@@ -254,7 +280,7 @@
     </div>
     <div class="footer-index" aria-label="设置页索引">
       <div><span>运行</span><a href="#runtime">分析模式</a><a href="#tk-note">TK Note</a><a href="#libtv">LibTV</a></div>
-      <div><span>模型</span><a href="#models">Gemini</a><a href="#models">OpenRouter</a><a href="#models">MiniMax</a></div>
+      <div><span>模型</span><a href="#models">常用服务商</a><a href="#models">自定义 API</a><a href="#models">会话密钥</a></div>
       <div><span>返回</span><a href="/">分析首页</a><p>本地 Flask</p><p>静态 EdgeOne 展示</p></div>
     </div>
     <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>

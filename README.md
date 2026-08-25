@@ -46,6 +46,7 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - **线上功能不再是假演示**：EdgeOne Pages 搭配 Python Cloud Functions，支持同源健康检查、API23 搜索、单视频分析、流式进度和浏览器安全导出。
 - **搜索链路切换为 API23**：适配 API23 的请求参数、分页游标与多种响应结构；API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **TK Note + LibTV 成为默认主链**：TK Note 采集原片、字幕 / ASR、元数据与评论证据，LibTV 负责真实拉片和结构分析；MiniMax 只保留旧接口兼容能力。
+- **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
 - **明确云端与本地边界**：网页端凭据仅保存在当前标签页；本地 Flask 继续提供持久缓存、目录访问、浏览器 Cookie、代理与 Obsidian 文件写入。
 
@@ -59,6 +60,7 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 | --- | --- | --- |
 | 粘贴 TikTok / 抖音视频链接并拉片 | TK Note → LibTV | `LIBTV_ACCESS_KEY` |
 | 输入关键词搜索后拉片 | API23 → TK Note → LibTV | `RAPIDAPI_KEY` + `LIBTV_ACCESS_KEY` |
+| 使用自选大模型分析 | TK Note → 已选模型服务商 | `MODEL_API_KEY`，并将 `analysis_mode` 设为 `model` |
 | 调用旧版脚本变体扩展接口 | MiniMax | 可选的 `MINIMAX_API_KEY` |
 
 因此：**RapidAPI 只用于你已选定的 API23 关键词搜索；直链分析不需要它。MiniMax 只是兼容保留项，不是启动网站、搜索视频或默认拉片的必需依赖。**
@@ -106,6 +108,11 @@ Skill 默认调用线上 `https://viralx.metrolabs.mobi/api/*`，因此只需要
 ```powershell
 $env:LIBTV_ACCESS_KEY = "your-libtv-key"
 $env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
+# 可选：改用模型 API 分析
+$env:ANALYSIS_MODE = "model"
+$env:MODEL_PROVIDER = "openai"
+$env:MODEL_API_KEY = "your-model-key"
+$env:MODEL_NAME = "gpt-4.1-mini"
 ```
 
 仓库内的入口位于 [`.agents/skills/viralx`](.agents/skills/viralx)。如果直接克隆仓库并用 Codex 打开，根目录 `AGENTS.md` 也会把 ViralX 调用请求路由到同一个 Skill。
@@ -133,7 +140,7 @@ $env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
 
 ### 2. 网页设置
 
-设置页集中管理 API23、TK Note、LibTV 和可选兼容项。在线环境只显示云端安全字段；本地目录、浏览器 Cookie、代理和持久缓存设置只在本地 Flask 开发运行时出现。
+设置页集中管理 API23、TK Note、LibTV 和模型 API。模型区提供 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 常用预设，也支持自定义 OpenAI Chat Completions / Anthropic Messages 兼容接口。在线环境只显示云端安全字段；本地目录、浏览器 Cookie、代理和持久缓存设置只在本地 Flask 运行时出现。
 
 ![ViralX 网页设置页](docs/assets/viralx-settings.png)
 
@@ -161,7 +168,7 @@ flowchart LR
 
 - 输入关键词：API23 负责找到候选 TikTok 视频。
 - 粘贴链接：不需要 API23，由 TK Note / yt-dlp 采集视频资产。
-- 开始拉片：默认交给 LibTV；Gemini、OpenRouter 等保留为兼容分析模式。
+- 开始拉片：默认交给 LibTV；选择“模型 API 分析”时，明确调用设置页中选定的服务商，不会静默回退到 MiniMax。
 
 ## Web 架构
 
@@ -242,9 +249,14 @@ python web_app.py
 | --- | --- | --- |
 | `RAPIDAPI_KEY` / `rapidapi_key` | API23 关键词搜索 | 仅搜索关键词时需要 |
 | `LIBTV_ACCESS_KEY` / `libtv_access_key` | 默认的一键拉片分析 | 使用 LibTV 时需要 |
+| `MODEL_PROVIDER` / `model_provider` | `openai`、`anthropic`、`gemini`、`deepseek`、`openrouter`、`custom` | 使用模型 API 时需要 |
+| `MODEL_API_KEY` / `model_api_key` | 当前服务商的 API Key | 使用模型 API 时需要 |
+| `MODEL_NAME` / `model_name` | 当前账户可调用的完整模型 ID | 使用模型 API 时需要 |
+| `MODEL_BASE_URL` / `model_base_url` | 自定义 API 根地址；常用预设自动填写 | 自定义服务商时需要 |
+| `MODEL_PROTOCOL` / `model_protocol` | `openai` 或 `anthropic` | 自定义服务商时需要 |
 | `MINIMAX_API_KEY` / `minimax_api_key` | 仅旧版 `/api/generate_variants` 脚本变体扩展 | 可选；网页默认主链不调用 |
-| `GEMINI_API_KEY` / `gemini_api_key` | Gemini 兼容分析模式 | 可选 |
-| `OPENROUTER_API_KEY` / `openrouter_api_key` | OpenRouter 兼容分析模式 | 可选 |
+
+旧版 `GEMINI_*`、`OPENROUTER_*`、`MINIMAX_*` 分析配置会在读取时迁移到统一模型合同，避免已有本地配置突然失效。MiniMax 的旧版脚本变体接口仍独立保留。
 
 直接粘贴 TikTok 视频链接时不会调用 API23。完整字段、超时、ASR、代理和本地缓存配置见 [`config.json.example`](config.json.example)。
 

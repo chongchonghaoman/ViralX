@@ -15,6 +15,7 @@ import threading
 import queue
 from tiktok_viral_analyzer import TikTokViralAnalyzer
 from ai_analyzer import AIAnalyzer
+from model_providers import model_is_ready, normalize_model_config
 
 app = Flask(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
@@ -50,10 +51,15 @@ DEFAULT_CONFIG = {
     'tk_note_proxy': '',
     'tk_note_timeout': 1800,
     'video_cache_dir': './video_cache',
+    'model_provider': '',
+    'model_protocol': '',
+    'model_api_key': '',
+    'model_base_url': '',
+    'model_name': '',
     'gemini_api_key': '',
-    'gemini_model': 'gemini-2.5-flash',
+    'gemini_model': 'gemini-3.7-flash',
     'openrouter_api_key': '',
-    'openrouter_model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+    'openrouter_model': 'openrouter/auto',
     'minimax_api_key': '',
     'minimax_base_url': 'https://api.minimaxi.com/anthropic',
     'minimax_model': 'MiniMax-M2.7',
@@ -82,6 +88,11 @@ def load_config():
         'TK_NOTE_COOKIES_FROM_BROWSER': ('tk_note_cookies_from_browser', str),
         'TK_NOTE_PROXY': ('tk_note_proxy', str),
         'TK_NOTE_TIMEOUT': ('tk_note_timeout', float),
+        'MODEL_PROVIDER': ('model_provider', str),
+        'MODEL_PROTOCOL': ('model_protocol', str),
+        'MODEL_API_KEY': ('model_api_key', str),
+        'MODEL_BASE_URL': ('model_base_url', str),
+        'MODEL_NAME': ('model_name', str),
         'GEMINI_API_KEY': ('gemini_api_key', str),
         'GEMINI_MODEL': ('gemini_model', str),
         'OPENROUTER_API_KEY': ('openrouter_api_key', str),
@@ -113,7 +124,7 @@ def load_config():
         merged['video_cache_dir'] = os.environ.get('VIRALX_VIDEO_CACHE_DIR', '/tmp/viralx/video_cache')
         merged['libtv_timeout'] = min(float(merged.get('libtv_timeout', 100)), 100)
         merged['tk_note_timeout'] = min(float(merged.get('tk_note_timeout', 90)), 90)
-    return merged
+    return normalize_model_config(merged, allow_private_custom=not IS_EDGE_RUNTIME)
 
 def save_config(data):
     """保存配置到 config.json"""
@@ -185,19 +196,18 @@ def health():
     """返回不含密钥的运行状态，供本地与 EdgeOne 前端探活。"""
     current_config = load_config()
     runtime = 'edgeone' if IS_EDGE_RUNTIME else 'local'
-    provider = str(current_config.get('analysis_mode', 'libtv')).lower()
+    mode = str(current_config.get('analysis_mode', 'libtv')).lower()
+    provider = current_config.get('model_provider', 'openai') if mode == 'model' else 'libtv'
     readiness = {
         'libtv': bool(current_config.get('libtv_access_key')),
-        'gemini': bool(current_config.get('gemini_api_key')),
-        'openrouter': bool(current_config.get('openrouter_api_key')),
-        'minimax': bool(current_config.get('minimax_api_key')),
+        'model': model_is_ready(current_config),
     }
     return jsonify({
         'status': 'ok',
         'runtime': runtime,
         'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
         'analysis_provider': provider,
-        'analysis_ready': readiness.get(provider, False),
+        'analysis_ready': readiness.get(mode, False),
         'configured': {
             **readiness,
             'keyword_search': bool(current_config.get('rapidapi_key')),
@@ -263,8 +273,11 @@ def analyze():
                 base_url=current_config.get('minimax_base_url'),
                 model=current_config.get('minimax_model'),
                 analysis_mode=current_config.get('analysis_mode', 'libtv'),
-                openrouter_api_key=current_config.get('openrouter_api_key', ''),
-                openrouter_model=current_config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'),
+                model_provider=current_config.get('model_provider', 'openai'),
+                model_protocol=current_config.get('model_protocol', 'openai'),
+                model_api_key=current_config.get('model_api_key', ''),
+                model_base_url=current_config.get('model_base_url', ''),
+                model_name=current_config.get('model_name', ''),
                 libtv_access_key=current_config.get('libtv_access_key', ''),
                 libtv_im_base=current_config.get('libtv_im_base', 'https://im.liblib.tv'),
                 libtv_poll_interval=current_config.get('libtv_poll_interval', 8),

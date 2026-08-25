@@ -26,6 +26,11 @@ ENV_HEADER_MAP = {
     "TK_NOTE_ASR_BACKEND": "X-ViralX-TK-ASR",
     "TK_NOTE_LANGUAGE": "X-ViralX-TK-Language",
     "TK_NOTE_TIMEOUT": "X-ViralX-TK-Timeout",
+    "MODEL_PROVIDER": "X-ViralX-Model-Provider",
+    "MODEL_PROTOCOL": "X-ViralX-Model-Protocol",
+    "MODEL_API_KEY": "X-ViralX-Model-Key",
+    "MODEL_BASE_URL": "X-ViralX-Model-Base-URL",
+    "MODEL_NAME": "X-ViralX-Model-Name",
     "GEMINI_API_KEY": "X-ViralX-Gemini-Key",
     "GEMINI_MODEL": "X-ViralX-Gemini-Model",
     "OPENROUTER_API_KEY": "X-ViralX-OpenRouter-Key",
@@ -153,9 +158,17 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--min-likes", type=int, help="Override API23 minimum likes")
     analyze.add_argument(
         "--analysis-mode",
-        choices=("libtv", "gemini", "openrouter", "minimax"),
+        choices=("libtv", "model", "gemini", "openrouter", "minimax"),
         help="Override the configured analysis provider",
     )
+    analyze.add_argument(
+        "--model-provider",
+        choices=("openai", "anthropic", "gemini", "deepseek", "openrouter", "custom"),
+        help="Select the provider used when analysis mode is model",
+    )
+    analyze.add_argument("--model-protocol", choices=("openai", "anthropic"), help="Protocol for a custom provider")
+    analyze.add_argument("--model-base-url", help="Base URL for a custom provider")
+    analyze.add_argument("--model-name", help="Provider model ID")
     analyze.add_argument("--output", type=Path, help="Also save the NDJSON stream to this path")
     return parser
 
@@ -179,6 +192,15 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             headers["X-ViralX-Min-Likes"] = str(max(0, args.min_likes))
         if args.analysis_mode:
             headers["X-ViralX-Analysis-Mode"] = args.analysis_mode
+        if args.model_provider:
+            headers["X-ViralX-Model-Provider"] = args.model_provider
+            headers.setdefault("X-ViralX-Analysis-Mode", "model")
+        if args.model_protocol:
+            headers["X-ViralX-Model-Protocol"] = args.model_protocol
+        if args.model_base_url:
+            headers["X-ViralX-Model-Base-URL"] = args.model_base_url
+        if args.model_name:
+            headers["X-ViralX-Model-Name"] = args.model_name
         return stream_analyze(
             args.base_url,
             payload,

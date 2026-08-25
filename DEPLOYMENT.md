@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dpmxxtcu571t`
+- Production deployment ID: `dpctpv0yzdj1`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpmxxtcu571t`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpctpv0yzdj1`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -58,9 +58,9 @@ The deployed site now includes an EdgeOne Python Cloud Function. The browser cal
 - `POST /api/generate_variants`
 - `POST /api/export-obsidian` (Obsidian URI or Markdown download)
 
-The online runtime intentionally does not expose the local settings or cache-clear APIs. `/settings.html` provides a browser-only BYOK configuration surface: supported credentials and model choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
+The online runtime intentionally does not expose the local settings or cache-clear APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports the unified `MODEL_*` EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
 
-The deployed environment currently has no project-level LibTV, RapidAPI API23, Gemini, OpenRouter, or MiniMax credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. The UI therefore reports `云端接口在线 · 待配置 LibTV` until the visitor supplies a session credential in `/settings.html` or the required EdgeOne environment variables are added. This is a real online API; readiness indicators never imply that an external provider request was successfully billed or completed.
+The deployed environment currently has no project-level LibTV, RapidAPI API23, or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. Visitors can keep LibTV as the default analysis chain or select one model provider in `/settings.html`. Common providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service. Readiness indicators never imply that an external provider request was successfully billed or completed.
 
 The local Flask version remains the full-control runtime for:
 

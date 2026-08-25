@@ -29,10 +29,11 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | `VIRALX_BASE_URL` | Override the default `https://viralx.metrolabs.mobi` server |
 | `RAPIDAPI_KEY` | API23 keyword discovery; not used for direct URLs |
 | `LIBTV_ACCESS_KEY` | Default LibTV shot analysis |
-| `ANALYSIS_MODE` | `libtv`, `gemini`, `openrouter`, or `minimax` |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Gemini compatibility mode |
-| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | OpenRouter compatibility mode |
-| `MINIMAX_API_KEY`, `MINIMAX_MODEL` | MiniMax mode and script generation |
+| `ANALYSIS_MODE` | `libtv` or `model`; legacy provider values are migrated |
+| `MODEL_PROVIDER` | `openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom` |
+| `MODEL_API_KEY`, `MODEL_NAME` | Key and model ID for the selected provider |
+| `MODEL_BASE_URL`, `MODEL_PROTOCOL` | Custom endpoint root and `openai` / `anthropic` protocol |
+| `GEMINI_*`, `OPENROUTER_*`, `MINIMAX_*` | Legacy compatibility; MiniMax remains available to script generation |
 | `MIN_LIKES` | Default API23 popularity threshold |
 | `LIBTV_POLL_INTERVAL`, `LIBTV_TIMEOUT` | LibTV polling controls |
 | `TK_NOTE_ASR_BACKEND`, `TK_NOTE_LANGUAGE`, `TK_NOTE_TIMEOUT` | TK Note collection controls |
