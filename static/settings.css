@@ -278,6 +278,98 @@
   color: var(--color-muted);
 }
 
+.libtv-connect-panel {
+  display: grid;
+  gap: var(--space-xl);
+  padding: clamp(1.15rem, 3vw, 2rem);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--color-accent) 22%, transparent), transparent 30%),
+    var(--color-page);
+}
+
+.libtv-connect-panel__status {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--space-md);
+}
+
+.libtv-status-dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
+  margin-block-start: 0.35rem;
+  border: 2px solid var(--color-paper);
+  border-radius: 50%;
+  background: var(--color-muted);
+  box-shadow: 0 0 0 1px var(--color-rule-strong);
+}
+
+.libtv-connect-panel[data-connection-state="connected"] .libtv-status-dot {
+  background: var(--color-success);
+}
+
+.libtv-connect-panel[data-connection-state="starting"] .libtv-status-dot,
+.libtv-connect-panel[data-connection-state="awaiting_browser"] .libtv-status-dot {
+  background: var(--color-accent);
+  animation: libtv-pulse 1.4s var(--ease-out) infinite;
+}
+
+.libtv-connect-panel[data-connection-state="error"] .libtv-status-dot,
+.libtv-connect-panel[data-connection-state="unavailable"] .libtv-status-dot {
+  background: var(--color-error);
+}
+
+.libtv-connect-panel__status strong {
+  display: block;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.libtv-connect-panel__status p,
+.libtv-privacy {
+  max-width: 66ch;
+  margin: var(--space-xs) 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.libtv-connect-panel__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.libtv-connect-panel__actions .btn,
+.libtv-connect-panel__actions .refresh-link {
+  min-height: 2.75rem;
+}
+
+.libtv-connect-panel__actions .refresh-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--space-sm);
+  text-decoration: none;
+}
+
+.libtv-privacy {
+  margin: 0;
+  padding-block-start: var(--space-md);
+  border-block-start: 1px solid var(--color-rule);
+  font-size: var(--text-xs);
+}
+
+@keyframes libtv-pulse {
+  50% { box-shadow: 0 0 0 0.42rem color-mix(in srgb, var(--color-accent) 18%, transparent); }
+}
+
 .provider-picker {
   min-width: 0;
   margin: 0;
@@ -650,5 +742,9 @@
   .settings-actions {
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .libtv-status-dot {
+    animation: none !important;
   }
 }

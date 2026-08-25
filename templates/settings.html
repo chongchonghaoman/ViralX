@@ -44,7 +44,7 @@
     <header class="settings-hero" data-motion="reveal">
       <p class="section-label">系统配置 · VIRALX</p>
       <h1>把分析链，<br>配置清楚。</h1>
-      <p>ViralX 默认走 TK Note 证据采集与 LibTV 一键拉片。密钥和本地目录只保存在当前运行环境。</p>
+      <p>ViralX 默认由 TK Note 采集证据，再交给本机 LibTV CLI。LibTV 只通过官方网页授权，ViralX 不接触登录凭据。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
@@ -79,10 +79,10 @@
             <div class="settings-field">
               <label for="analysis_mode">默认分析模式</label>
               <select id="analysis_mode" name="analysis_mode">
-                <option value="libtv">LibTV 一键拉片</option>
+                <option value="libtv">LibTV 画布拉片 · 本地</option>
                 <option value="model">模型 API 分析</option>
               </select>
-              <small class="field-note">LibTV 负责完整拉片；模型 API 使用下方选定的服务商。</small>
+              <small class="field-note">LibTV 依赖本机 CLI 网页登录；EdgeOne 网页端使用模型 API。</small>
             </div>
             <div class="settings-field">
               <label for="min_likes">关键词检索最低点赞数</label>
@@ -155,36 +155,27 @@
         <section class="settings-section" id="libtv" data-motion="reveal">
           <div class="settings-section__head">
             <span>03</span>
-            <div><h2>LibTV 一键拉片</h2><p>上传原视频、创建会话、轮询报告，并保留项目画布。</p></div>
+            <div><h2>连接 LibTV</h2><p>通过官方 CLI 打开网页授权；连接后，ViralX 创建画布并上传原视频。</p></div>
           </div>
           <details class="section-disclosure" data-mode-details="libtv" open>
-            <summary><span><strong>LibTV 凭据与参数</strong><small>默认分析链</small></span></summary>
-            <div class="section-disclosure__body settings-grid">
-            <div class="settings-field settings-field--wide">
-              <label for="libtv_access_key">LibTV Access Key</label>
-              <input type="password" id="libtv_access_key" name="libtv_access_key" autocomplete="off" placeholder="LIBTV_ACCESS_KEY">
-              <small class="field-note">也可以通过系统环境变量配置。</small>
-            </div>
-            <div class="settings-field" data-local-only>
-              <label for="libtv_im_base">服务地址</label>
-              <input type="url" id="libtv_im_base" name="libtv_im_base" data-mono="true" placeholder="https://im.liblib.tv">
-              <small class="field-note">通常不需要修改。</small>
-            </div>
-            <div class="settings-field">
-              <label for="libtv_poll_interval">轮询间隔</label>
-              <input type="number" id="libtv_poll_interval" name="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
-              <small class="field-note">单位为秒。</small>
-            </div>
-            <div class="settings-field">
-              <label for="libtv_timeout">拉片等待上限</label>
-              <input type="number" id="libtv_timeout" name="libtv_timeout" min="30" max="900" step="10" placeholder="180">
-              <small class="field-note">超时后仍保留项目画布入口。</small>
-            </div>
-            <div class="settings-field" data-local-only>
-              <label for="libtv_concurrency">并发拉片数</label>
-              <input type="number" id="libtv_concurrency" name="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
-              <small class="field-note">默认 2，避免同一 Key 创建过多会话。</small>
-            </div>
+            <summary><span><strong>网页登录连接</strong><small id="libtv-summary-state">正在检查</small></span></summary>
+            <div class="section-disclosure__body">
+              <div class="libtv-connect-panel" id="libtv-connection" data-connection-state="starting" aria-live="polite">
+                <div class="libtv-connect-panel__status">
+                  <span class="libtv-status-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong id="libtv-auth-label">正在检查 LibTV</strong>
+                    <p id="libtv-auth-message">确认本机 CLI 与网页登录状态…</p>
+                  </div>
+                </div>
+                <div class="libtv-connect-panel__actions">
+                  <button class="btn btn-primary" id="libtv-connect-btn" type="button">连接 LibTV</button>
+                  <button class="refresh-link" id="libtv-refresh-btn" type="button">刷新状态</button>
+                  <button class="refresh-link" id="libtv-disconnect-btn" type="button" hidden>断开连接</button>
+                  <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
+                </div>
+                <p class="libtv-privacy">授权由 LibTV 官方网页与本机 CLI 完成。ViralX 不读取、保存或回显 token；EdgeOne 也无法访问你电脑上的登录态。</p>
+              </div>
             </div>
           </details>
         </section>

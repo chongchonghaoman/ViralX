@@ -1,5 +1,4 @@
 import json
-import os
 import unittest
 from unittest.mock import patch
 
@@ -15,13 +14,18 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(self.client.get('/settings').status_code, 200)
 
     def test_health_returns_readiness_without_secret_values(self):
-        response = self.client.get('/api/health')
+        with patch.object(web_app.libtv_auth, 'status', return_value={
+            'state': 'disconnected', 'connected': False, 'cli_installed': True,
+        }):
+            response = self.client.get('/api/health')
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload['runtime'], 'local')
         self.assertEqual(payload['keyword_search_provider'], 'api23')
         self.assertIsInstance(payload['analysis_ready'], bool)
         self.assertTrue(all(isinstance(value, bool) for value in payload['configured'].values()))
+        self.assertEqual(payload['libtv']['auth'], 'web')
+        self.assertEqual(payload['libtv']['connection_state'], 'disconnected')
 
     def test_health_reports_selected_generic_model_provider(self):
         config = {
@@ -39,29 +43,47 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(payload['analysis_ready'])
         self.assertNotIn('local-secret', json.dumps(payload))
 
-    def test_direct_douyin_url_uses_libtv_and_reports_missing_key(self):
-        config = {**web_app.DEFAULT_CONFIG, 'libtv_access_key': ''}
-        with patch.object(web_app, 'load_config', return_value=config), patch.dict(
-            os.environ, {'LIBTV_ACCESS_KEY': ''}
-        ):
+    def test_direct_douyin_url_reports_missing_browser_login(self):
+        config = {**web_app.DEFAULT_CONFIG, 'analysis_mode': 'libtv'}
+        with patch.object(web_app, 'load_config', return_value=config), patch(
+            'ai_analyzer.LibTVAnalyzer'
+        ) as analyzer_class:
+            analyzer_class.return_value.available = True
+            analyzer_class.return_value.is_authenticated.return_value = False
             response = self.client.post(
                 '/api/analyze',
                 json={'keyword': 'https://www.douyin.com/video/123456'},
             )
-
-        payloads = [
-            json.loads(line)
-            for line in response.get_data(as_text=True).splitlines()
-            if line.strip()
-        ]
+            payloads = [
+                json.loads(line)
+                for line in response.get_data(as_text=True).splitlines()
+                if line.strip()
+            ]
         progress = payloads[0]
         completed = payloads[-1]
 
         self.assertEqual(response.mimetype, 'application/x-ndjson')
         self.assertEqual(progress['video']['analysis_provider'], 'libtv')
         self.assertEqual(progress['video']['libtv_status'], 'error')
-        self.assertIn('LIBTV_ACCESS_KEY', progress['video']['ai_analysis'])
+        self.assertIn('连接 LibTV', progress['video']['ai_analysis'])
         self.assertEqual(completed['failed_videos'], 1)
+
+    def test_libtv_auth_start_returns_only_safe_browser_state(self):
+        state = {
+            'state': 'awaiting_browser',
+            'connected': False,
+            'cli_installed': True,
+            'login_url': 'https://www.liblib.tv/zh?callback_url=http%3A%2F%2F127.0.0.1%3A63393%2Fcallback',
+            'message': '请在官方网页完成授权',
+        }
+        with patch.object(web_app.libtv_auth, 'start_login', return_value=state):
+            response = self.client.post('/api/libtv/auth/start')
+        payload = response.get_json()
+        self.assertEqual(payload['state'], 'awaiting_browser')
+        self.assertTrue(payload['login_url'].startswith('https://www.liblib.tv/'))
+        serialized = json.dumps(payload).lower()
+        self.assertNotIn('token', serialized)
+        self.assertNotIn('authorization', serialized)
 
     def test_direct_video_data_preserves_source_url(self):
         url = 'https://www.tiktok.com/@creator/video/123'

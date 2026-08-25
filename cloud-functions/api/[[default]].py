@@ -26,7 +26,6 @@ os.environ.setdefault("VIRALX_MAX_ANALYZE_VIDEOS", "1")
 os.environ.setdefault("VIRALX_CACHE_DIR", "/tmp/viralx/cache")
 os.environ.setdefault("VIRALX_OUTPUT_DIR", "/tmp/viralx/data")
 os.environ.setdefault("VIRALX_VIDEO_CACHE_DIR", "/tmp/viralx/video_cache")
-os.environ.setdefault("LIBTV_TIMEOUT", "100")
 os.environ.setdefault("TK_NOTE_TIMEOUT", "90")
 
 staged_tk_note = FUNCTIONS_DIR / "vendor" / "tk_note" / "extract_tiktok_text.py"
@@ -34,12 +33,6 @@ source_tk_note = PROJECT_ROOT / ".agents" / "skills" / "tk-note" / "scripts" / "
 tk_note_script = staged_tk_note if staged_tk_note.is_file() else source_tk_note
 if tk_note_script.is_file():
     os.environ.setdefault("VIRALX_TK_NOTE_SCRIPT", str(tk_note_script))
-
-staged_libtv = FUNCTIONS_DIR / "vendor" / "libtv"
-source_libtv = PROJECT_ROOT / ".agents" / "skills" / "libtv-skill" / "scripts"
-libtv_scripts = staged_libtv if staged_libtv.is_dir() else source_libtv
-if libtv_scripts.is_dir():
-    os.environ.setdefault("VIRALX_LIBTV_SCRIPTS_DIR", str(libtv_scripts))
 
 from ai_analyzer import AIAnalyzer  # noqa: E402
 from model_providers import model_is_ready, normalize_model_config  # noqa: E402
@@ -60,11 +53,7 @@ def load_config():
     """Build cloud config from server env plus session-only BYOK headers."""
     config = {
         "rapidapi_key": os.environ.get("RAPIDAPI_KEY", ""),
-        "analysis_mode": os.environ.get("ANALYSIS_MODE", "libtv"),
-        "libtv_access_key": os.environ.get("LIBTV_ACCESS_KEY", ""),
-        "libtv_im_base": os.environ.get("OPENAPI_IM_BASE", "https://im.liblib.tv"),
-        "libtv_poll_interval": _number("LIBTV_POLL_INTERVAL", 8, float),
-        "libtv_timeout": min(_number("LIBTV_TIMEOUT", 100, float), 100),
+        "analysis_mode": os.environ.get("ANALYSIS_MODE", "model"),
         "tk_note_asr_backend": os.environ.get("TK_NOTE_ASR_BACKEND", "auto"),
         "tk_note_language": os.environ.get("TK_NOTE_LANGUAGE", "auto"),
         "tk_note_cookies_from_browser": "",
@@ -100,7 +89,6 @@ def load_config():
     string_headers = {
         "X-ViralX-Analysis-Mode": "analysis_mode",
         "X-ViralX-RapidAPI-Key": "rapidapi_key",
-        "X-ViralX-LibTV-Key": "libtv_access_key",
         "X-ViralX-Model-Provider": "model_provider",
         "X-ViralX-Model-Protocol": "model_protocol",
         "X-ViralX-Model-Key": "model_api_key",
@@ -125,8 +113,6 @@ def load_config():
 
     numeric_headers = {
         "X-ViralX-Min-Likes": ("min_likes", 0, 1_000_000_000, int),
-        "X-ViralX-LibTV-Poll": ("libtv_poll_interval", 1, 30, float),
-        "X-ViralX-LibTV-Timeout": ("libtv_timeout", 30, 100, float),
         "X-ViralX-TK-Timeout": ("tk_note_timeout", 30, 90, float),
     }
     for header_name, (config_name, minimum, maximum, cast) in numeric_headers.items():
@@ -172,7 +158,7 @@ def _configured_state():
     config = load_config()
     mode = str(config.get("analysis_mode") or "libtv").lower()
     provider_ready = {
-        "libtv": bool(config.get("libtv_access_key")),
+        "libtv": False,
         "model": model_is_ready(config),
     }
     return config, mode, provider_ready
@@ -192,6 +178,13 @@ def health():
         "configured": {
             **provider_ready,
             "keyword_search": bool(config.get("rapidapi_key")),
+        },
+        "libtv": {
+            "auth": "web",
+            "scope": "local",
+            "connection_state": "local_only",
+            "connected": False,
+            "cli_installed": False,
         },
         "limits": {
             "max_videos": MAX_ANALYZE_VIDEOS,
@@ -222,6 +215,14 @@ def analyze():
                 yield json.dumps({
                     "status": "error",
                     "message": "请输入关键词或抖音/TikTok 视频链接",
+                    "done": True,
+                }, ensure_ascii=False) + "\n"
+                return
+
+            if str(config.get("analysis_mode") or "libtv").lower() == "libtv":
+                yield json.dumps({
+                    "status": "error",
+                    "message": "LibTV 现在使用本机 CLI 网页登录，EdgeOne 无法访问本地登录态；请选择模型 API，或在本地运行 ViralX。",
                     "done": True,
                 }, ensure_ascii=False) + "\n"
                 return
@@ -261,10 +262,6 @@ def analyze():
                 model_api_key=config["model_api_key"],
                 model_base_url=config["model_base_url"],
                 model_name=config["model_name"],
-                libtv_access_key=config["libtv_access_key"],
-                libtv_im_base=config["libtv_im_base"],
-                libtv_poll_interval=config["libtv_poll_interval"],
-                libtv_timeout=config["libtv_timeout"],
                 video_cache_dir=config["video_cache_dir"],
                 tk_note_asr_backend=config["tk_note_asr_backend"],
                 tk_note_language=config["tk_note_language"],

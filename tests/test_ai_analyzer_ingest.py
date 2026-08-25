@@ -18,17 +18,19 @@ class FakeCollector:
 
 
 class FakeLibTV:
-    access_key = "test-key"
+    available = True
 
     def __init__(self):
         self.paths = []
 
+    def is_authenticated(self):
+        return True
+
     def analyze(self, video_file_path, user_request=""):
         self.paths.append((video_file_path, user_request))
         return LibTVAnalysisResult(
-            analysis="## 一键拉片\n完成",
-            status="completed",
-            session_id="session",
+            analysis="视频已上传画布",
+            status="uploaded",
             project_uuid="project",
             project_url="https://example.com/project",
             result_urls=[],
@@ -53,7 +55,6 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             collector = FakeCollector(asset)
             analyzer = AIAnalyzer(
                 analysis_mode="libtv",
-                libtv_access_key="test-key",
                 video_collector=collector,
             )
             fake_libtv = FakeLibTV()
@@ -67,7 +68,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
 
             self.assertEqual(len(collector.calls), 1)
             self.assertEqual(collector.calls[0][-1], True)
-            self.assertEqual(fake_libtv.paths, [(str(video), "一键拉片")])
+            self.assertEqual(fake_libtv.paths, [(str(video), "逐帧拉片")])
             self.assertEqual(result["analysis_provider"], "libtv")
             self.assertEqual(result["tk_note_status"], "reused")
             self.assertEqual(video_data["title"], "Real title")

@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dpbir5qqtfuo`
+- Production deployment ID: `dplvgnzhnyb4`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpbir5qqtfuo`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dplvgnzhnyb4`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -34,10 +34,12 @@ Verified on the public custom domain:
 - The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
 - Responsive WebP hero assets return `200 image/webp` with immutable caching
 - `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
+- `/api/health` reports LibTV as `auth: web`, `scope: local`, `connection_state: local_only`
+- `POST /api/analyze` with LibTV mode -> actionable local-CLI / model-API recovery message
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 
-The home page and settings page were visually checked from the live HTTPS domain. The production build passed desktop and 320px, 390px, and 414px mobile Chromium review without horizontal overflow. The live browser console showed no JavaScript or CSP errors.
+The home page and settings page were visually checked from the live HTTPS domain. The production build passed desktop and 390px mobile Chromium review for this release; the LibTV section is collapsed and labelled `仅本地可用`, while model settings remain operable. The live browser console showed no JavaScript or CSP errors.
 
 ## Original protected deployment
 
@@ -61,15 +63,15 @@ The deployed site now includes an EdgeOne Python Cloud Function. The browser cal
 - `POST /api/generate_variants`
 - `POST /api/export-obsidian` (Obsidian URI or Markdown download)
 
-The online runtime intentionally does not expose the local settings or cache-clear APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports the unified `MODEL_*` EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
+The online runtime intentionally does not expose local settings, cache-clear, or LibTV authentication APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports unified `MODEL_*` EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
 
-The deployed environment currently has no project-level LibTV, RapidAPI API23, or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. Visitors can keep LibTV as the default analysis chain or select one model provider in `/settings.html`. Common providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service. Readiness indicators never imply that an external provider request was successfully billed or completed.
+The deployed environment currently has no project-level RapidAPI API23 or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. EdgeOne analysis requires one model provider selected in `/settings.html`. LibTV is explicitly shown as local-only: browser login writes credentials to the user's local official CLI, which an edge function cannot access. Common model providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service.
 
 The local Flask version remains the full-control runtime for:
 
 - Python and the Flask API routes;
 - TK Note / `yt-dlp` ingestion;
-- LibTV uploads and polling;
+- official LibTV CLI browser login, canvas creation, and source-video upload;
 - local video and analysis caches;
 - direct Obsidian filesystem export;
 - editable settings and destructive cache management;
@@ -90,6 +92,6 @@ npm run build:edgeone
 npx edgeone makers deploy public -n viralx-overseas -e production -a overseas --json
 ```
 
-`public/` is generated and ignored by Git. The source of truth is the Flask template, shared static assets, `cloud-functions/`, and `scripts/build-edgeone.mjs`. The build stages only the public-safe cloud entrypoint, backend modules, and vendored TK Note / LibTV helper scripts; it never copies `config.json`.
+`public/` is generated and ignored by Git. The source of truth is the Flask template, shared static assets, `cloud-functions/`, and `scripts/build-edgeone.mjs`. The build stages only the public-safe cloud entrypoint, backend modules, and vendored TK Note scripts; it does not bundle the local LibTV CLI or copy `config.json`.
 
 Reference: [EdgeOne custom domain documentation](https://pages.edgeone.ai/document/custom-domain) and [HTTPS configuration overview](https://pages.edgeone.ai/document/https-configuration-overview).

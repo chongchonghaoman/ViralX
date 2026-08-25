@@ -46,8 +46,8 @@ class ViralXSkillClientTests(unittest.TestCase):
             "ANALYSIS_MODE": "libtv",
         })
         self.assertEqual(headers["X-ViralX-RapidAPI-Key"], "rapid-secret")
-        self.assertEqual(headers["X-ViralX-LibTV-Key"], "libtv-secret")
         self.assertEqual(headers["X-ViralX-Analysis-Mode"], "libtv")
+        self.assertNotIn("X-ViralX-LibTV-Key", headers)
 
     @patch.object(MODULE, "urlopen")
     def test_application_error_stream_returns_exit_code_two(self, mock_urlopen):
