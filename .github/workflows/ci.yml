@@ -25,3 +25,13 @@ jobs:
         run: python -m py_compile libtv_analyzer.py ai_analyzer.py web_app.py tiktok_viral_analyzer.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build EdgeOne web application
+        run: npm run build:edgeone

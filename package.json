@@ -1,34 +1,13 @@
 {
   "name": "viralx",
   "version": "1.0.0",
-  "description": "TikTok 爆款视频分析工具 - Electron 桌面版",
-  "main": "main.js",
+  "description": "Web-first short-video evidence and shot-analysis workspace",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
     "build:edgeone": "node scripts/build-edgeone.mjs",
     "preview:edgeone": "python -m http.server 4173 --bind 127.0.0.1 --directory public",
     "deploy:edgeone": "npm run build:edgeone && npx edgeone makers deploy public -n viralx-overseas -e production -a overseas"
   },
-  "build": {
-    "appId": "com.viralx.app",
-    "productName": "ViralX",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "**/*",
-      "!node_modules/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.productivity"
-    }
-  },
-  "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+  "engines": {
+    "node": ">=18"
   }
 }

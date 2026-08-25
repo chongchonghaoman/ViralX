@@ -1,8 +1,8 @@
 # Design — ViralX
 
-ViralX is an evidence-led website and local analysis tool for short-video researchers,
-creative operators, and product teams. This document is the visual contract for every
-browser surface.
+ViralX is an evidence-led web application for short-video researchers, creative operators,
+and product teams. It uses cloud and local web runtimes behind the same browser interface.
+This document is the visual contract for every browser surface.
 
 ## Design position
 
