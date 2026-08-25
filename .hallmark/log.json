@@ -1,5 +1,15 @@
 [
   {
+    "date": "2026-08-25",
+    "scope": "homepage hero typography and navigation clearance",
+    "macrostructure": "Centered Marquee + Embedded Studio",
+    "theme": "studied-DNA (source: https://www.butter.video/) with DNP Shuei Mincho typography",
+    "genre": "playful product editorial",
+    "enrichment": "existing ViralX signal-orbit product visual in a dedicated nav-safe lane",
+    "brief": "Keep the approved website structure while removing nav overlap and giving the main claim the graceful Mincho voice selected by the user",
+    "knob_deltas": "hero title Hanken Grotesk to DNP Shuei Mincho alias chain with Noto Serif SC public fallback; desktop hero start 0 to nav clearance; wide illustration 39rem to 34rem"
+  },
+  {
     "date": "2026-08-24",
     "scope": "website, embedded studio and settings",
     "macrostructure": "Centered Marquee + Embedded Studio",

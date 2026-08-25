@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500&display=swap');
 
 :root {
   color-scheme: light;
@@ -32,6 +32,7 @@
 
   --font-display: "Hanken Grotesk", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif;
   --font-body: "Hanken Grotesk", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  --font-hero-script: "FTT-DNP秀英明朝", "FTT-DNP 秀英明朝", "FOT-DNP 秀英明朝 Pr6 L", "DNP 秀英明朝 Pr6 L", "A-OTF 秀英明朝 Pr6 L", "Noto Serif SC", "Songti SC", "STSong", serif;
 
   --space-3xs: 0.125rem;
   --space-2xs: 0.25rem;
@@ -54,6 +55,8 @@
   --text-2xl: 2.441rem;
   --text-3xl: 3.052rem;
   --text-display: clamp(3.2rem, 8vw, 6.8rem);
+  --text-hero-script: clamp(3rem, 14vw, 5.4rem);
+  --text-hero-script-wide: clamp(5.4rem, 7.1vw, 6.4rem);
 
   --control-height: 3.25rem;
   --radius-xs: 0.375rem;
@@ -77,6 +80,7 @@
   --page-gutter: clamp(1rem, 3vw, 3rem);
   --content-max: 90rem;
   --nav-height: 4rem;
+  --hero-nav-clearance: calc(var(--nav-height) + var(--space-2xl));
   --z-base: 1;
   --z-raised: 10;
   --z-sticky: 200;

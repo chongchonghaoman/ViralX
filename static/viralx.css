@@ -1,6 +1,7 @@
 /* Hallmark · genre: playful-product-editorial · tone: assured, tactile, evidence-led
  * macrostructure: Centered Marquee + Embedded Studio · theme: studied-DNA (source: https://www.butter.video/)
- * components: split floating pill nav · centered object/claim · dark editor surface · four-step flow · index footer
+ * components: split floating pill nav · nav-safe illustration lane · Shuei Mincho hero claim · dark editor surface · four-step flow · index footer
+ * knob deltas: hero title=Shuei Mincho · desktop hero start=nav-clearance · wide illustration=39rem→34rem
  * pre-emit critique: P5 H5 E5 S5 R5 V5 · contrast: pass (40–41) · nav: N5 · footer: Ft4 · slop: pass (42–45)
  * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57)
  */
@@ -227,6 +228,7 @@ img {
 
 .hero-visual img {
   width: 100%;
+  height: auto;
   aspect-ratio: 3 / 2;
   object-fit: cover;
   clip-path: ellipse(48% 40% at 50% 50%);
@@ -274,15 +276,22 @@ img {
 }
 
 .hero h1 {
-  max-width: 9ch;
+  max-width: 100%;
   min-width: 0;
   margin: var(--space-md) auto 0;
   overflow-wrap: anywhere;
-  font-family: var(--font-display);
-  font-size: clamp(3.2rem, 13vw, 7.2rem);
+  font-family: var(--font-hero-script);
+  font-size: var(--text-hero-script);
   font-weight: 400;
-  letter-spacing: -0.045em;
-  line-height: 0.99;
+  font-style: normal;
+  letter-spacing: 0.015em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.hero-title__line {
+  display: block;
+  white-space: nowrap;
 }
 
 .hero-lede {
@@ -1374,6 +1383,10 @@ img {
 }
 
 @media (min-width: 40rem) {
+  .hero-title__line {
+    display: inline;
+  }
+
   .source-row {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
@@ -1499,12 +1512,12 @@ img {
   .hero {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    padding-block-start: 0;
+    padding-block-start: var(--hero-nav-clearance);
   }
 
   .hero-visual {
     grid-column: 1;
-    width: min(100%, 36rem);
+    width: min(100%, 34rem);
     min-height: 20rem;
     justify-self: center;
   }
@@ -1519,16 +1532,22 @@ img {
   .hero h1 {
     max-width: none;
     margin-inline: auto;
-    font-size: clamp(5rem, 7.5vw, 7rem);
+    font-size: var(--text-hero-script-wide);
   }
 
   .hero-lede {
+    margin-block-start: var(--space-md);
     margin-inline: auto;
+  }
+
+  .hero-cta {
+    margin-block-start: var(--space-md);
   }
 
   .analysis-studio {
     grid-column: 1;
     justify-self: center;
+    margin-block-start: var(--space-2xl);
     padding: var(--space-xl);
   }
 
@@ -1590,16 +1609,16 @@ img {
 
 @media (min-width: 80rem) {
   .hero-visual {
-    width: min(100%, 39rem);
+    width: min(100%, 34rem);
     min-height: 21rem;
   }
 
   .hero h1 {
-    font-size: clamp(6rem, 7.5vw, 7.35rem);
+    font-size: var(--text-hero-script-wide);
   }
 
   .analysis-studio {
-    margin-block-start: var(--space-3xl);
+    margin-block-start: var(--space-2xl);
   }
 
   .frame {

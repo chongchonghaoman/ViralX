@@ -44,7 +44,11 @@ The canonical values live in static/tokens.css.
 - ViralX does not copy or hotlink those licensed font binaries.
 - Display and Latin UI: Hanken Grotesk (SIL OFL), weights 400–700, roman.
 - Chinese fallback and body: Noto Sans SC, weights 400–700.
-- Marketing display scale tops out around 7.35rem on wide screens; product controls stay at
+- The homepage claim alone targets DNP Shuei Mincho (the FTT/FOT/DNP/A-OTF family aliases)
+  as its graceful Mincho outlier. The public build currently falls back to Noto Serif SC
+  until a licensed DNP webfont kit or WOFF2 is supplied. The face never appears in
+  navigation, body copy, forms, settings, reports, or evidence labels.
+- Marketing display scale tops out around 6.75rem on wide screens; product controls stay at
   normal reading size.
 - Chinese display tracking is tuned more conservatively than English display tracking.
 - Display headings use overflow-wrap: anywhere and remain complete compositions at
@@ -56,6 +60,8 @@ The canonical values live in static/tokens.css.
 - Controls share a 52px base height.
 - Desktop navigation uses two detached 20px-radius floating capsules: product navigation on
   the left and account/action controls on the right. Mobile recombines them into one shell.
+- The hero reserves `--hero-nav-clearance` before the product visual. Navigation and the
+  signal-orbit may never occupy the same vertical lane at desktop widths.
 - Product panels and secondary controls use restrained 6–20px radii; pills are reserved for
   navigation and primary actions.
 - Evidence and workflow sections rely on rules, contrast, and sequence rather than nested
