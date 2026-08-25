@@ -61,6 +61,7 @@ await cp(join(projectRoot, "static", "viralx.js"), join(publicStatic, "viralx.js
 await cp(join(projectRoot, "cloud-functions"), publicFunctions, { recursive: true });
 for (const moduleName of [
   "ai_analyzer.py",
+  "model_providers.py",
   "video_ingest.py",
   "libtv_analyzer.py",
   "tiktok_viral_analyzer.py",

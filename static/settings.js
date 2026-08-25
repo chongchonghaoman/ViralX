@@ -1,14 +1,24 @@
 (() => {
   "use strict";
 
+  const PROVIDERS = {
+    openai: { name: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", keyPlaceholder: "OpenAI API Key" },
+    anthropic: { name: "Anthropic Claude", protocol: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", keyPlaceholder: "Anthropic API Key" },
+    gemini: { name: "Google Gemini", protocol: "gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-3.7-flash", keyPlaceholder: "Google AI Studio API Key" },
+    deepseek: { name: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash", keyPlaceholder: "DeepSeek API Key" },
+    openrouter: { name: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/auto", keyPlaceholder: "OpenRouter API Key" },
+    custom: { name: "自定义 API", protocol: "openai", baseUrl: "", model: "", keyPlaceholder: "自定义服务的 API Key" },
+  };
+
   const DEFAULTS = {
     rapidapi_key: "", analysis_mode: "libtv", libtv_access_key: "",
     libtv_im_base: "https://im.liblib.tv", libtv_poll_interval: 8,
     libtv_timeout: 100, libtv_concurrency: 1, tk_note_asr_backend: "auto",
     tk_note_language: "auto", tk_note_cookies_from_browser: "", tk_note_proxy: "",
-    tk_note_timeout: 90, video_cache_dir: "./video_cache", gemini_api_key: "",
-    gemini_model: "gemini-2.5-flash", openrouter_api_key: "",
-    openrouter_model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    tk_note_timeout: 90, video_cache_dir: "./video_cache", model_provider: "openai",
+    model_protocol: "openai", model_api_key: "", model_base_url: "https://api.openai.com/v1",
+    model_name: "gpt-4.1-mini", gemini_api_key: "", gemini_model: "gemini-3.7-flash", openrouter_api_key: "",
+    openrouter_model: "openrouter/auto",
     minimax_api_key: "", minimax_base_url: "https://api.minimaxi.com/anthropic",
     minimax_model: "MiniMax-M2.7", min_likes: 5000, output_dir: "./data",
     search_keywords: [],
@@ -16,6 +26,8 @@
 
   let settings = {};
   let runtimeMode = "local";
+  let activeProvider = "openai";
+  let providerDrafts = {};
   const byId = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const apiFetch = (url, options) => window.ViralXCloudConfig
@@ -27,10 +39,84 @@
     if (field) field.value = value ?? "";
   }
 
+  function migrateLegacySettings(input) {
+    const migrated = { ...(input || {}) };
+    const legacyMode = String(migrated.analysis_mode || "").toLowerCase();
+    if (!["gemini", "openrouter", "minimax"].includes(legacyMode)) return migrated;
+    const legacy = {
+      gemini: { provider: "gemini", protocol: "gemini", key: migrated.gemini_api_key, baseUrl: PROVIDERS.gemini.baseUrl, model: migrated.gemini_model },
+      openrouter: { provider: "openrouter", protocol: "openai", key: migrated.openrouter_api_key, baseUrl: PROVIDERS.openrouter.baseUrl, model: migrated.openrouter_model },
+      minimax: { provider: "custom", protocol: "anthropic", key: migrated.minimax_api_key, baseUrl: migrated.minimax_base_url, model: migrated.minimax_model },
+    }[legacyMode];
+    migrated.analysis_mode = "model";
+    migrated.model_provider = legacy.provider;
+    migrated.model_protocol = legacy.protocol;
+    migrated.model_api_key ||= legacy.key || "";
+    migrated.model_base_url ||= legacy.baseUrl || "";
+    migrated.model_name ||= legacy.model || "";
+    return migrated;
+  }
+
+  function providerDraft() {
+    return {
+      apiKey: byId("model_api_key")?.value.trim() || "",
+      model: byId("model_name")?.value.trim() || "",
+      baseUrl: byId("model_base_url")?.value.trim() || "",
+      protocol: byId("model_protocol")?.value || "openai",
+    };
+  }
+
+  function renderProvider(provider) {
+    const preset = PROVIDERS[provider] || PROVIDERS.openai;
+    const custom = provider === "custom";
+    byId("provider-name").textContent = preset.name;
+    byId("provider-endpoint").textContent = custom
+      ? (byId("model_base_url").value.trim() || "等待填写 Base URL")
+      : preset.baseUrl;
+    byId("model_api_key").placeholder = preset.keyPlaceholder;
+    document.querySelectorAll("[data-custom-model]").forEach((field) => {
+      field.hidden = !custom;
+      field.querySelectorAll("input, select").forEach((control) => { control.disabled = !custom; });
+    });
+  }
+
+  function selectProvider(provider, { restore = true, userInitiated = false } = {}) {
+    const next = PROVIDERS[provider] ? provider : "openai";
+    if (restore && activeProvider) providerDrafts[activeProvider] = providerDraft();
+    activeProvider = next;
+    document.querySelectorAll('input[name="model_provider"]').forEach((radio) => {
+      radio.checked = radio.value === next;
+    });
+    const preset = PROVIDERS[next];
+    const draft = providerDrafts[next] || {
+      apiKey: "",
+      model: preset.model,
+      baseUrl: preset.baseUrl,
+      protocol: preset.protocol,
+    };
+    setValue("model_api_key", draft.apiKey);
+    setValue("model_name", draft.model || preset.model);
+    setValue("model_base_url", draft.baseUrl || preset.baseUrl);
+    setValue("model_protocol", draft.protocol || preset.protocol);
+    renderProvider(next);
+    if (userInitiated) byId("analysis_mode").value = "model";
+  }
+
   function applySettings() {
+    settings = migrateLegacySettings(settings);
     Object.entries(DEFAULTS).forEach(([id, fallback]) => {
       if (id !== "search_keywords") setValue(id, settings[id] ?? fallback);
     });
+    activeProvider = PROVIDERS[settings.model_provider] ? settings.model_provider : "openai";
+    providerDrafts = {
+      [activeProvider]: {
+        apiKey: settings.model_api_key || "",
+        model: settings.model_name || PROVIDERS[activeProvider].model,
+        baseUrl: settings.model_base_url || PROVIDERS[activeProvider].baseUrl,
+        protocol: settings.model_protocol || PROVIDERS[activeProvider].protocol,
+      },
+    };
+    selectProvider(activeProvider, { restore: false });
     renderKeywords();
   }
 
@@ -48,15 +134,30 @@
     settings.tk_note_proxy = byId("tk_note_proxy").value.trim();
     settings.tk_note_timeout = Number.parseInt(byId("tk_note_timeout").value, 10) || DEFAULTS.tk_note_timeout;
     settings.video_cache_dir = byId("video_cache_dir").value.trim() || DEFAULTS.video_cache_dir;
-    settings.gemini_api_key = byId("gemini_api_key").value.trim();
-    settings.gemini_model = byId("gemini_model").value.trim() || DEFAULTS.gemini_model;
-    settings.openrouter_api_key = byId("openrouter_api_key").value.trim();
-    settings.openrouter_model = byId("openrouter_model").value.trim() || DEFAULTS.openrouter_model;
-    settings.minimax_api_key = byId("minimax_api_key").value.trim();
-    settings.minimax_base_url = byId("minimax_base_url").value.trim() || DEFAULTS.minimax_base_url;
-    settings.minimax_model = byId("minimax_model").value.trim() || DEFAULTS.minimax_model;
+    const selectedProvider = document.querySelector('input[name="model_provider"]:checked')?.value || "openai";
+    const preset = PROVIDERS[selectedProvider];
+    settings.model_provider = selectedProvider;
+    settings.model_protocol = selectedProvider === "custom" ? byId("model_protocol").value : preset.protocol;
+    settings.model_api_key = byId("model_api_key").value.trim();
+    settings.model_base_url = selectedProvider === "custom" ? byId("model_base_url").value.trim() : preset.baseUrl;
+    settings.model_name = byId("model_name").value.trim();
     settings.min_likes = Number.parseInt(byId("min_likes").value, 10) || DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
+    if (settings.analysis_mode === "model") {
+      if (!settings.model_api_key) throw new Error("模型 API 模式需要填写 API Key");
+      if (!settings.model_name) throw new Error("模型 API 模式需要填写模型名称");
+      if (selectedProvider === "custom") {
+        let endpoint;
+        try { endpoint = new URL(settings.model_base_url); }
+        catch (_) { throw new Error("自定义 Base URL 不是有效的完整地址"); }
+        if (!(["http:", "https:"].includes(endpoint.protocol)) || endpoint.search || endpoint.hash) {
+          throw new Error("自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
+        }
+        if (runtimeMode === "edgeone" && endpoint.protocol !== "https:") {
+          throw new Error("网页端的自定义 Base URL 必须使用 HTTPS");
+        }
+      }
+    }
     return settings;
   }
 
@@ -86,7 +187,8 @@
     const note = byId("runtime-note");
     if (runtimeMode !== "edgeone") { note.hidden = true; return; }
     const configured = health.configured || {};
-    const provider = String(health.analysis_provider || settings.analysis_mode || "libtv");
+    const provider = String(health.analysis_provider || settings.model_provider || settings.analysis_mode || "libtv");
+    const providerLabel = PROVIDERS[provider]?.name || (provider === "libtv" ? "LibTV" : provider);
     const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
     note.replaceChildren();
     const copy = document.createElement("div");
@@ -97,7 +199,7 @@
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
-    [["分析模式", provider], ["LibTV", configured.libtv ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
+    [["分析模式", providerLabel], ["模型 API", configured.model ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;
@@ -126,13 +228,13 @@
   async function loadLocalSettings() {
     const response = await window.fetch("/api/settings");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    settings = { ...DEFAULTS, ...(await response.json()) };
+    settings = { ...DEFAULTS, ...migrateLegacySettings(await response.json()) };
     applySettings();
   }
 
   async function loadCloudSettings(health) {
     configureCloudPage();
-    settings = { ...DEFAULTS, ...(window.ViralXCloudConfig?.read() || {}) };
+    settings = { ...DEFAULTS, ...migrateLegacySettings(window.ViralXCloudConfig?.read() || {}) };
     applySettings();
     updateRuntimeNote(health);
   }
@@ -194,8 +296,8 @@
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.textContent = "正在保存";
-    collectSettings();
     try {
+      collectSettings();
       if (runtimeMode === "edgeone") {
         settings.libtv_timeout = Math.min(Math.max(settings.libtv_timeout, 30), 100);
         settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 30), 90);
@@ -251,6 +353,14 @@
     byId("new-keyword").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { event.preventDefault(); addKeyword(event.currentTarget.value); }
     });
+    document.querySelectorAll('input[name="model_provider"]').forEach((radio) => {
+      radio.addEventListener("change", (event) => {
+        if (event.currentTarget.checked) selectProvider(event.currentTarget.value, { userInitiated: true });
+      });
+    });
+    byId("model_base_url").addEventListener("input", () => renderProvider("custom"));
+    settings = { ...DEFAULTS };
+    applySettings();
     initMotion();
     bindCategoryNav();
     loadSettings();

@@ -59,6 +59,38 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertNotIn("session-secret-libtv", serialized)
         self.assertNotIn("session-secret-rapid", serialized)
 
+    def test_generic_model_headers_select_provider_without_echoing_key(self):
+        response = self.client.get(
+            "/health",
+            headers={
+                "X-ViralX-Analysis-Mode": "model",
+                "X-ViralX-Model-Provider": "openai",
+                "X-ViralX-Model-Key": "session-secret-model",
+                "X-ViralX-Model-Name": "gpt-4.1-mini",
+            },
+        )
+        payload = response.get_json()
+        self.assertEqual(payload["analysis_provider"], "openai")
+        self.assertTrue(payload["analysis_ready"])
+        self.assertTrue(payload["configured"]["model"])
+        self.assertNotIn("session-secret-model", json.dumps(payload))
+
+    def test_cloud_custom_model_rejects_insecure_or_private_endpoint(self):
+        response = self.client.get(
+            "/health",
+            headers={
+                "X-ViralX-Analysis-Mode": "model",
+                "X-ViralX-Model-Provider": "custom",
+                "X-ViralX-Model-Protocol": "openai",
+                "X-ViralX-Model-Key": "session-secret-model",
+                "X-ViralX-Model-Base-URL": "http://127.0.0.1:11434/v1",
+                "X-ViralX-Model-Name": "local-model",
+            },
+        )
+        payload = response.get_json()
+        self.assertEqual(payload["analysis_provider"], "custom")
+        self.assertFalse(payload["analysis_ready"])
+
     def test_empty_analysis_request_returns_ndjson_contract(self):
         response = self.client.post("/analyze", json={"keyword": ""})
         self.assertEqual(response.status_code, 200)

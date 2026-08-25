@@ -23,6 +23,22 @@ class WebAppTests(unittest.TestCase):
         self.assertIsInstance(payload['analysis_ready'], bool)
         self.assertTrue(all(isinstance(value, bool) for value in payload['configured'].values()))
 
+    def test_health_reports_selected_generic_model_provider(self):
+        config = {
+            **web_app.DEFAULT_CONFIG,
+            'analysis_mode': 'model',
+            'model_provider': 'deepseek',
+            'model_api_key': 'local-secret',
+            'model_base_url': 'https://api.deepseek.com',
+            'model_name': 'deepseek-v4-flash',
+        }
+        with patch.object(web_app, 'load_config', return_value=config):
+            response = self.client.get('/api/health')
+        payload = response.get_json()
+        self.assertEqual(payload['analysis_provider'], 'deepseek')
+        self.assertTrue(payload['analysis_ready'])
+        self.assertNotIn('local-secret', json.dumps(payload))
+
     def test_direct_douyin_url_uses_libtv_and_reports_missing_key(self):
         config = {**web_app.DEFAULT_CONFIG, 'libtv_access_key': ''}
         with patch.object(web_app, 'load_config', return_value=config), patch.dict(

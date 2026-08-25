@@ -103,6 +103,12 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
   applicable.
 - Local settings preserve secrets and local directories in the Flask runtime. EdgeOne settings
   expose only cloud-safe fields and keep credentials in the current browser session.
+- Model configuration is one progressive-disclosure flow: choose OpenAI, Claude, Gemini,
+  DeepSeek, OpenRouter, or Custom; then fill one API key and one model ID. Only Custom reveals
+  protocol and Base URL. The provider grid is one column on phones and two columns from 40rem.
+- Each provider keeps an in-memory draft while the page is open, so changing providers never
+  places one service's key into another service's field. A provider choice also selects the
+  model-analysis runtime explicitly; failed calls never silently consume a fallback provider.
 - Do not invent customer logos, performance metrics, case studies, or model results.
 
 ## Responsive order
@@ -131,6 +137,9 @@ change this sequence.
 - `/settings.html` is a session-first BYOK surface. API keys stay in `sessionStorage`, travel
   only with same-origin HTTPS requests, are never echoed by health responses, and disappear
   when the tab closes. Project-level EdgeOne environment variables remain supported.
+- EdgeOne custom model endpoints must be public HTTPS addresses on a standard port. The cloud
+  function rejects private, loopback and link-local destinations; local Flask deliberately
+  permits HTTP and private endpoints for self-hosted models.
 - Public readiness labels distinguish interface availability, credential presence, and a
   completed external provider analysis; one must never be presented as proof of another.
 

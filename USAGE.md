@@ -18,6 +18,7 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 | --- | --- | --- |
 | TikTok / 抖音视频链接 | TK Note → LibTV | `LIBTV_ACCESS_KEY` |
 | TikTok 搜索主题 | API23 → TK Note → LibTV | `RAPIDAPI_KEY` + `LIBTV_ACCESS_KEY` |
+| 视频链接 + 模型 API | TK Note → 已选模型服务商 | `MODEL_API_KEY` |
 
 RapidAPI 只承载 API23 关键词发现，不解析已知视频链接。MiniMax 不属于默认链路，仅在显式调用旧版 `/api/generate_variants` 扩展时可选使用。
 
@@ -50,6 +51,36 @@ python web_app.py
 ```
 
 如果只分析视频直链，可以不配置 `rapidapi_key`。
+
+## 使用常用模型或自定义 API
+
+在设置页把“默认分析模式”切换为“模型 API 分析”，再从以下服务商中选择一个：OpenAI、Claude、Gemini、DeepSeek、OpenRouter 或自定义 API。常用服务商会自动带入官方 Base URL 和建议模型名；模型名始终可以修改。
+
+本地配置示例：
+
+```json
+{
+  "analysis_mode": "model",
+  "model_provider": "openai",
+  "model_api_key": "YOUR_MODEL_API_KEY",
+  "model_name": "gpt-4.1-mini"
+}
+```
+
+自定义 OpenAI-compatible 服务：
+
+```json
+{
+  "analysis_mode": "model",
+  "model_provider": "custom",
+  "model_protocol": "openai",
+  "model_api_key": "YOUR_MODEL_API_KEY",
+  "model_base_url": "http://127.0.0.1:11434/v1",
+  "model_name": "your-model-id"
+}
+```
+
+本地 Flask 可以连接 HTTP 和内网接口。EdgeOne 网页端只接受解析到公网地址的 HTTPS 自定义接口，以防云函数被用来访问内网资源。选择的模型调用失败时会返回该服务商的明确错误，不会转去消费另一个服务商的 Key。
 
 ## 在 Codex 中调用
 

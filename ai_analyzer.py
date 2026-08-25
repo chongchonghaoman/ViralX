@@ -5,6 +5,7 @@ import json
 import os
 import time
 import hashlib
+import base64
 import subprocess
 import requests
 import anthropic
@@ -12,6 +13,7 @@ import google.genai as genai
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from libtv_analyzer import LibTVAnalyzer, LibTVError
+from model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config
 from video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
 
 def load_config():
@@ -20,6 +22,11 @@ def load_config():
     if config_path.exists():
         config = json.loads(config_path.read_text(encoding='utf-8'))
     env_map = {
+        'MODEL_PROVIDER': 'model_provider',
+        'MODEL_PROTOCOL': 'model_protocol',
+        'MODEL_API_KEY': 'model_api_key',
+        'MODEL_BASE_URL': 'model_base_url',
+        'MODEL_NAME': 'model_name',
         'GEMINI_API_KEY': 'gemini_api_key',
         'GEMINI_MODEL': 'gemini_model',
         'OPENROUTER_API_KEY': 'openrouter_api_key',
@@ -72,15 +79,23 @@ class AICache:
             print(f"[缓存写入失败] {e}")
 
 
-class OpenRouterAnalyzer:
-    """OpenRouter 免费模型分析器（每1秒取1帧图片）"""
+class OpenAICompatibleAnalyzer:
+    """OpenAI-compatible video-frame and metadata analyzer."""
 
-    BASE_URL = "https://openrouter.ai/api/v1"
-
-    def __init__(self, api_key: str = None, model: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"):
+    def __init__(
+        self,
+        api_key: str = "",
+        model: str = "",
+        base_url: str = "",
+        provider_name: str = "模型 API",
+        supports_vision: bool = True,
+    ):
         config = load_config()
-        self.api_key = api_key or config.get('openrouter_api_key', '')
+        self.api_key = api_key
         self.model_name = model
+        self.base_url = str(base_url or "").rstrip("/")
+        self.provider_name = provider_name
+        self.supports_vision = supports_vision
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
         self.video_dir.mkdir(exist_ok=True, parents=True)
 
@@ -97,8 +112,8 @@ class OpenRouterAnalyzer:
         try:
             cmd = [
                 "ffmpeg", "-i", video_path,
-                "-vf", "fps=1",
-                "-q:v", "3",
+                "-vf", "fps=1/2,scale='min(960,iw)':-2",
+                "-q:v", "5",
                 str(output_dir / "frame_%04d.jpg"),
                 "-y"
             ]
@@ -120,8 +135,8 @@ class OpenRouterAnalyzer:
         metadata_text = self._build_metadata_text(video_data)
 
         try:
-            if video_file_path and os.path.exists(video_file_path):
-                print(f"[OpenRouter 分析] {video_id}...")
+            if self.supports_vision and video_file_path and os.path.exists(video_file_path):
+                print(f"[{self.provider_name} 分析] {video_id}...")
                 frames = self.extract_frames(video_file_path)
                 if not frames:
                     return self._analyze_text_only(video_data)
@@ -129,14 +144,18 @@ class OpenRouterAnalyzer:
                 prompt = self._build_analysis_prompt(video_data, metadata_text, len(frames))
 
                 content_parts = [{"type": "text", "text": prompt}]
-                for frame in frames[:30]:
-                    content_parts.append({"type": "image_url", "image_url": {"url": "file://" + frame}})
+                for frame in frames[:12]:
+                    encoded = base64.b64encode(Path(frame).read_bytes()).decode("ascii")
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+                    })
 
                 headers = {
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://viralx.local",
-                    "X-Title": "ViralX"
+                    "HTTP-Referer": "https://viralx.metrolabs.mobi",
+                    "X-Title": "ViralX",
                 }
                 payload = {
                     "model": self.model_name,
@@ -146,7 +165,7 @@ class OpenRouterAnalyzer:
                 }
 
                 resp = requests.post(
-                    f"{self.BASE_URL}/chat/completions",
+                    f"{self.base_url}/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=120
@@ -156,13 +175,13 @@ class OpenRouterAnalyzer:
                     result = resp.json()["choices"][0]["message"]["content"].strip()
                     return result
                 else:
-                    return f"OpenRouter 分析失败: {resp.status_code} {resp.text[:100]}"
+                    return f"{self.provider_name} 分析失败：HTTP {resp.status_code}"
 
             return self._analyze_text_only(video_data)
 
         except Exception as e:
-            print(f"[OpenRouter 分析异常] {e}")
-            return f"OpenRouter 分析失败: {str(e)[:100]}"
+            print(f"[{self.provider_name} 分析异常] {type(e).__name__}")
+            return f"{self.provider_name} 分析失败：{str(e)[:100]}"
 
     def _build_analysis_prompt(self, video_data: dict, metadata_text: str, frame_count: int) -> str:
         return f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
@@ -315,88 +334,39 @@ class OpenRouterAnalyzer:
 高赞评论:
 {comments_text or '（无评论数据）'}"""
 
-    def _analyze_text_only(self, video_data: dict) -> str:
-        """纯文本分析（无视频文件时）"""
-        prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+    def _analyze_text_prompt(self, video_data: dict) -> str:
+        return f"""你是一位资深 TikTok 电商短视频拆解专家。
 
 {self._build_metadata_text(video_data)}
 
-=== 你的任务 ===
-基于以上数据进行分析，只能分析数据中提供的内容：
-- 不要编造视频画面
-- 不要逐秒描述画面（用户有眼睛）
-- 重点分析：为什么这个视频能爆？它做对了什么？
-- 输出结构化深度拆解报告
+只根据上面的标题、互动数据和评论证据分析，不得编造画面、台词或商品信息。
+请用 Markdown 输出以下五部分：
 
-请用 Markdown 格式输出：
+## 核心卖点
+用表格说明痛点、核心优势、价值感知、购买便利与信任建立；证据不足时明确写“数据不足”。
 
-## 🎯 核心卖点
+## 用户反馈洞察
+解读点赞、评论、分享与高赞评论中能被证据支持的需求和顾虑。
 
-| 卖点层级 | 具体内容 | 呈现方式 |
-|---------|---------|---------|
-| **痛点解决** | （从标题/评论推断） | （如何呈现） |
-| **核心优势** | （最大卖点） | （用了什么词） |
-| **价值感知** | （值在哪） | （如何传达） |
-| **效果承诺** | （使用结果） | （如何可视化） |
-| **购买便利** | （如何引导） | （话术） |
-| **信任建立** | （如何让人信） | （背书/展示） |
+## 爆款逻辑
+区分“已观察事实”和“基于数据的推断”，说明标题、互动和受众之间的关系。
 
-### 卖点提炼技巧
-- （总结2-3个核心表达技巧）
+## 可复用结构
+给出开场模式、信任路径、转化节奏与适用边界。
 
----
+## 翻拍框架
+提供一个不虚构原视频画面的执行框架。"""
 
-## 💬 用户反馈洞察
-
-### 互动数据解读
-
-| 指标 | 数值 | 基准比 | 数据含义 |
-| --- | --- | ----- | ----- |
-| 点赞 | X | 100% | 基础认可度 |
-| 评论 | X | X% | 低/中/高，说明什么 |
-| 分享 | X | X% | 超高/正常/低分享率 |
-
-### 用户行为推断
-
-**① 评论反映的真实需求**
-```
-✓ 需求1
-✓ 需求2
-```
-
-### 用户潜在关注点
-
-| 关注维度 | 推测热点问题 | 优先级 |
-|---------|-------------| ------ |
-
----
-
-## 🔥 爆款逻辑推断
-
-- 标题：暗示了___痛点/欲望
-- 评论：反映___真实需求
-- 互动数据：透露___信息
-
----
-
-## 📝 翻拍框架（基于推断的逻辑）
-
-| 维度 | 内容 |
-|-----|-----|
-| **核心卖点定位** | |
-| **开场模式** | |
-| **信任建立路径** | |
-| **转化节奏** | |
-
----
-*拆解完毕*"""
+    def _analyze_text_only(self, video_data: dict) -> str:
+        """纯文本分析（无视频文件时）"""
+        prompt = self._analyze_text_prompt(video_data)
 
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://viralx.local",
-                "X-Title": "ViralX"
+                "HTTP-Referer": "https://viralx.metrolabs.mobi",
+                "X-Title": "ViralX",
             }
             payload = {
                 "model": self.model_name,
@@ -405,7 +375,7 @@ class OpenRouterAnalyzer:
                 "temperature": 0.7
             }
             resp = requests.post(
-                f"{self.BASE_URL}/chat/completions",
+                f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=120
@@ -413,18 +383,109 @@ class OpenRouterAnalyzer:
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"].strip()
             else:
-                return f"分析失败: {resp.status_code} {resp.text[:100]}"
+                return f"{self.provider_name} 分析失败：HTTP {resp.status_code}"
         except Exception as e:
-            return f"分析失败: {str(e)[:100]}"
+            return f"{self.provider_name} 分析失败：{str(e)[:100]}"
+
+
+class OpenRouterAnalyzer(OpenAICompatibleAnalyzer):
+    """Backward-compatible OpenRouter constructor."""
+
+    def __init__(self, api_key: str = "", model: str = "openrouter/auto"):
+        super().__init__(
+            api_key=api_key,
+            model=model,
+            base_url=MODEL_PROVIDER_PRESETS["openrouter"]["base_url"],
+            provider_name="OpenRouter",
+            supports_vision=True,
+        )
+
+
+class AnthropicCompatibleAnalyzer:
+    """Anthropic Messages-compatible analyzer with sampled video frames."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        provider_name: str = "Anthropic Claude",
+        supports_vision: bool = True,
+    ):
+        self.api_key = api_key
+        self.model_name = model
+        self.base_url = str(base_url or "").rstrip("/")
+        self.provider_name = provider_name
+        self.supports_vision = supports_vision
+        self.client = anthropic.Anthropic(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            timeout=120,
+        )
+        self.prompt_helper = OpenAICompatibleAnalyzer(
+            api_key="",
+            model=model,
+            base_url="https://example.invalid",
+            provider_name=provider_name,
+            supports_vision=supports_vision,
+        )
+
+    @staticmethod
+    def _extract_text(message) -> str:
+        return "".join(
+            block.text
+            for block in (message.content or [])
+            if getattr(block, "type", "") == "text"
+        ).strip()
+
+    def _request(self, content: list) -> str:
+        message = self.client.messages.create(
+            model=self.model_name,
+            max_tokens=8192,
+            temperature=0.7,
+            messages=[{"role": "user", "content": content}],
+        )
+        return self._extract_text(message) or "分析结果为空"
+
+    def analyze(self, video_data: dict, video_file_path: str = None) -> str:
+        metadata = self.prompt_helper._build_metadata_text(video_data)
+        frames = []
+        if self.supports_vision and video_file_path and os.path.exists(video_file_path):
+            frames = self.prompt_helper.extract_frames(video_file_path)
+        prompt = (
+            self.prompt_helper._build_analysis_prompt(video_data, metadata, len(frames))
+            if frames
+            else self.prompt_helper._analyze_text_prompt(video_data)
+        )
+        content = [{"type": "text", "text": prompt}]
+        for frame in frames[:12]:
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64.b64encode(Path(frame).read_bytes()).decode("ascii"),
+                },
+            })
+        try:
+            return self._request(content)
+        except Exception as exc:
+            if frames:
+                try:
+                    return self._request([{"type": "text", "text": self.prompt_helper._analyze_text_prompt(video_data)}])
+                except Exception as retry_exc:
+                    exc = retry_exc
+            print(f"[{self.provider_name} 分析异常] {type(exc).__name__}")
+            return f"{self.provider_name} 分析失败：{str(exc)[:100]}"
 
 
 class GeminiAnalyzer:
     """Gemini 多模态分析器（支持视频 + 文本）"""
 
-    def __init__(self, api_key: str = None, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str = None, model: str = "gemini-3.7-flash"):
         config = load_config()
         self.api_key = api_key or config.get('gemini_api_key', '')
-        self.model_name = model or config.get('gemini_model', 'gemini-2.5-flash')
+        self.model_name = model or config.get('gemini_model', 'gemini-3.7-flash')
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
         self.video_dir.mkdir(exist_ok=True)
         self.client = genai.Client(api_key=self.api_key)
@@ -708,8 +769,6 @@ class MiniMaxAnalyzer:
         self.api_key = api_key or config.get('minimax_api_key', '')
         self.base_url = base_url or config.get('minimax_base_url', 'https://api.minimaxi.com/anthropic')
         self.model = model or config.get('minimax_model', 'MiniMax-M2.7')
-        os.environ["ANTHROPIC_BASE_URL"] = self.base_url
-        os.environ["ANTHROPIC_API_KEY"] = self.api_key
         self.client = anthropic.Anthropic(
             api_key=self.api_key,
             base_url=self.base_url,
@@ -811,19 +870,8 @@ class MiniMaxAnalyzer:
 ---
 *拆解完毕*"""
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config={"temperature": 0.7, "max_output_tokens": 8192}
-            )
-            return response.text.strip() if hasattr(response, 'text') and response.text else "分析结果为空"
-        except Exception as e:
-            return f"分析失败: {str(e)[:100]}"
-
-
 class AIAnalyzer:
-    """统一分析器：默认使用 LibTV 一键拉片，并保留旧分析模式。"""
+    """统一分析器：LibTV 主链 + provider-neutral model API fallback."""
 
     _cache = None
     MAX_CONCURRENT = 5
@@ -835,6 +883,11 @@ class AIAnalyzer:
         base_url: str = None,
         model: str = None,
         analysis_mode: str = 'libtv',
+        model_provider: str = '',
+        model_protocol: str = '',
+        model_api_key: str = '',
+        model_base_url: str = '',
+        model_name: str = '',
         gemini_api_key: str = '',
         gemini_model: str = '',
         openrouter_api_key: str = '',
@@ -856,9 +909,34 @@ class AIAnalyzer:
         self.api_key = api_key or config.get('minimax_api_key', '')
         self.base_url = base_url or config.get('minimax_base_url', 'https://api.minimaxi.com/anthropic')
         self.model = model or config.get('minimax_model', 'MiniMax-M2.7')
-        self.analysis_mode = analysis_mode or config.get('analysis_mode', 'libtv')
-        self.openrouter_api_key = openrouter_api_key or config.get('openrouter_api_key', '')
-        self.openrouter_model = openrouter_model or config.get('openrouter_model', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free')
+        requested_mode = analysis_mode or config.get('analysis_mode', 'libtv')
+        model_config = {
+            **config,
+            'analysis_mode': requested_mode,
+            'model_provider': model_provider or config.get('model_provider', ''),
+            'model_protocol': model_protocol or config.get('model_protocol', ''),
+            'model_api_key': model_api_key or config.get('model_api_key', ''),
+            'model_base_url': model_base_url or config.get('model_base_url', ''),
+            'model_name': model_name or config.get('model_name', ''),
+            'gemini_api_key': gemini_api_key or config.get('gemini_api_key', ''),
+            'gemini_model': gemini_model or config.get('gemini_model', ''),
+            'openrouter_api_key': openrouter_api_key or config.get('openrouter_api_key', ''),
+            'openrouter_model': openrouter_model or config.get('openrouter_model', ''),
+            'minimax_api_key': self.api_key,
+            'minimax_base_url': self.base_url,
+            'minimax_model': self.model,
+        }
+        model_config = normalize_model_config(
+            model_config,
+            allow_private_custom=os.environ.get('VIRALX_RUNTIME', '').lower() != 'edgeone',
+        )
+        self.analysis_mode = model_config['analysis_mode']
+        self.model_provider = model_config['model_provider']
+        self.model_protocol = model_config['model_protocol']
+        self.model_api_key = model_config['model_api_key']
+        self.model_base_url = model_config['model_base_url']
+        self.model_name = model_config['model_name']
+        self.model_config_error = model_config.get('model_config_error', '')
         self.libtv_access_key = libtv_access_key or config.get('libtv_access_key', '')
         self.libtv_im_base = libtv_im_base or config.get('libtv_im_base', 'https://im.liblib.tv')
         self.libtv_poll_interval = libtv_poll_interval if libtv_poll_interval is not None else config.get('libtv_poll_interval', 8)
@@ -880,11 +958,8 @@ class AIAnalyzer:
             ),
         )
 
-        self.gemini_key = gemini_api_key or config.get('gemini_api_key', '')
-        self.gemini_model = gemini_model or config.get('gemini_model', 'gemini-2.5-flash')
         self.use_libtv = self.analysis_mode == 'libtv'
-        self.use_gemini = self.analysis_mode == 'gemini' and bool(self.gemini_key)
-        self.use_openrouter = self.analysis_mode == 'openrouter' and bool(self.openrouter_api_key)
+        self.use_model = self.analysis_mode == 'model'
 
         if self.use_libtv:
             self.libtv = LibTVAnalyzer(
@@ -897,20 +972,39 @@ class AIAnalyzer:
         else:
             self.libtv = None
 
-        if self.use_gemini:
-            self.gemini = GeminiAnalyzer(api_key=self.gemini_key, model=self.gemini_model)
-            print(f"[AIAnalyzer] 模式1: Gemini 多模态分析 ({self.gemini_model})")
-        else:
-            self.gemini = None
+        self.model_analyzer = None
+        self.gemini = None
+        self.openrouter = None
+        if self.use_model and self.model_api_key and self.model_name and self.model_base_url and not self.model_config_error:
+            preset = MODEL_PROVIDER_PRESETS[self.model_provider]
+            provider_label = preset['label']
+            if self.model_provider == 'gemini':
+                self.model_analyzer = GeminiAnalyzer(
+                    api_key=self.model_api_key,
+                    model=self.model_name,
+                )
+                self.gemini = self.model_analyzer
+            elif self.model_protocol == 'anthropic':
+                self.model_analyzer = AnthropicCompatibleAnalyzer(
+                    api_key=self.model_api_key,
+                    model=self.model_name,
+                    base_url=self.model_base_url,
+                    provider_name=provider_label,
+                    supports_vision=bool(preset.get('vision', True)),
+                )
+            else:
+                self.model_analyzer = OpenAICompatibleAnalyzer(
+                    api_key=self.model_api_key,
+                    model=self.model_name,
+                    base_url=self.model_base_url,
+                    provider_name=provider_label,
+                    supports_vision=bool(preset.get('vision', True)),
+                )
+                if self.model_provider == 'openrouter':
+                    self.openrouter = self.model_analyzer
+            print(f"[AIAnalyzer] 模型 API: {provider_label} ({self.model_name})")
 
-        if self.use_openrouter:
-            self.openrouter = OpenRouterAnalyzer(api_key=self.openrouter_api_key, model=self.openrouter_model)
-            print(f"[AIAnalyzer] 模式2: OpenRouter ({self.openrouter_model})")
-        else:
-            self.openrouter = None
-
-        os.environ["ANTHROPIC_BASE_URL"] = self.base_url
-        os.environ["ANTHROPIC_API_KEY"] = self.api_key
+        # MiniMax remains isolated for the legacy script-variant endpoint only.
         self.client = None
         if self.api_key:
             self.client = anthropic.Anthropic(
@@ -1001,37 +1095,56 @@ class AIAnalyzer:
                     **acquisition_details,
                 }
 
-        if self.use_gemini and video_url:
-            try:
-                asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
-                video_file_path = asset.video_file
-                acquisition_details = asset.analysis_details()
-                video_data.update(asset.video_fields())
-            except VideoIngestError as exc:
-                print(f"[视频采集失败，fallback] {exc}")
-            if video_file_path:
-                result = self.gemini.analyze(video_data, video_file_path)
-                if "失败" not in result:
-                    return {'analysis': result, 'analysis_provider': 'gemini', **acquisition_details}
-                print(f"[Gemini 失败，fallback] {result[:100]}")
-
-        elif self.use_openrouter and video_url:
-            try:
-                asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
-                video_file_path = asset.video_file
-                acquisition_details = asset.analysis_details()
-                video_data.update(asset.video_fields())
-            except VideoIngestError as exc:
-                print(f"[视频采集失败，fallback] {exc}")
-            if video_file_path:
-                result = self.openrouter.analyze(video_data, video_file_path)
-                if "失败" not in result:
-                    return {'analysis': result, 'analysis_provider': 'openrouter', **acquisition_details}
-                print(f"[OpenRouter 失败，fallback] {result[:100]}")
+        if self.use_model:
+            if self.model_config_error:
+                return {
+                    'analysis': f'模型 API 配置无效：{self.model_config_error}',
+                    'analysis_provider': self.model_provider,
+                    'model_status': 'error',
+                }
+            if not self.model_api_key:
+                return {
+                    'analysis': '模型 API 分析失败：未配置 API Key，请先在设置页填写',
+                    'analysis_provider': self.model_provider,
+                    'model_status': 'error',
+                }
+            if not self.model_name:
+                return {
+                    'analysis': '模型 API 分析失败：未填写模型名称',
+                    'analysis_provider': self.model_provider,
+                    'model_status': 'error',
+                }
+            if not self.model_analyzer:
+                return {
+                    'analysis': '模型 API 分析失败：当前供应商配置无法初始化',
+                    'analysis_provider': self.model_provider,
+                    'model_status': 'error',
+                }
+            if video_url:
+                try:
+                    asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+                    video_file_path = asset.video_file
+                    acquisition_details = asset.analysis_details()
+                    video_data.update(asset.video_fields())
+                except VideoIngestError as exc:
+                    acquisition_details = {
+                        'acquisition_provider': 'tk-note' if is_tiktok_url(video_url) else 'yt-dlp',
+                        ('tk_note_status' if is_tiktok_url(video_url) else 'video_ingest_status'): 'error',
+                        'acquisition_note': f'视频采集失败，已改用元数据分析：{str(exc)[:120]}',
+                    }
+            result = self.model_analyzer.analyze(video_data, video_file_path)
+            failed = '失败' in result
+            return {
+                'analysis': result,
+                'analysis_provider': self.model_provider,
+                'model_status': 'error' if failed else 'completed',
+                **acquisition_details,
+            }
 
         return {
-            'analysis': self._analyze_minimax(video_data),
-            'analysis_provider': 'minimax',
+            'analysis': '分析失败：请选择 LibTV 或模型 API 分析模式',
+            'analysis_provider': self.analysis_mode,
+            'model_status': 'error',
         }
 
     def _analyze_minimax(self, video_data: dict) -> str:

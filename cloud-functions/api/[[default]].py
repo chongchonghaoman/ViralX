@@ -42,6 +42,7 @@ if libtv_scripts.is_dir():
     os.environ.setdefault("VIRALX_LIBTV_SCRIPTS_DIR", str(libtv_scripts))
 
 from ai_analyzer import AIAnalyzer  # noqa: E402
+from model_providers import model_is_ready, normalize_model_config  # noqa: E402
 from tiktok_viral_analyzer import TikTokViralAnalyzer  # noqa: E402
 
 
@@ -70,12 +71,17 @@ def load_config():
         "tk_note_proxy": os.environ.get("TK_NOTE_PROXY", ""),
         "tk_note_timeout": min(_number("TK_NOTE_TIMEOUT", 90, float), 90),
         "video_cache_dir": os.environ.get("VIRALX_VIDEO_CACHE_DIR", "/tmp/viralx/video_cache"),
+        "model_provider": os.environ.get("MODEL_PROVIDER", ""),
+        "model_protocol": os.environ.get("MODEL_PROTOCOL", ""),
+        "model_api_key": os.environ.get("MODEL_API_KEY", ""),
+        "model_base_url": os.environ.get("MODEL_BASE_URL", ""),
+        "model_name": os.environ.get("MODEL_NAME", ""),
         "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
-        "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+        "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-3.7-flash"),
         "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
         "openrouter_model": os.environ.get(
             "OPENROUTER_MODEL",
-            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "openrouter/auto",
         ),
         "minimax_api_key": os.environ.get("MINIMAX_API_KEY", ""),
         "minimax_base_url": os.environ.get("MINIMAX_BASE_URL", "https://api.minimaxi.com/anthropic"),
@@ -89,12 +95,17 @@ def load_config():
         "output_dir": os.environ.get("VIRALX_OUTPUT_DIR", "/tmp/viralx/data"),
     }
     if not has_request_context():
-        return config
+        return normalize_model_config(config, allow_private_custom=False)
 
     string_headers = {
         "X-ViralX-Analysis-Mode": "analysis_mode",
         "X-ViralX-RapidAPI-Key": "rapidapi_key",
         "X-ViralX-LibTV-Key": "libtv_access_key",
+        "X-ViralX-Model-Provider": "model_provider",
+        "X-ViralX-Model-Protocol": "model_protocol",
+        "X-ViralX-Model-Key": "model_api_key",
+        "X-ViralX-Model-Base-URL": "model_base_url",
+        "X-ViralX-Model-Name": "model_name",
         "X-ViralX-Gemini-Key": "gemini_api_key",
         "X-ViralX-Gemini-Model": "gemini_model",
         "X-ViralX-OpenRouter-Key": "openrouter_api_key",
@@ -109,8 +120,6 @@ def load_config():
         if value:
             config[config_name] = value[:4096]
 
-    mode = str(config.get("analysis_mode") or "libtv").lower()
-    config["analysis_mode"] = mode if mode in {"libtv", "gemini", "openrouter", "minimax"} else "libtv"
     asr_mode = str(config.get("tk_note_asr_backend") or "auto").lower()
     config["tk_note_asr_backend"] = asr_mode if asr_mode in {"auto", "none", "qwen3-asr", "whisper"} else "auto"
 
@@ -128,7 +137,7 @@ def load_config():
             config[config_name] = max(minimum, min(cast(value), maximum))
         except (TypeError, ValueError):
             continue
-    return config
+    return normalize_model_config(config, allow_private_custom=False)
 
 
 def is_video_url(value):
@@ -164,9 +173,7 @@ def _configured_state():
     mode = str(config.get("analysis_mode") or "libtv").lower()
     provider_ready = {
         "libtv": bool(config.get("libtv_access_key")),
-        "gemini": bool(config.get("gemini_api_key")),
-        "openrouter": bool(config.get("openrouter_api_key")),
-        "minimax": bool(config.get("minimax_api_key")),
+        "model": model_is_ready(config),
     }
     return config, mode, provider_ready
 
@@ -175,11 +182,12 @@ def _configured_state():
 def health():
     """Readiness without returning any credential values."""
     config, mode, provider_ready = _configured_state()
+    provider = config.get("model_provider", "openai") if mode == "model" else "libtv"
     return jsonify({
         "status": "ok",
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
-        "analysis_provider": mode,
+        "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
         "configured": {
             **provider_ready,
@@ -248,10 +256,11 @@ def analyze():
                 base_url=config["minimax_base_url"],
                 model=config["minimax_model"],
                 analysis_mode=config["analysis_mode"],
-                gemini_api_key=config["gemini_api_key"],
-                gemini_model=config["gemini_model"],
-                openrouter_api_key=config["openrouter_api_key"],
-                openrouter_model=config["openrouter_model"],
+                model_provider=config["model_provider"],
+                model_protocol=config["model_protocol"],
+                model_api_key=config["model_api_key"],
+                model_base_url=config["model_base_url"],
+                model_name=config["model_name"],
                 libtv_access_key=config["libtv_access_key"],
                 libtv_im_base=config["libtv_im_base"],
                 libtv_poll_interval=config["libtv_poll_interval"],
