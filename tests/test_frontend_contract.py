@@ -13,6 +13,7 @@ class FrontendContractTests(unittest.TestCase):
         cls.settings = (ROOT / "templates" / "settings.html").read_text(encoding="utf-8")
         cls.home_js = (ROOT / "static" / "viralx.js").read_text(encoding="utf-8")
         cls.settings_js = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
+        cls.connector_js = (ROOT / "static" / "connector.js").read_text(encoding="utf-8")
         cls.build_js = (ROOT / "scripts" / "build-edgeone.mjs").read_text(encoding="utf-8")
 
     def assert_named_control(self, html, control_id, name):
@@ -66,6 +67,23 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("function renderLibTVState", self.settings_js)
         for state in ("connected", "awaiting_browser", "starting", "unavailable", "error", "local_only", "disconnected"):
             self.assertIn(f'{state}:', self.settings_js)
+
+    def test_hosted_libtv_uses_a_fixed_paired_loopback_connector(self):
+        for html in (self.home, self.settings):
+            self.assertIn("http://127.0.0.1:57231", html)
+            self.assertIn("filename='connector.js'", html)
+        self.assertIn('const CONNECTOR_ORIGIN = "http://127.0.0.1:57231"', self.connector_js)
+        self.assertIn('const PAIRING_FRAGMENT = "viralx-connector"', self.connector_js)
+        self.assertIn('targetAddressSpace: "loopback"', self.connector_js)
+        self.assertIn('"loopback-network"', self.connector_js)
+        self.assertIn('X-ViralX-Connector-Token', self.connector_js)
+        self.assertIn("window.sessionStorage.setItem(TOKEN_KEY", self.connector_js)
+        self.assertIn("window.history.replaceState", self.connector_js)
+        self.assertNotIn("console.log", self.connector_js)
+        self.assertIn('(read().analysis_mode || "libtv") === "libtv"', (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8"))
+        self.assertIn("connector_missing:", self.settings_js)
+        self.assertIn("pairing_required:", self.settings_js)
+        self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)
 
     def test_field_validation_targets_the_relevant_control(self):
         self.assertIn("class SettingsValidationError", self.settings_js)

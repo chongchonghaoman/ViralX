@@ -270,6 +270,31 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       runtimeMode = data.runtime || "local";
+      const selectedMode = window.ViralXCloudConfig?.read().analysis_mode || "libtv";
+      if (runtimeMode === "edgeone" && selectedMode === "libtv") {
+        try {
+          await window.ViralXConnector?.ready();
+          const connector = await window.ViralXConnector?.probe();
+          const paired = Boolean(connector?.paired);
+          const libtv = connector?.libtv || {};
+          runtimeReady = paired && Boolean(libtv.connected);
+          chip.dataset.state = runtimeReady ? "ready" : "warning";
+          label.textContent = runtimeReady
+            ? "本机 Connector · LibTV 就绪"
+            : paired
+              ? "Connector 已配对 · 待登录 LibTV"
+              : "Connector 已启动 · 待安全配对";
+        } catch (_) {
+          runtimeReady = false;
+          chip.dataset.state = "warning";
+          const permission = await window.ViralXConnector?.permissionState();
+          label.textContent = permission === "denied"
+            ? "网页在线 · 本机网络权限已拒绝"
+            : "网页在线 · 未检测到本机 Connector";
+        }
+        syncPrimaryActions();
+        return;
+      }
       runtimeReady = Boolean(data.analysis_ready);
       const providerKey = String(data.analysis_provider || "libtv").toLowerCase();
       const provider = {
@@ -543,7 +568,11 @@
     loading.hidden = false;
     results.replaceChildren();
     updateResultCount(0, "管线运行中");
-    updateProgress("正在准备视频证据，随后提交 LibTV", 8);
+    const selectedMode = window.ViralXCloudConfig?.read().analysis_mode || "libtv";
+    updateProgress(
+      selectedMode === "libtv" ? "正在通过本机 Connector 准备视频证据" : "正在准备视频证据并提交模型分析",
+      8,
+    );
 
     const streamContainer = document.createElement("div");
     streamContainer.id = "stream-results";
@@ -621,8 +650,10 @@
         text.split("\n").forEach(parseLine);
       }
     } catch (error) {
-      const hint = runtimeMode === "edgeone"
-        ? "确认云端运行状态与服务配置"
+      const hint = runtimeMode === "edgeone" && selectedMode === "libtv"
+        ? "确认本机 Connector 正在运行且 LibTV 已登录"
+        : runtimeMode === "edgeone"
+          ? "确认云端运行状态与服务配置"
         : "确认本地服务仍在运行";
       showInlineError(`分析没有完成：${error.message}。${hint}后重试。`);
       updateResultCount(received, "连接中断");

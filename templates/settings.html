@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#EDEDED">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:57231">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
+  <script defer src="{{ url_for('static', filename='connector.js') }}"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='settings.js') }}"></script>
 </head>
@@ -44,7 +45,7 @@
     <header class="settings-hero" data-motion="reveal">
       <p class="section-label">系统配置 · VIRALX</p>
       <h1>把分析链，<br>配置清楚。</h1>
-      <p>ViralX 默认由 TK Note 采集证据，再交给本机 LibTV CLI。LibTV 只通过官方网页授权，ViralX 不接触登录凭据。</p>
+      <p>网页通过只监听本机的 ViralX Connector 调用 TK Note 与 LibTV 官方 CLI。授权仍在 LibTV 官网完成，ViralX 不接触登录凭据。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
@@ -79,10 +80,10 @@
             <div class="settings-field">
               <label for="analysis_mode">默认分析模式</label>
               <select id="analysis_mode" name="analysis_mode">
-                <option value="libtv">LibTV 画布拉片 · 本地</option>
+                <option value="libtv">LibTV 画布拉片 · 连接本机</option>
                 <option value="model">模型 API 分析</option>
               </select>
-              <small class="field-note">LibTV 依赖本机 CLI 网页登录；EdgeOne 网页端使用模型 API。</small>
+              <small class="field-note">EdgeOne 网页可通过本机 Connector 使用 LibTV；不启动 Connector 时可选模型 API。</small>
             </div>
             <div class="settings-field">
               <label for="min_likes">关键词检索最低点赞数</label>
@@ -155,7 +156,7 @@
         <section class="settings-section" id="libtv" data-motion="reveal">
           <div class="settings-section__head">
             <span>03</span>
-            <div><h2>连接 LibTV</h2><p>通过官方 CLI 打开网页授权；连接后，ViralX 创建画布并上传原视频。</p></div>
+            <div><h2>连接 LibTV</h2><p>网页先与本机 Connector 安全配对，再由官方 CLI 打开授权页；连接后创建画布并上传原视频。</p></div>
           </div>
           <details class="section-disclosure" data-mode-details="libtv" open>
             <summary><span><strong>网页登录连接</strong><small id="libtv-summary-state">正在检查</small></span></summary>
@@ -172,9 +173,10 @@
                   <button class="btn btn-primary" id="libtv-connect-btn" type="button">连接 LibTV</button>
                   <button class="refresh-link" id="libtv-refresh-btn" type="button">刷新状态</button>
                   <button class="refresh-link" id="libtv-disconnect-btn" type="button" hidden>断开连接</button>
+                  <a class="refresh-link" id="connector-guide-link" href="https://github.com/chongchonghaoman/ViralX#在网页使用本机-libtv" target="_blank" rel="noopener noreferrer" hidden>启动 Connector</a>
                   <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
                 </div>
-                <p class="libtv-privacy">授权由 LibTV 官方网页与本机 CLI 完成。ViralX 不读取、保存或回显 token；EdgeOne 也无法访问你电脑上的登录态。</p>
+                <p class="libtv-privacy">Connector 只监听 127.0.0.1，并只接受 viralx.metrolabs.mobi。配对密钥保存在本机内存与当前标签页；LibTV token 仍只由官方 CLI 保存。</p>
               </div>
             </div>
           </details>

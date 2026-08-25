@@ -266,13 +266,12 @@ def health():
         },
     })
 
-@app.route('/api/analyze', methods=['POST'])
-def analyze():
+def build_analyze_response(config_override=None, max_videos=None):
     """
     执行分析 — 流式响应。
     边并发分析视频边返回结果，前端逐个看到分析完成。
     """
-    data = request.json
+    data = request.get_json(silent=True) or {}
     keyword = (data.get('keyword') or '').strip()
     refresh = data.get('refresh', False)
     product_name = data.get('product_name', '')
@@ -280,7 +279,8 @@ def analyze():
 
     def generate():
         try:
-            current_config = load_config()
+            current_config = dict(config_override) if config_override is not None else load_config()
+            video_limit = max(1, min(int(max_videos or MAX_ANALYZE_VIDEOS), MAX_ANALYZE_VIDEOS))
 
             if not keyword:
                 yield json.dumps({'status': 'error', 'message': '请输入关键词或抖音/TikTok 视频链接', 'done': True}, ensure_ascii=False) + '\n'
@@ -335,7 +335,7 @@ def analyze():
             results = []
             for result in ai.batch_analyze_streaming(
                 video_data,
-                max_videos=MAX_ANALYZE_VIDEOS,
+                max_videos=video_limit,
                 video_urls=video_urls,
                 product_name=product_name,
                 product_info=product_info,
@@ -359,7 +359,7 @@ def analyze():
                     'status': 'progress',
                     'done': False,
                     'current': len(results),
-                    'total': min(len(video_data), MAX_ANALYZE_VIDEOS),
+                    'total': min(len(video_data), video_limit),
                     'video': result
                 }, ensure_ascii=False) + '\n'
 
@@ -387,6 +387,12 @@ def analyze():
         'X-Accel-Buffering': 'no',
         'Cache-Control': 'no-cache'
     })
+
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze():
+    """Execute analysis through the full local Flask runtime."""
+    return build_analyze_response()
 
 @app.route('/api/keywords', methods=['GET'])
 def get_keywords():
@@ -468,4 +474,4 @@ def clear_cache():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5001)
+    app.run(host='127.0.0.1', debug=False, port=5001)

@@ -27,6 +27,7 @@
   let activeProvider = "openai";
   let providerDrafts = {};
   let libtvPollTimer = 0;
+  let connectorState = { available: false, paired: false, libtv: null };
   const byId = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const apiFetch = (url, options) => window.ViralXCloudConfig
@@ -245,7 +246,11 @@
     const note = byId("runtime-note");
     if (runtimeMode !== "edgeone") { note.hidden = true; return; }
     const configured = health.configured || {};
-    const provider = String(health.analysis_provider || settings.model_provider || "openai");
+    const provider = String(
+      settings.analysis_mode === "libtv"
+        ? "libtv"
+        : health.analysis_provider || settings.model_provider || "openai",
+    );
     const providerLabel = PROVIDERS[provider]?.name || (provider === "libtv" ? "LibTV" : provider);
     const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
     note.replaceChildren();
@@ -253,11 +258,16 @@
     const title = document.createElement("strong");
     title.textContent = "当前标签页的安全配置";
     const description = document.createElement("p");
-    description.textContent = "模型与 API23 密钥只保存在浏览器 sessionStorage，并通过 HTTPS 发送给 ViralX 云函数；LibTV 网页授权只在本机版可用。";
+    description.textContent = "模型与 API23 密钥只保存在当前标签页。LibTV 模式通过仅监听 127.0.0.1 的 Connector 调用本机 CLI；登录凭据不会发送给 EdgeOne。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
-    [["分析模式", providerLabel], ["模型 API", configured.model ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
+    const connectorLabel = !connectorState.available
+      ? "未启动"
+      : connectorState.paired
+        ? "已安全配对"
+        : "等待配对";
+    [["分析模式", providerLabel], ["本机 Connector", connectorLabel], ["模型 API", configured.model ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;
@@ -274,9 +284,9 @@
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
     const libtvOption = byId("analysis_mode").querySelector('option[value="libtv"]');
-    libtvOption.disabled = true;
-    libtvOption.textContent = "LibTV 画布拉片 · 需本地运行";
-    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 网页端使用当前标签页的模型 API 与 API23 临时凭据；LibTV 网页授权、本地目录和 Obsidian 文件写入由本地 Flask 管理。";
+    libtvOption.disabled = false;
+    libtvOption.textContent = "LibTV 画布拉片 · 连接本机";
+    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 保留网页入口；模型任务走云函数，LibTV 任务通过本机 Connector 调用官方 CLI。密钥与登录态都不会写入公开网页。";
     document.querySelector(".settings-actions > p").textContent = "保存到当前标签页；关闭后自动清除。";
     byId("save-btn").textContent = "保存到当前会话";
     byId("reset-btn").textContent = "恢复会话值";
@@ -295,6 +305,8 @@
       unavailable: "需要安装 CLI",
       error: "连接失败",
       local_only: "仅本地可用",
+      connector_missing: "未检测到 Connector",
+      pairing_required: "等待安全配对",
       disconnected: "尚未连接",
     };
     panel.dataset.connectionState = connectionState;
@@ -306,14 +318,16 @@
     const connected = connectionState === "connected";
     const unavailable = connectionState === "unavailable";
     const localOnly = connectionState === "local_only";
+    const connectorBlocked = ["connector_missing", "pairing_required"].includes(connectionState);
     const connect = byId("libtv-connect-btn");
-    connect.hidden = connected || unavailable;
-    connect.disabled = busy || localOnly;
+    connect.hidden = connected || unavailable || connectorBlocked;
+    connect.disabled = busy || localOnly || connectorBlocked;
     connect.toggleAttribute("aria-busy", busy);
     connect.textContent = busy ? "等待授权" : (connectionState === "error" ? "重新连接" : "连接 LibTV");
     byId("libtv-refresh-btn").hidden = localOnly;
     byId("libtv-disconnect-btn").hidden = !connected;
-    byId("libtv-install-link").hidden = !unavailable && !localOnly;
+    byId("connector-guide-link").hidden = !connectorBlocked;
+    byId("libtv-install-link").hidden = !unavailable;
   }
 
   function stopLibTVPolling() {
@@ -323,10 +337,45 @@
 
   async function refreshLibTVState({ force = false, poll = false } = {}) {
     if (runtimeMode === "edgeone") {
-      renderLibTVState({
-        state: "local_only",
-        message: "EdgeOne 无法访问你电脑上的 LibTV CLI 登录态；线上分析请选择模型 API。",
-      });
+      try {
+        const pairing = await window.ViralXConnector?.ready();
+        const status = await window.ViralXConnector?.probe({ force });
+        connectorState = {
+          available: true,
+          paired: Boolean(status?.paired),
+          libtv: status?.libtv || null,
+        };
+        if (!connectorState.paired) {
+          renderLibTVState({
+            state: "pairing_required",
+            message: pairing?.error
+              ? `安全配对没有完成：${pairing.error}。请重启 Connector。`
+              : "Connector 已启动，但当前标签页没有会话。重启 Connector 后会自动打开配对页。",
+          });
+          updateRuntimeNote();
+          return;
+        }
+        const state = connectorState.libtv || {};
+        renderLibTVState(state);
+        updateRuntimeNote();
+        if (poll && ["starting", "awaiting_browser"].includes(state.state)) {
+          stopLibTVPolling();
+          libtvPollTimer = window.setTimeout(() => refreshLibTVState({ force: true, poll: true }), 1500);
+        } else {
+          stopLibTVPolling();
+        }
+      } catch (_) {
+        connectorState = { available: false, paired: false, libtv: null };
+        stopLibTVPolling();
+        const permission = await window.ViralXConnector?.permissionState();
+        renderLibTVState({
+          state: "connector_missing",
+          message: permission === "denied"
+            ? "浏览器已拒绝本机网络访问。请在本站点权限中允许本地网络，然后刷新状态。"
+            : "这台电脑尚未运行 ViralX Connector，或浏览器尚未允许本机网络。启动后它会打开本页并自动完成一次性配对。",
+        });
+        updateRuntimeNote();
+      }
       return;
     }
     try {
@@ -347,11 +396,16 @@
   }
 
   async function startLibTVLogin() {
-    if (runtimeMode === "edgeone") return;
+    if (runtimeMode === "edgeone" && !connectorState.paired) {
+      await refreshLibTVState({ force: true });
+      return;
+    }
     const popup = window.open("about:blank", "ViralXLibTVLogin");
     renderLibTVState({ state: "starting", message: "正在向本机 LibTV CLI 请求官方授权地址…" });
     try {
-      const response = await window.fetch("/api/libtv/auth/start", { method: "POST" });
+      const response = runtimeMode === "edgeone"
+        ? await window.ViralXConnector.request("/connector/v1/libtv/login/start", { method: "POST" })
+        : await window.fetch("/api/libtv/auth/start", { method: "POST" });
       const state = await response.json();
       if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
       renderLibTVState(state);
@@ -374,7 +428,9 @@
   async function disconnectLibTV() {
     stopLibTVPolling();
     try {
-      const response = await window.fetch("/api/libtv/auth/logout", { method: "POST" });
+      const response = runtimeMode === "edgeone"
+        ? await window.ViralXConnector.request("/connector/v1/libtv/logout", { method: "POST" })
+        : await window.fetch("/api/libtv/auth/logout", { method: "POST" });
       const state = await response.json();
       if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
       renderLibTVState(state);
@@ -394,10 +450,15 @@
   async function loadCloudSettings(health) {
     configureCloudPage();
     settings = { ...DEFAULTS, ...migrateLegacySettings(window.ViralXCloudConfig?.read() || {}) };
-    if (settings.analysis_mode === "libtv") settings.analysis_mode = "model";
     applySettings();
+    const pairing = await window.ViralXConnector?.ready();
+    if (pairing?.attempted && pairing.paired) {
+      showStatus("已与本机 ViralX Connector 安全配对。现在可以连接 LibTV。", "success", { focus: false });
+    } else if (pairing?.attempted && pairing.error) {
+      showStatus(`Connector 配对失败：${pairing.error}`, "error", { focus: false });
+    }
+    await refreshLibTVState();
     updateRuntimeNote(health);
-    renderLibTVState({ state: "local_only", message: "EdgeOne 无法访问你电脑上的 LibTV CLI 登录态；线上分析请选择模型 API。" });
   }
 
   async function loadSettings() {
@@ -468,6 +529,7 @@
         window.ViralXCloudConfig.write(settings);
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
         updateRuntimeNote(healthResponse.ok ? await healthResponse.json() : {});
+        if (settings.analysis_mode === "libtv") await refreshLibTVState();
         showStatus("已保存到当前浏览器会话。返回分析页后立即生效，关闭标签页会自动清除。", "success");
       } else {
         const response = await window.fetch("/api/settings", {
