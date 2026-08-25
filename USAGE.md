@@ -10,17 +10,27 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 4. 粘贴 TikTok / 抖音视频链接，或输入一个 TikTok 搜索主题，然后开始分析。
 5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
 
-公开网站不会内置第三方 Key。会话级模型 / API23 Key 只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只在本地 Flask 中可用。
+公开网站不会内置第三方 Key。会话级模型 / API23 Key 只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权可由本地 Flask 直接使用，也可由 EdgeOne 页面通过 loopback-only ViralX Connector 使用。
 
 ## API 依赖边界
 
 | 输入方式 | 调用链 | 必要凭据 |
 | --- | --- | --- |
-| 本地 TikTok / 抖音视频链接 | TK Note → 官方 LibTV CLI → 画布 | 本机 LibTV 网页登录 |
-| 本地 TikTok 搜索主题 | API23 → TK Note → LibTV CLI | `RAPIDAPI_KEY` + 本机 LibTV 网页登录 |
+| 网页 TikTok / 抖音视频链接 | 本机 Connector → TK Note → 官方 LibTV CLI → 画布 | Connector + 本机 LibTV 网页登录 |
+| 网页 TikTok 搜索主题 | API23 → 本机 Connector → TK Note → LibTV CLI | `RAPIDAPI_KEY` + Connector + 本机 LibTV 网页登录 |
 | 视频链接 + 模型 API | TK Note → 已选模型服务商 | `MODEL_API_KEY` |
 
-RapidAPI 只承载 API23 关键词发现，不解析已知视频链接。LibTV 不再使用 Access Key；EdgeOne 无法读取电脑上的 CLI 登录态，因此线上必须选择模型 API。MiniMax 不属于默认链路。
+RapidAPI 只承载 API23 关键词发现，不解析已知视频链接。LibTV 不再使用 Access Key；EdgeOne 云函数不能读取电脑上的 CLI 登录态，但生产网页可以在用户授权后直连 `127.0.0.1` Connector。MiniMax 不属于默认链路。
+
+## 从生产网页连接本机 LibTV
+
+在仓库目录安装依赖后，双击 `start-connector.cmd` 或执行：
+
+```bash
+python connector.py
+```
+
+Connector 会打开 `https://viralx.metrolabs.mobi/settings.html` 并用 URL fragment 完成一次性配对。浏览器询问本地网络权限时选择允许，然后在设置页点击“连接 LibTV”。Connector 只开放受限的 `/connector/v1/*` 能力，不开放设置读取、清缓存或本地文件导出。
 
 ## 本地 Web 运行
 
@@ -109,7 +119,7 @@ $viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
 | `/api/export-obsidian` | POST | 生成 Obsidian URI 或 Markdown 下载 |
 | `/api/generate_variants` | POST | 可选的旧版脚本变体扩展 |
 
-本地 Flask 另外提供 `/api/settings`、`/api/cache/clear` 和 `/api/libtv/auth/*`；生产 EdgeOne 不公开这些本地管理接口。
+本地 Flask 另外提供 `/api/settings`、`/api/cache/clear` 和 `/api/libtv/auth/*`；生产 EdgeOne 不公开这些本地管理接口。生产网页访问的是独立 loopback Connector 路由，不是把这些本地 API 代理到公网。
 
 ## 测试与构建
 

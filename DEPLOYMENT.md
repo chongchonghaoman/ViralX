@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dplvgnzhnyb4`
+- Production deployment ID: `dp2lf6tr73ho`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dplvgnzhnyb4`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dp2lf6tr73ho`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -28,18 +28,22 @@ Verified on the public custom domain:
 
 - `GET /` -> `200 text/html`
 - `GET /settings.html` -> `200 text/html`
+- `GET /static/connector.js` -> `200`, fixed loopback origin and `targetAddressSpace: "loopback"` present
 - `GET /api/health` -> `200 application/json`
 - `GET /api/health` -> `keyword_search_provider: api23`
-- `/` and `/settings.html` include the production CSP, pinned CDN assets with SRI, and the `edgeone` deployment marker
+- `/` and `/settings.html` include the production CSP (including the fixed loopback Connector origin), pinned CDN assets with SRI, and the `edgeone` deployment marker
 - The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
 - Responsive WebP hero assets return `200 image/webp` with immutable caching
 - `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
-- `/api/health` reports LibTV as `auth: web`, `scope: local`, `connection_state: local_only`
-- `POST /api/analyze` with LibTV mode -> actionable local-CLI / model-API recovery message
+- `/api/health` continues to report the Cloud Function's own LibTV state as `local_only`; the browser separately probes the local Connector
+- Browser LibTV mode routes only `/api/analyze` to authenticated `http://127.0.0.1:57231/connector/v1/analyze`
+- Production HTTPS page completed a real one-use pairing against the local Connector; the URL fragment was removed before the page reached its steady state
+- Production settings reported `runtime=edgeone`, Connector paired, and LibTV `disconnected`; the homepage independently reported `Connector 已配对 · 待登录 LibTV`
+- Connector returned `403` for an untrusted Origin and `204` for the trusted CORS/private-network preflight
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 
-The home page and settings page were visually checked from the live HTTPS domain. The production build passed desktop and 390px mobile Chromium review for this release; the LibTV section is collapsed and labelled `仅本地可用`, while model settings remain operable. The live browser console showed no JavaScript or CSP errors.
+The home page and settings page were checked from the live HTTPS domain in 1440×1000 desktop and 390×844 mobile Chromium. The live console had no JavaScript, CSP, CORS, mixed-content, or Local Network Access error; Chrome emitted only its non-blocking form-structure heuristic. LibTV readiness is the conjunction of browser loopback permission, a paired Connector session, and official CLI login; the Cloud Function's own `local_only` state is not shown as the final browser state.
 
 ## Original protected deployment
 
@@ -65,7 +69,9 @@ The deployed site now includes an EdgeOne Python Cloud Function. The browser cal
 
 The online runtime intentionally does not expose local settings, cache-clear, or LibTV authentication APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports unified `MODEL_*` EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
 
-The deployed environment currently has no project-level RapidAPI API23 or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. EdgeOne analysis requires one model provider selected in `/settings.html`. LibTV is explicitly shown as local-only: browser login writes credentials to the user's local official CLI, which an edge function cannot access. Common model providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service.
+The public page may also call the separately installed ViralX Connector at `http://127.0.0.1:57231`. This is not an EdgeOne proxy: the browser connects directly to loopback after its Local Network Access permission flow. Connector uses an exact Origin allowlist, CORS/PNA validation, a one-use fragment bootstrap, in-memory sessions, and one-video analysis. It exposes only status, pairing, LibTV login/status/logout, and analysis. It does not expose local settings, cache clearing, arbitrary filesystem export, or CLI tokens.
+
+The deployed environment currently has no project-level RapidAPI API23 or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. Model mode requires one provider selected in `/settings.html`. LibTV mode requires a paired local Connector and an official CLI browser login; the edge function still cannot access that login. Common model providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service.
 
 The local Flask version remains the full-control runtime for:
 

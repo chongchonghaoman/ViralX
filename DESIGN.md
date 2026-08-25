@@ -102,7 +102,8 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
 - Every interactive element has hover, focus-visible, active, and disabled treatment where
   applicable.
 - Local settings preserve secrets and local directories in the Flask runtime. EdgeOne settings
-  expose only cloud-safe fields and keep credentials in the current browser session.
+  expose only cloud-safe fields and keep credentials in the current browser session. LibTV mode
+  may connect to the loopback-only ViralX Connector after an explicit one-time pairing.
 - Model configuration is one progressive-disclosure flow: choose OpenAI, Claude, Gemini,
   DeepSeek, OpenRouter, or Custom; then fill one API key and one model ID. Only Custom reveals
   protocol and Base URL. The provider grid is one column on phones and two columns from 40rem.
@@ -134,8 +135,13 @@ change this sequence.
   may run one-video analysis with temporary `/tmp` assets, but must never claim persistent
   local files, browser cookies, arbitrary proxies, caches, or direct Obsidian writes exist at
   the edge.
-- EdgeOne cannot access a visitor's local LibTV CLI login. Its LibTV state is always
-  `local_only`; online analysis requires a configured model API.
+- EdgeOne Cloud Functions cannot access a visitor's local LibTV CLI login. The top-level
+  production page may connect directly to `http://127.0.0.1:57231` after the browser grants
+  loopback access and a one-use fragment secret is exchanged for an in-memory session. Model
+  mode remains same-origin EdgeOne; LibTV mode routes only analysis and auth actions to Connector.
+- Connector binds only to `127.0.0.1`, allows exact trusted Origins, validates CORS/PNA
+  preflights, requires a short-lived session for every action, and limits hosted analysis to one
+  video. It never exposes local settings, cache clearing, arbitrary file export, or CLI tokens.
 - `/settings.html` is a session-first BYOK surface. API keys stay in `sessionStorage`, travel
   only with same-origin HTTPS requests, are never echoed by health responses, and disappear
   when the tab closes. Project-level EdgeOne environment variables remain supported.
@@ -152,6 +158,7 @@ change this sequence.
 - static/settings.css: settings-only layout.
 - static/viralx.js: full Flask interaction and GSAP.
 - static/settings.js: settings interaction and route entrance motion.
+- static/connector.js: hosted-page pairing, loopback permission request, session routing.
 - static/assets/viralx-title-shuei-wide.svg: exact one-line outlined homepage claim.
 - static/assets/viralx-title-shuei-stacked.svg: exact two-line outlined mobile claim.
 - static/assets/viralx-signal-orbit-640.webp: mobile and compact-display hero source.
@@ -161,15 +168,16 @@ change this sequence.
 
 - Public availability is not analysis readiness. The homepage health check must route an
   unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
-  locally connected LibTV or a ready model provider may expose the analysis action as the primary CTA.
+  paired Connector with connected LibTV or a ready model provider may expose analysis as the primary CTA.
 - API23 is explained at the source field: video URLs bypass it, while keyword discovery needs
-  it. Local analysis may use a browser-connected LibTV CLI; EdgeOne requires a model provider.
+  it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
 - Model and LibTV settings use native `details` disclosure keyed to `analysis_mode`. Choosing a
   model provider switches the mode to `model`; inactive settings remain saved and are never
   deleted merely because their panel is collapsed.
-- LibTV connection UI exposes `disconnected`, `starting`, `awaiting_browser`, `connected`,
-  `error`, `unavailable`, and `local_only`. Starting/awaiting states prevent duplicate actions;
-  errors always expose a recovery action, and reduced motion removes the status pulse.
+- LibTV connection UI exposes `connector_missing`, `pairing_required`, `disconnected`, `starting`,
+  `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
+  Starting/awaiting states prevent duplicate actions; errors always expose a recovery action,
+  and reduced motion removes the status pulse.
 - Settings validation is field-local. API key, model name and custom Base URL errors set
   `aria-invalid`, expose `aria-errormessage`, reveal the correct disclosure and move focus to
   the relevant control without forcing the user back to the page-level status region.

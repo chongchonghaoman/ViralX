@@ -312,13 +312,15 @@
 }
 
 .libtv-connect-panel[data-connection-state="starting"] .libtv-status-dot,
-.libtv-connect-panel[data-connection-state="awaiting_browser"] .libtv-status-dot {
+.libtv-connect-panel[data-connection-state="awaiting_browser"] .libtv-status-dot,
+.libtv-connect-panel[data-connection-state="pairing_required"] .libtv-status-dot {
   background: var(--color-accent);
   animation: libtv-pulse 1.4s var(--ease-out) infinite;
 }
 
 .libtv-connect-panel[data-connection-state="error"] .libtv-status-dot,
-.libtv-connect-panel[data-connection-state="unavailable"] .libtv-status-dot {
+.libtv-connect-panel[data-connection-state="unavailable"] .libtv-status-dot,
+.libtv-connect-panel[data-connection-state="connector_missing"] .libtv-status-dot {
   background: var(--color-error);
 }
 

@@ -48,6 +48,7 @@ npm run build:edgeone
 - RapidAPI、LibTV、MiniMax、Gemini 或 OpenRouter Key；
 - TikTok 浏览器 Cookie、代理凭据；
 - EdgeOne 部署 Token；
+- ViralX Connector 的一次性配对 fragment 或浏览器会话 token；
 - 下载的视频、字幕、转写、缓存和本地 Obsidian 路径。
 
 公开示例只允许使用占位值。仓库 `.gitignore` 已覆盖标准本地路径，但提交前仍应检查 `git diff --cached`。

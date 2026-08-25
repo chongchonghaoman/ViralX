@@ -20,6 +20,7 @@ html = html
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}", "/static/assets/viralx-signal-orbit.png")
   .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}", "/static/assets/viralx-title-shuei-wide.svg")
   .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}", "/static/assets/viralx-title-shuei-stacked.svg")
+  .replaceAll("{{ url_for('static', filename='connector.js') }}", "/static/connector.js")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
   .replaceAll("{{ url_for('static', filename='viralx.js') }}", "/static/viralx.js")
   .replaceAll('href="/settings"', 'href="/settings.html"')
@@ -36,9 +37,10 @@ settingsHtml = settingsHtml
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
   .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
   .replaceAll("{{ url_for('static', filename='settings.css') }}", "/static/settings.css")
+  .replaceAll("{{ url_for('static', filename='connector.js') }}", "/static/connector.js")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
   .replaceAll("{{ url_for('static', filename='settings.js') }}", "/static/settings.js")
-  .replace("配置留在本地；证据留在你的工作区。", "密钥留在当前标签页；请求只发往 ViralX 云函数。")
+  .replace("配置留在本地；证据留在你的工作区。", "模型请求走云函数；LibTV 请求只发往本机 Connector。")
   .replace("静态 EdgeOne 展示", "EdgeOne 云函数")
   .replace("LOCAL-FIRST · 2026", "SESSION-FIRST · EDGEONE · 2026");
 await writeFile(join(publicDir, "settings.html"), settingsHtml, "utf8");
@@ -46,6 +48,7 @@ await writeFile(join(publicDir, "settings.html"), settingsHtml, "utf8");
 await cp(join(projectRoot, "static", "tokens.css"), join(publicStatic, "tokens.css"));
 await cp(join(projectRoot, "static", "viralx.css"), join(publicStatic, "viralx.css"));
 await cp(join(projectRoot, "static", "settings.css"), join(publicStatic, "settings.css"));
+await cp(join(projectRoot, "static", "connector.js"), join(publicStatic, "connector.js"));
 await cp(join(projectRoot, "static", "cloud-config.js"), join(publicStatic, "cloud-config.js"));
 await cp(join(projectRoot, "static", "settings.js"), join(publicStatic, "settings.js"));
 await cp(

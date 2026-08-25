@@ -94,6 +94,17 @@
   function apiFetch(url, options = {}) {
     const requestHeaders = new Headers(options.headers || {});
     Object.entries(headers()).forEach(([name, value]) => requestHeaders.set(name, value));
+    const hosted = document.documentElement.dataset.deployment === "edgeone";
+    const useConnector = hosted
+      && (read().analysis_mode || "libtv") === "libtv"
+      && new URL(url, window.location.origin).pathname === "/api/analyze"
+      && window.ViralXConnector;
+    if (useConnector) {
+      return window.ViralXConnector.request("/connector/v1/analyze", {
+        ...options,
+        headers: requestHeaders,
+      });
+    }
     return window.fetch(url, { ...options, headers: requestHeaders });
   }
 

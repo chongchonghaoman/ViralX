@@ -11,8 +11,8 @@ Use ViralX as a remote web capability. The installed skill does not need the ful
 
 - For a TikTok or Douyin URL, call `analyze` directly. API23 is not involved.
 - For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for API23 discovery; the discovered video then continues to the active analysis provider.
-- Production EdgeOne supports model analysis only. Set `ANALYSIS_MODE=model`, choose `MODEL_PROVIDER` (`openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom`), and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
-- LibTV uses the official local CLI browser login. To use it from Codex, run ViralX locally, connect LibTV from `http://127.0.0.1:5001/settings`, and set `VIRALX_BASE_URL=http://127.0.0.1:5001`. Never try to send a LibTV token to EdgeOne.
+- The production API used by this Skill supports model analysis only. Set `ANALYSIS_MODE=model`, choose `MODEL_PROVIDER` (`openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom`), and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
+- LibTV uses the official local CLI browser login. To use it from Codex, run ViralX locally, connect LibTV from `http://127.0.0.1:5001/settings`, and set `VIRALX_BASE_URL=http://127.0.0.1:5001`. The hosted website's Connector is a browser-only session bridge and is not an Agent credential. Never try to send a LibTV token or Connector session to EdgeOne.
 - Use `health` before analysis when credential or service readiness is unknown.
 - Use `keywords` only when the user asks for existing or suggested topics.
 
