@@ -13,7 +13,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 import threading
 import queue
-from tiktok_viral_analyzer import TikTokViralAnalyzer
+from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message
 from ai_analyzer import AIAnalyzer
 from libtv_analyzer import LIBTV_CLI_PAGE, LibTVAuthManager
 from model_providers import model_is_ready, normalize_model_config
@@ -278,6 +278,7 @@ def build_analyze_response(config_override=None, max_videos=None):
     product_info = data.get('product_info', '')
 
     def generate():
+        current_config = {}
         try:
             current_config = dict(config_override) if config_override is not None else load_config()
             video_limit = max(1, min(int(max_videos or MAX_ANALYZE_VIDEOS), MAX_ANALYZE_VIDEOS))
@@ -309,7 +310,8 @@ def build_analyze_response(config_override=None, max_videos=None):
                 }
 
             if not video_data:
-                yield json.dumps({'status': 'error', 'message': '未找到相关视频', 'done': True}, ensure_ascii=False) + '\n'
+                message = tiktok.empty_result_message() if tiktok else '未找到相关视频'
+                yield json.dumps({'status': 'error', 'message': message, 'done': True}, ensure_ascii=False) + '\n'
                 return
 
             # 创建 AI 分析器
@@ -381,7 +383,18 @@ def build_analyze_response(config_override=None, max_videos=None):
             }, ensure_ascii=False) + '\n'
 
         except Exception as e:
-            yield json.dumps({'status': 'error', 'message': str(e), 'done': True}, ensure_ascii=False) + '\n'
+            secrets = (
+                current_config.get('rapidapi_key'),
+                current_config.get('model_api_key'),
+                current_config.get('gemini_api_key'),
+                current_config.get('openrouter_api_key'),
+                current_config.get('minimax_api_key'),
+            )
+            yield json.dumps({
+                'status': 'error',
+                'message': safe_error_message(e, secrets),
+                'done': True,
+            }, ensure_ascii=False) + '\n'
 
     return Response(generate(), mimetype='application/x-ndjson', headers={
         'X-Accel-Buffering': 'no',

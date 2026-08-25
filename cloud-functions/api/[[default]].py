@@ -36,7 +36,7 @@ if tk_note_script.is_file():
 
 from ai_analyzer import AIAnalyzer  # noqa: E402
 from model_providers import model_is_ready, normalize_model_config  # noqa: E402
-from tiktok_viral_analyzer import TikTokViralAnalyzer  # noqa: E402
+from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message  # noqa: E402
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
@@ -249,7 +249,8 @@ def analyze():
                 }
 
             if not video_data:
-                yield json.dumps({"status": "error", "message": "未找到相关视频", "done": True}, ensure_ascii=False) + "\n"
+                message = tiktok.empty_result_message() if tiktok else "未找到相关视频"
+                yield json.dumps({"status": "error", "message": message, "done": True}, ensure_ascii=False) + "\n"
                 return
 
             ai = AIAnalyzer(
@@ -307,7 +308,18 @@ def analyze():
                 "done": True,
             }, ensure_ascii=False) + "\n"
         except Exception as exc:
-            yield json.dumps({"status": "error", "message": str(exc), "done": True}, ensure_ascii=False) + "\n"
+            secrets = (
+                config.get("rapidapi_key"),
+                config.get("model_api_key"),
+                config.get("gemini_api_key"),
+                config.get("openrouter_api_key"),
+                config.get("minimax_api_key"),
+            )
+            yield json.dumps({
+                "status": "error",
+                "message": safe_error_message(exc, secrets),
+                "done": True,
+            }, ensure_ascii=False) + "\n"
 
     return Response(generate(), mimetype="application/x-ndjson", headers={
         "X-Accel-Buffering": "no",

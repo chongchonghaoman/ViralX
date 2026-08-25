@@ -25,7 +25,7 @@
   <a href="DEPLOYMENT.md">部署说明</a>
 </p>
 
-<p align="center"><sub>最后更新：2026-08-25 · 当前版本：Web 产品 + EdgeOne Cloud Functions + 本机 LibTV Connector</sub></p>
+<p align="center"><sub>最后更新：2026-08-26 · 当前版本：Web 产品 + EdgeOne Cloud Functions + 本机 LibTV Connector</sub></p>
 
 ![ViralX 网页首页](docs/assets/viralx-homepage.png)
 
@@ -47,7 +47,7 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - **产品形态全面 Web 化**：首页承担真实分析工作台，设置页管理运行模式与凭据；桌面端和移动端共享同一条任务链。
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上功能不再是假演示**：EdgeOne Pages 搭配 Python Cloud Functions，支持同源健康检查、API23 搜索、单视频分析、流式进度和浏览器安全导出。
-- **搜索链路切换为 API23**：适配 API23 的请求参数、分页游标与多种响应结构；API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
+- **搜索链路切换为 API23**：主搜索使用官方 `/api/search/video`，空结果时自动回退同属 API23 的 `/api/post/discover`；支持分页、热度过滤、HTTP 200 业务错误识别、响应结构诊断和凭据脱敏。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **网页版可连接本机 LibTV**：新增 loopback-only Connector；EdgeOne 设置页与它完成一次性配对后，可以启动官方 `libtv login web`、读取无凭据状态、创建画布并上传 TK Note 采集的原片。
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
@@ -128,7 +128,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 | 能力 | 网页中的实际行为 |
 | --- | --- |
-| API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频，支持游标分页、热度过滤和响应归一化 |
+| API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频；支持 Search + Discover 双入口、分页、热度过滤、响应归一化和可操作的空结果诊断 |
 | 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 API23，直接进入视频采集与拉片链路 |
 | TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据 |
 | LibTV 网页连接 | EdgeOne 页面与本机 Connector 一次性配对，再调用官方 `libtv login web`；连接后创建画布、上传原视频并返回画布入口 |
@@ -356,7 +356,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集共 51 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV CLI 网页登录边界、本地 Flask、EdgeOne BYOK、公私路由边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、单视频限制与前端路由合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集共 57 项，覆盖 ViralX Skill 调用脚本、API23 Search/Discover 双入口与错误脱敏、TK Note、LibTV CLI 网页登录边界、本地 Flask、EdgeOne BYOK、公私路由边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、单视频限制与前端路由合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 

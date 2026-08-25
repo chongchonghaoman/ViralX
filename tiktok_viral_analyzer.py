@@ -5,19 +5,38 @@ TikTok 美区爆款视频分析工具
 """
 import requests
 import json
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping
+
+
+def safe_error_message(value: Any, secrets: Iterable[Any] = ()) -> str:
+    """Keep diagnostics useful while removing credentials and token-shaped text."""
+    text = str(value or "").strip().replace("\n", " ")
+    for secret in secrets:
+        secret_value = str(secret or "")
+        if secret_value:
+            text = text.replace(secret_value, "[redacted]")
+    text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization|access[_ -]?token|refresh[_ -]?token|api[_ -]?key)\s*[:=]\s*\S+",
+        r"\1=[redacted]",
+        text,
+    )
+    return text[:600]
 
 class TikTokViralAnalyzer:
     SEARCH_PROVIDER = "api23"
     SEARCH_HOST = "tiktok-api23.p.rapidapi.com"
     SEARCH_URL = f"https://{SEARCH_HOST}/api/search/video"
+    DISCOVER_URL = f"https://{SEARCH_HOST}/api/post/discover"
     SEARCH_TIMEOUT_SECONDS = 15
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.api_key = ""  # RapidAPI API23 key；仅用于关键词发现
+        self.last_search_diagnostics: Dict[str, Any] = {}
 
     @staticmethod
     def _mapping(value: Any) -> Mapping[str, Any]:
@@ -36,11 +55,45 @@ class TikTokViralAnalyzer:
         root = cls._mapping(payload)
         candidates = [root, cls._mapping(root.get("data"))]
         for container in candidates:
-            for key in ("item_list", "itemList", "items"):
+            for key in ("item_list", "itemList", "items", "videoList", "videos"):
                 value = container.get(key)
                 if isinstance(value, list):
                     return [item for item in value if isinstance(item, dict)]
         return []
+
+    @classmethod
+    def _api23_has_item_list(cls, payload: Any) -> bool:
+        root = cls._mapping(payload)
+        candidates = [root, cls._mapping(root.get("data"))]
+        return any(
+            isinstance(container.get(key), list)
+            for container in candidates
+            for key in ("item_list", "itemList", "items", "videoList", "videos")
+        )
+
+    @classmethod
+    def _api23_business_error(cls, payload: Any) -> str:
+        """Return a safe API23 business error carried inside an HTTP 200 body."""
+        root = cls._mapping(payload)
+        containers = [root, cls._mapping(root.get("data"))]
+        for container in containers:
+            code = container.get("status_code")
+            if code in (None, ""):
+                code = container.get("statusCode")
+            failed = code not in (None, 0, "0", 200, "200") or container.get("success") is False
+            error = container.get("error")
+            if not failed and not error:
+                continue
+            message = (
+                container.get("status_msg")
+                or container.get("statusMsg")
+                or container.get("message")
+                or (error.get("message") if isinstance(error, Mapping) else error)
+                or "API23 返回了业务错误"
+            )
+            safe_message = safe_error_message(message)[:240]
+            return f"{safe_message}（业务状态 {code}）" if code not in (None, "") else safe_message
+        return ""
 
     @classmethod
     def _normalize_api23_video(cls, item: Dict) -> Dict:
@@ -80,8 +133,20 @@ class TikTokViralAnalyzer:
         }
 
     def search_viral_videos(self, keyword: str, min_likes: int = 10000, count: int = 50) -> List[Dict]:
-        """Use RapidAPI API23 for keyword discovery and return ViralX video rows."""
+        """Search API23, with its Discover endpoint as a same-provider fallback."""
         clean_keyword = str(keyword or "").strip()
+        threshold = max(0, self._integer(min_likes))
+        self.last_search_diagnostics = {
+            "keyword": clean_keyword,
+            "threshold": threshold,
+            "raw_items": 0,
+            "normalized_items": 0,
+            "filtered_by_likes": 0,
+            "max_likes": 0,
+            "routes": [],
+            "responses": 0,
+            "recognized_lists": 0,
+        }
         if not clean_keyword:
             return []
         if not str(self.api_key or "").strip():
@@ -97,30 +162,20 @@ class TikTokViralAnalyzer:
             "x-rapidapi-key": self.api_key,
             "x-rapidapi-host": self.SEARCH_HOST,
         }
-        cursor: Any = 0
-        search_id = "0"
-        seen_pages = set()
         seen_video_ids = set()
         viral_videos: List[Dict] = []
 
-        # API23 uses cursor + log_pb.impr_id for subsequent pages. Five pages
-        # keeps a single ViralX search bounded while still honoring count=30.
-        for _ in range(5):
-            page_signature = (str(cursor), str(search_id))
-            if page_signature in seen_pages:
-                break
-            seen_pages.add(page_signature)
-
-            params = {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id}
+        def request_page(url: str, params: Dict[str, Any]) -> Mapping[str, Any]:
             try:
                 response = requests.get(
-                    self.SEARCH_URL,
+                    url,
                     headers=headers,
                     params=params,
                     timeout=self.SEARCH_TIMEOUT_SECONDS,
                 )
             except requests.RequestException as exc:
-                raise RuntimeError(f"API23 关键词搜索请求失败：{exc}") from exc
+                detail = safe_error_message(exc, (self.api_key,))
+                raise RuntimeError(f"API23 关键词搜索请求失败：{detail}") from exc
 
             if response.status_code != 200:
                 message = error_messages.get(response.status_code, "API23 关键词搜索暂时不可用")
@@ -130,27 +185,62 @@ class TikTokViralAnalyzer:
                 payload = response.json()
             except ValueError as exc:
                 raise RuntimeError("API23 返回了无法解析的响应") from exc
+            business_error = self._api23_business_error(payload)
+            if business_error:
+                detail = safe_error_message(business_error, (self.api_key,))
+                raise RuntimeError(f"API23 搜索失败：{detail}")
+            mapped_payload = self._mapping(payload)
+            self.last_search_diagnostics["responses"] += 1
+            if self._api23_has_item_list(mapped_payload):
+                self.last_search_diagnostics["recognized_lists"] += 1
+            return mapped_payload
 
-            items = self._api23_items(payload)
+        def collect_items(items: List[Dict], route: str) -> None:
+            diagnostics = self.last_search_diagnostics
+            diagnostics["raw_items"] += len(items)
+            if route not in diagnostics["routes"]:
+                diagnostics["routes"].append(route)
             for item in items:
                 video = self._normalize_api23_video(item)
                 video_id = video["video_id"]
-                if (
-                    video_id
-                    and video_id not in seen_video_ids
-                    and video["digg_count"] >= self._integer(min_likes)
-                ):
-                    seen_video_ids.add(video_id)
-                    viral_videos.append(video)
-                    if len(viral_videos) >= limit:
-                        break
+                if not video_id:
+                    continue
+                diagnostics["normalized_items"] += 1
+                diagnostics["max_likes"] = max(diagnostics["max_likes"], video["digg_count"])
+                if video["digg_count"] < threshold:
+                    diagnostics["filtered_by_likes"] += 1
+                    continue
+                if video_id in seen_video_ids:
+                    continue
+                seen_video_ids.add(video_id)
+                viral_videos.append(video)
+
+        cursor: Any = 0
+        search_id = "0"
+        seen_pages = set()
+
+        # API23 uses cursor + log_pb.impr_id for subsequent pages. Five pages
+        # keeps a single ViralX search bounded while still honoring count=30.
+        for _ in range(5):
+            page_signature = (str(cursor), str(search_id))
+            if page_signature in seen_pages:
+                break
+            seen_pages.add(page_signature)
+
+            payload = request_page(
+                self.SEARCH_URL,
+                {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id},
+            )
+            items = self._api23_items(payload)
+            collect_items(items, "/api/search/video")
             if len(viral_videos) >= limit:
                 break
 
             root = self._mapping(payload)
             nested = self._mapping(root.get("data"))
             container = nested if any(
-                isinstance(nested.get(key), list) for key in ("item_list", "itemList", "items")
+                isinstance(nested.get(key), list)
+                for key in ("item_list", "itemList", "items", "videoList", "videos")
             ) else root
             has_more = container.get(
                 "has_more",
@@ -166,9 +256,58 @@ class TikTokViralAnalyzer:
             log_pb = self._mapping(container.get("log_pb") or root.get("log_pb"))
             search_id = str(log_pb.get("impr_id") or log_pb.get("imprId") or search_id)
 
+        # API23 exposes a second official keyword-discovery route. It is useful
+        # when TikTok's search route returns an empty first result set, and keeps
+        # ViralX on the user's selected API23 provider.
+        if not viral_videos:
+            for page in range(1, 4):
+                payload = request_page(
+                    self.DISCOVER_URL,
+                    {"keyword": clean_keyword, "page": page},
+                )
+                items = self._api23_items(payload)
+                collect_items(items, "/api/post/discover")
+                if len(viral_videos) >= limit:
+                    break
+                root = self._mapping(payload)
+                nested = self._mapping(root.get("data"))
+                container = nested if nested else root
+                has_more = container.get("hasMore", container.get("has_more", False))
+                if has_more not in (True, 1, "1") or not items:
+                    break
+
         viral_videos = viral_videos[:limit]
-        print(f"[API23] 找到 {len(viral_videos)} 个符合阈值的视频")
+        diagnostics = self.last_search_diagnostics
+        print(
+            "[API23] "
+            f"候选 {diagnostics['raw_items']}，可识别 {diagnostics['normalized_items']}，"
+            f"符合阈值 {len(viral_videos)}"
+        )
         return viral_videos
+
+    def empty_result_message(self) -> str:
+        """Explain an empty API23 result without exposing credentials or payloads."""
+        diagnostics = self.last_search_diagnostics or {}
+        raw_items = self._integer(diagnostics.get("raw_items"))
+        normalized_items = self._integer(diagnostics.get("normalized_items"))
+        threshold = self._integer(diagnostics.get("threshold"))
+        max_likes = self._integer(diagnostics.get("max_likes"))
+        routes = diagnostics.get("routes") or []
+        responses = self._integer(diagnostics.get("responses"))
+        recognized_lists = self._integer(diagnostics.get("recognized_lists"))
+        route_label = "、".join(routes) or "API23 搜索接口"
+        if raw_items == 0:
+            if responses and recognized_lists == 0:
+                return "API23 返回了响应，但没有可识别的视频列表；接口响应结构可能已经更新。"
+            return f"API23 的 {route_label} 均未返回视频候选；请在 RapidAPI Playground 检查当前订阅和实际响应。"
+        if normalized_items == 0:
+            return f"API23 返回了 {raw_items} 条候选，但响应中没有可识别的视频 ID；接口结构可能已经更新。"
+        if threshold > 0 and max_likes < threshold:
+            return (
+                f"API23 返回了 {normalized_items} 条视频，但最高点赞为 {max_likes:,}，"
+                f"全部低于当前阈值 {threshold:,}；请降低最低点赞数后重试。"
+            )
+        return f"API23 返回了 {normalized_items} 条候选，但没有可用于分析的视频。"
 
     def get_video_comments(self, video_id: str, max_count: int = 20) -> List[Dict]:
         """使用本地 TikTok API 抓取评论"""

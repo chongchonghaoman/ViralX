@@ -93,6 +93,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('control.setAttribute("aria-invalid", "true")', self.settings_js)
         self.assertIn('control.setAttribute("aria-errormessage", error.id)', self.settings_js)
 
+    def test_zero_minimum_likes_is_preserved(self):
+        self.assertIn("const parsedMinLikes = Number.parseInt", self.settings_js)
+        self.assertIn("Number.isFinite(parsedMinLikes)", self.settings_js)
+        self.assertNotIn('Number.parseInt(byId("min_likes").value, 10) || DEFAULTS.min_likes', self.settings_js)
+
     def test_report_markdown_is_version_pinned_and_sanitized(self):
         self.assertIn("marked@15.0.12/marked.min.js", self.home)
         self.assertIn("integrity=\"sha384-", self.home)

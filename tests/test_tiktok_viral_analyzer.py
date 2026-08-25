@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from tiktok_viral_analyzer import TikTokViralAnalyzer
+from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message
 
 
 class TikTokViralAnalyzerTests(unittest.TestCase):
@@ -144,6 +144,90 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             mock_get.call_args_list[1].kwargs["params"],
             {"keyword": "camping light", "cursor": 10, "search_id": "search-session-1"},
         )
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_falls_back_to_discover_posts(self, mock_get):
+        search = Mock(status_code=200)
+        search.json.return_value = {"hasMore": 0, "item_list": []}
+        discover = Mock(status_code=200)
+        discover.json.return_value = {
+            "hasMore": False,
+            "videoList": [
+                {
+                    "id": "discover-result",
+                    "desc": "Picture light for a gallery wall",
+                    "author": {"uniqueId": "lightingstudio"},
+                    "stats": {"diggCount": 25000, "playCount": 800000},
+                    "video": {"duration": 17},
+                }
+            ],
+        }
+        mock_get.side_effect = [search, discover]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=5000, count=30)
+
+        self.assertEqual([video["video_id"] for video in videos], ["discover-result"])
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_args_list[1].args[0], self.analyzer.DISCOVER_URL)
+        self.assertEqual(
+            mock_get.call_args_list[1].kwargs["params"],
+            {"keyword": "picture light", "page": 1},
+        )
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_http_200_business_error_is_actionable(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "status_code": 10222,
+            "status_msg": "Search upstream is unavailable",
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "API23.*Search upstream.*10222"):
+            self.analyzer.search_viral_videos("picture light")
+
+    def test_error_messages_redact_exact_and_token_shaped_secrets(self):
+        message = safe_error_message(
+            "x-rapidapi-key=test-api23-secret Authorization: Bearer another-secret",
+            ("test-api23-secret",),
+        )
+        self.assertNotIn("test-api23-secret", message)
+        self.assertNotIn("another-secret", message)
+        self.assertIn("redacted", message)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_unknown_api23_shape_is_not_reported_as_a_true_empty_list(self, mock_get):
+        first = Mock(status_code=200)
+        first.json.return_value = {"unexpectedResults": [{"id": "one"}]}
+        second = Mock(status_code=200)
+        second.json.return_value = {"anotherUnexpectedShape": True}
+        mock_get.side_effect = [first, second]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=0)
+
+        self.assertEqual(videos, [])
+        self.assertIn("响应结构可能已经更新", self.analyzer.empty_result_message())
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_empty_message_distinguishes_like_filtering(self, mock_get):
+        search = Mock(status_code=200)
+        search.json.return_value = {
+            "hasMore": False,
+            "item_list": [{"id": "low-search", "stats": {"diggCount": 900}}],
+        }
+        discover = Mock(status_code=200)
+        discover.json.return_value = {
+            "hasMore": False,
+            "videoList": [{"id": "low-discover", "stats": {"diggCount": 1200}}],
+        }
+        mock_get.side_effect = [search, discover]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=5000)
+
+        self.assertEqual(videos, [])
+        message = self.analyzer.empty_result_message()
+        self.assertIn("2 条视频", message)
+        self.assertIn("最高点赞为 1,200", message)
+        self.assertIn("阈值 5,000", message)
 
 
 if __name__ == "__main__":

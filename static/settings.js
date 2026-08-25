@@ -158,7 +158,8 @@
     settings.model_api_key = byId("model_api_key").value.trim();
     settings.model_base_url = selectedProvider === "custom" ? byId("model_base_url").value.trim() : preset.baseUrl;
     settings.model_name = byId("model_name").value.trim();
-    settings.min_likes = Number.parseInt(byId("min_likes").value, 10) || DEFAULTS.min_likes;
+    const parsedMinLikes = Number.parseInt(byId("min_likes").value, 10);
+    settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
     if (settings.analysis_mode === "model") {
       if (!settings.model_api_key) throw new SettingsValidationError("model_api_key", "模型 API 模式需要填写 API Key");

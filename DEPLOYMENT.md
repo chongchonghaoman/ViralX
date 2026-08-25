@@ -2,13 +2,13 @@
 
 ## Public production deployment
 
-- Date: 2026-08-25
+- Date: 2026-08-26
 - Account: `metro` (`100046117544`)
 - Area: Overseas (China mainland excluded)
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dp2lf6tr73ho`
+- Production deployment ID: `dp8f8bmsq9tq`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
 - Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dp2lf6tr73ho`
@@ -35,6 +35,8 @@ Verified on the public custom domain:
 - The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
 - Responsive WebP hero assets return `200 image/webp` with immutable caching
 - `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
+- API23 keyword discovery uses `/api/search/video` with `/api/post/discover` as an empty-result fallback; `min_likes=0` is preserved instead of reverting to `5000`
+- A production smoke request with invalid placeholder credentials returned an actionable API23 `403` without echoing either placeholder credential
 - `/api/health` continues to report the Cloud Function's own LibTV state as `local_only`; the browser separately probes the local Connector
 - Browser LibTV mode routes only `/api/analyze` to authenticated `http://127.0.0.1:57231/connector/v1/analyze`
 - Production HTTPS page completed a real one-use pairing against the local Connector; the URL fragment was removed before the page reached its steady state
