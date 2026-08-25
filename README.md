@@ -291,7 +291,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集共 26 项，覆盖 ViralX Skill 客户端、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界和浏览器版 Obsidian 导出。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集共 26 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界和浏览器版 Obsidian 导出。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 
