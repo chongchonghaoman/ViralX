@@ -87,6 +87,7 @@
     if (runtimeMode !== "edgeone") { note.hidden = true; return; }
     const configured = health.configured || {};
     const provider = String(health.analysis_provider || settings.analysis_mode || "libtv");
+    const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
     note.replaceChildren();
     const copy = document.createElement("div");
     const title = document.createElement("strong");
@@ -96,7 +97,7 @@
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
-    [["分析模式", provider], ["LibTV", configured.libtv ? "已配置" : "未配置"], ["关键词", configured.keyword_search ? "已配置" : "未配置"]]
+    [["分析模式", provider], ["LibTV", configured.libtv ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;

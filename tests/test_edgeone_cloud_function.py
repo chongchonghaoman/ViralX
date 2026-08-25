@@ -34,6 +34,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["runtime"], "edgeone")
+        self.assertEqual(payload["keyword_search_provider"], "api23")
         self.assertEqual(payload["limits"]["max_videos"], 1)
         self.assertIsInstance(payload["analysis_ready"], bool)
         self.assertTrue(all(isinstance(value, bool) for value in payload["configured"].values()))
@@ -64,6 +65,13 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
         self.assertTrue(payload["done"])
+
+    def test_keyword_search_without_api23_key_returns_actionable_error(self):
+        response = self.client.post("/analyze", json={"keyword": "camping light"})
+        payload = json.loads(response.get_data(as_text=True).strip())
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("API23", payload["message"])
+        self.assertIn("RAPIDAPI_KEY", payload["message"])
 
     def test_private_settings_and_cache_routes_are_not_public(self):
         self.assertEqual(self.client.get("/settings").status_code, 404)

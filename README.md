@@ -22,7 +22,7 @@
 ![ViralX 视频证据信号主视觉](static/assets/viralx-signal-orbit.png)
 
 > [!IMPORTANT]
-> 线上站点不是静态概念页：它已经接入 EdgeOne Python Cloud Functions，提供真实的同源分析 API。实际调用 LibTV、RapidAPI、MiniMax、Gemini 或 OpenRouter 前，仍需由使用者在设置页临时提供凭据，或由部署者配置项目环境变量。ViralX 不会把“页面在线”伪装成“外部分析服务已就绪”。
+> 线上站点不是静态概念页：它已经接入 EdgeOne Python Cloud Functions，提供真实的同源分析 API。实际调用 LibTV、RapidAPI API23、MiniMax、Gemini 或 OpenRouter 前，仍需由使用者在设置页临时提供凭据，或由部署者配置项目环境变量。ViralX 不会把“页面在线”伪装成“外部分析服务已就绪”。
 
 ## 2026-08-25 重点更新
 
@@ -35,24 +35,26 @@
 | 动效系统 | 使用 GSAP 3.13 与 ScrollTrigger 编排首屏、滚动章节、证据轨道和真实分析结果；完整支持 `prefers-reduced-motion` 降级 |
 | 网页端能力 | 新增 EdgeOne Pages + Python Cloud Functions，在线提供 `health`、`keywords`、`analyze`、`generate_variants` 与浏览器版 Obsidian 导出 |
 | 安全设置页 | 新增 `/settings.html` BYOK 页面；凭据仅保存在当前标签页 `sessionStorage`，经同源 HTTPS 临时发送，关页即清除 |
+| API23 搜索 | 关键词发现改接 RapidAPI TikTok API23：请求使用 `/api/search/video` 的 `keyword`、`cursor`、`search_id`，并兼容 `item_list` / `itemList` 响应后统一归一化 |
 | 采集与拉片 | 国际 TikTok 走 TK Note 资产优先流程；抖音等兼容链接保留 yt-dlp；LibTV 成为默认的一键上传、会话创建和增量轮询分析器 |
 | 正式部署 | 上线 [viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)，配置 DNSPod CNAME、EdgeOne 免费证书、自动续期与强制 HTTPS |
-| 可靠性 | 新增云函数、公私路由、视频采集和 LibTV 工作流测试；当前共 16 项单元测试，CI 覆盖 Python 3.10、3.11、3.12 |
+| 可靠性 | 新增 API23、云函数、公私路由、视频采集和 LibTV 工作流测试；当前共 23 项单元测试，CI 覆盖 Python 3.10、3.11、3.12 |
 
 相关实现集中在 `static/`、`templates/`、`cloud-functions/`、`video_ingest.py`、`libtv_analyzer.py` 和 `scripts/build-edgeone.mjs`。完整视觉约束见 [DESIGN.md](DESIGN.md)，线上部署与运行边界见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ## 产品工作流
 
-1. 输入关键词，或直接粘贴 TikTok / 抖音单条视频链接。
-2. ViralX 下载原视频与安全元数据，优先读取字幕，必要时运行本地 ASR。
+1. 输入关键词时，API23 负责发现候选 TikTok 视频；也可以直接粘贴 TikTok / 抖音单条视频链接跳过搜索。
+2. ViralX 通过 TK Note / yt-dlp 下载原视频与安全元数据，优先读取字幕，必要时运行本地 ASR。
 3. 同一份原视频资产被交给 LibTV，创建拉片会话并持续返回真实进度。
 4. 前端按 NDJSON 流展示证据、结构、镜头与分析结果。
 5. 使用 MiniMax 等模型生成不同角度的裂变脚本，并导出 Markdown / Obsidian。
 
 ```mermaid
 flowchart LR
-    A[关键词 / TikTok / 抖音 URL] --> B[video_ingest]
-    B --> C{采集路由}
+    A[关键词] --> B[API23 视频搜索]
+    U[TikTok / 抖音 URL] --> C{采集路由}
+    B --> C
     C -->|国际 TikTok| D[TK Note]
     C -->|兼容链接| E[yt-dlp]
     D --> F[原视频 + 元数据 + 字幕/ASR + 可选评论]
@@ -84,7 +86,7 @@ ViralX 保留两套明确分工的运行时。网页端适合随开随用和单�
 ### 在线使用
 
 1. 打开 [viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。
-2. 进入 [设置页](https://viralx.metrolabs.mobi/settings.html)，填写本次标签页需要使用的 LibTV、搜索或模型凭据。
+2. 进入 [设置页](https://viralx.metrolabs.mobi/settings.html)，填写本次标签页需要使用的 LibTV、API23 搜索或模型凭据。
 3. 返回分析页，输入关键词或视频链接并开始拉片。
 
 页面无需凭据即可浏览；真实外部分析需要对应服务的 Key。`/api/health` 只报告运行时和凭据就绪状态，不代表第三方服务已经成功调用或计费。
@@ -120,7 +122,7 @@ Copy-Item config.json.example config.json
 {
   "analysis_mode": "libtv",
   "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY",
-  "rapidapi_key": "YOUR_RAPIDAPI_KEY",
+  "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY",
   "minimax_api_key": "YOUR_MINIMAX_API_KEY"
 }
 ```
@@ -140,11 +142,11 @@ $env:LIBTV_ACCESS_KEY = "your-access-key"
 常用服务：
 
 - [LibTV](https://www.liblib.tv/)：默认拉片分析器。
-- [RapidAPI TikTok Scraper](https://rapidapi.com/DataFanatic/api/tiktok-scraper7)：关键词搜索与公开视频数据。
+- [RapidAPI TikTok API23](https://rapidapi.com/Lundehund/api/tiktok-api23)：只负责关键词搜索和候选视频发现；ViralX 使用 `/api/search/video` 并将嵌套响应归一化为稳定字段。
 - [MiniMax](https://www.minimaxi.com/)：复刻脚本与裂变变体。
 - [OpenRouter](https://openrouter.ai/) / Gemini：兼容分析模式。
 
-TK Note 的视频、字幕和本地 ASR 主链不依赖付费抓取 API。若需要可选评论采集：
+直接粘贴 TikTok 视频链接时会跳过 API23，由 TK Note 处理视频、安全元数据、字幕与本地 ASR，因此这条主链不依赖 RapidAPI。若需要可选评论采集：
 
 ```bash
 python -m pip install -r requirements-tk-comments.txt
@@ -252,12 +254,13 @@ ViralX/
 python -m unittest discover -s tests -v
 ```
 
-当前测试集共 16 项，覆盖：
+当前测试集共 23 项，覆盖：
 
 - TK Note 采集路由、进度合同与资产复用；
 - LibTV 上传、会话轮询、超时和失败保护；
 - Flask 页面、健康检查和直接链接分析；
 - EdgeOne BYOK、公私路由边界与浏览器版 Obsidian 导出。
+- API23 请求参数、`item_list` / `itemList` 响应归一化、热度过滤与错误映射。
 
 验证 EdgeOne 构建：
 

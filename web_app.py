@@ -195,6 +195,7 @@ def health():
     return jsonify({
         'status': 'ok',
         'runtime': runtime,
+        'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
         'analysis_provider': provider,
         'analysis_ready': readiness.get(provider, False),
         'configured': {
@@ -236,6 +237,13 @@ def analyze():
                 video_data = [direct_video_data(keyword)]
                 video_urls = {video_data[0]['video_id']: keyword}
             else:
+                if not current_config.get('rapidapi_key'):
+                    yield json.dumps({
+                        'status': 'error',
+                        'message': 'API23 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接',
+                        'done': True,
+                    }, ensure_ascii=False) + '\n'
+                    return
                 tiktok = TikTokViralAnalyzer(current_config['output_dir'])
                 tiktok.api_key = current_config['rapidapi_key']
                 videos = tiktok.search_viral_videos(keyword, current_config['min_likes'], count=30)

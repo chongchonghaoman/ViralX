@@ -58,7 +58,7 @@ The deployed site now includes an EdgeOne Python Cloud Function. The browser cal
 
 The online runtime intentionally does not expose the local settings or cache-clear APIs. `/settings.html` provides a browser-only BYOK configuration surface: supported credentials and model choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
 
-The deployed environment currently has no project-level LibTV, RapidAPI, Gemini, OpenRouter, or MiniMax credential configured. The UI therefore reports `云端接口在线 · 待配置 LibTV` until the visitor supplies a session credential in `/settings.html` or the required EdgeOne environment variables are added. This is a real online API; readiness indicators never imply that an external provider request was successfully billed or completed.
+The deployed environment currently has no project-level LibTV, RapidAPI API23, Gemini, OpenRouter, or MiniMax credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. The UI therefore reports `云端接口在线 · 待配置 LibTV` until the visitor supplies a session credential in `/settings.html` or the required EdgeOne environment variables are added. This is a real online API; readiness indicators never imply that an external provider request was successfully billed or completed.
 
 The local Flask version remains the full-control runtime for:
 

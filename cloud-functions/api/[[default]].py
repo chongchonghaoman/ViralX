@@ -178,6 +178,7 @@ def health():
     return jsonify({
         "status": "ok",
         "runtime": "edgeone",
+        "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
         "analysis_provider": mode,
         "analysis_ready": provider_ready.get(mode, False),
         "configured": {
@@ -225,7 +226,7 @@ def analyze():
                 if not config["rapidapi_key"]:
                     yield json.dumps({
                         "status": "error",
-                        "message": "云端关键词搜索尚未配置 RAPIDAPI_KEY；请先粘贴视频链接",
+                        "message": "API23 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接",
                         "done": True,
                     }, ensure_ascii=False) + "\n"
                     return
