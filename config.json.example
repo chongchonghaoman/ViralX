@@ -1,10 +1,6 @@
 {
   "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY_HERE",
   "analysis_mode": "libtv",
-  "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY_HERE",
-  "libtv_im_base": "https://im.liblib.tv",
-  "libtv_poll_interval": 8,
-  "libtv_timeout": 180,
   "libtv_concurrency": 2,
   "tk_note_asr_backend": "auto",
   "tk_note_language": "auto",

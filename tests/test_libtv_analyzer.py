@@ -1,19 +1,9 @@
 import tempfile
 import unittest
+from subprocess import CompletedProcess
 from pathlib import Path
 
-from libtv_analyzer import LibTVAnalyzer, LibTVError, _extract_report
-
-
-class FakeClock:
-    def __init__(self):
-        self.value = 0.0
-
-    def __call__(self):
-        return self.value
-
-    def sleep(self, seconds):
-        self.value += seconds
+from libtv_analyzer import LibTVAnalyzer, LibTVError, _safe_message
 
 
 class LibTVAnalyzerTests(unittest.TestCase):
@@ -24,107 +14,74 @@ class LibTVAnalyzerTests(unittest.TestCase):
         self.addCleanup(temp_dir.cleanup)
         return video_path
 
-    def test_full_upload_session_poll_workflow(self):
+    def test_creates_canvas_then_uploads_source_video(self):
         calls = []
-        query_count = 0
 
-        def runner(script_name, args, timeout):
-            nonlocal query_count
-            calls.append((script_name, args, timeout))
-            if script_name == "upload_file.py":
-                return {"url": "https://libtv-res.liblib.art/claw/project/video.mp4"}
-            if script_name == "create_session.py":
-                return {
-                    "sessionId": "session-1",
-                    "projectUuid": "project-1",
-                    "projectUrl": "https://www.liblib.tv/canvas?projectId=project-1",
-                }
-            query_count += 1
-            if query_count == 1:
-                return {
-                    "messages": [
-                        {"id": "m1", "seq": 1, "role": "assistant", "content": "正在分析中，请稍候"}
-                    ]
-                }
-            return {
-                "messages": [
-                    {
-                        "id": "m2",
-                        "seq": 2,
-                        "role": "assistant",
-                        "status": "completed",
-                        "content": "## 一键拉片\n\n| 时间轴 | 镜头 | 画面 |\n|---|---|---|\n| 0-3s | 特写 | 产品开场 |",
-                    }
-                ]
-            }
-
-        clock = FakeClock()
-        analyzer = LibTVAnalyzer(
-            access_key="test-key",
-            poll_interval=1,
-            timeout=10,
-            runner=runner,
-            sleeper=clock.sleep,
-            clock=clock,
-        )
-
-        result = analyzer.analyze(str(self.make_video()))
-
-        self.assertEqual(result.status, "completed")
-        self.assertEqual(result.session_id, "session-1")
-        self.assertIn("时间轴", result.analysis)
-        self.assertEqual([call[0] for call in calls[:2]], ["upload_file.py", "create_session.py"])
-        self.assertIn("一键拉片", calls[1][1][0])
-        self.assertIn("参考视频：https://libtv-res.liblib.art/claw/project/video.mp4", calls[1][1][0])
-        self.assertIn("--after-seq", calls[-1][1])
-        self.assertIn("1", calls[-1][1])
-
-    def test_timeout_keeps_project_link_and_latest_progress(self):
-        clock = FakeClock()
-
-        def runner(script_name, args, timeout):
-            if script_name == "upload_file.py":
-                return {"url": "https://libtv-res.liblib.art/claw/p/video.mp4"}
-            if script_name == "create_session.py":
-                return {
-                    "sessionId": "session-timeout",
-                    "projectUuid": "project-timeout",
-                    "projectUrl": "https://www.liblib.tv/canvas?projectId=project-timeout",
-                }
-            return {
-                "messages": [
-                    {"id": "progress", "seq": 1, "role": "assistant", "content": "正在分析中，请稍候"}
-                ]
-            }
+        def runner(args, timeout):
+            calls.append((args, timeout))
+            if args[:2] == ["project", "create"]:
+                return {"data": {"uuid": "project-1"}}
+            if args[0] == "upload":
+                return {"success": True}
+            raise AssertionError(args)
 
         analyzer = LibTVAnalyzer(
-            access_key="test-key",
-            poll_interval=1,
-            timeout=2,
+            cli_path="libtv",
             runner=runner,
-            sleeper=clock.sleep,
-            clock=clock,
+            auth_checker=lambda: True,
         )
-
         result = analyzer.analyze(str(self.make_video()))
 
-        self.assertEqual(result.status, "timeout")
-        self.assertEqual(result.project_uuid, "project-timeout")
-        self.assertIn("正在分析", result.analysis)
+        self.assertEqual(result.status, "uploaded")
+        self.assertEqual(result.project_uuid, "project-1")
+        self.assertEqual(result.project_url, "https://www.liblib.tv/canvas?projectId=project-1")
+        self.assertIn("逐帧拉片", result.analysis)
+        self.assertEqual(calls[0][0][:2], ["project", "create"])
+        self.assertEqual(calls[1][0][0], "upload")
+        self.assertIn("--resource", calls[1][0])
+        self.assertIn("--project", calls[1][0])
+        self.assertIn("project-1", calls[1][0])
 
-    def test_missing_access_key_fails_before_upload(self):
-        analyzer = LibTVAnalyzer(access_key="", runner=lambda *_: {})
-        with self.assertRaisesRegex(LibTVError, "LIBTV_ACCESS_KEY"):
+    def test_accepts_official_human_readable_project_output(self):
+        calls = []
+
+        def runner(args, timeout):
+            calls.append(args)
+            if args[:2] == ["project", "create"]:
+                return CompletedProcess(args, 0, "画布创建成功\n项目 UUID: project-human-123\n", "")
+            return CompletedProcess(args, 0, "上传成功\n", "")
+
+        analyzer = LibTVAnalyzer(
+            cli_path="libtv",
+            runner=runner,
+            auth_checker=lambda: True,
+        )
+        result = analyzer.analyze(str(self.make_video()))
+        self.assertEqual(result.project_uuid, "project-human-123")
+        self.assertIn("project-human-123", calls[1])
+
+    def test_browser_login_is_required_before_any_upload(self):
+        calls = []
+        analyzer = LibTVAnalyzer(
+            cli_path="libtv",
+            runner=lambda args, timeout: calls.append(args),
+            auth_checker=lambda: False,
+        )
+        with self.assertRaisesRegex(LibTVError, "连接 LibTV"):
+            analyzer.analyze(str(self.make_video()))
+        self.assertEqual(calls, [])
+
+    def test_missing_official_cli_has_actionable_error(self):
+        analyzer = LibTVAnalyzer(cli_path="", auth_checker=lambda: False)
+        analyzer.cli_path = ""
+        with self.assertRaisesRegex(LibTVError, "官方 LibTV CLI"):
             analyzer.analyze(str(self.make_video()))
 
-    def test_progress_message_is_not_mistaken_for_report(self):
-        messages = [
-            {
-                "role": "assistant",
-                "content": "正在分析中，请稍候。我们正在进行镜头和时间轴识别。",
-            }
-        ]
-        self.assertIsNone(_extract_report(messages))
+    def test_cli_errors_redact_token_shaped_values(self):
+        message = _safe_message("Authorization: Bearer secret-token access_token=abc123")
+        self.assertNotIn("secret-token", message)
+        self.assertNotIn("abc123", message)
+        self.assertIn("redacted", message)
 
 
 if __name__ == "__main__":

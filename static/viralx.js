@@ -474,6 +474,8 @@
     const providerLabel = provider === "libtv"
       ? status === "pending" || status === "timeout"
         ? "LibTV · 处理中"
+        : status === "uploaded"
+          ? "LibTV · 已上传画布"
         : status === "error"
           ? "LibTV · 失败"
           : "LibTV · 已完成"
@@ -641,7 +643,7 @@
 
   function showAnalysis(id, provider = "ai") {
     const content = byId(id).textContent;
-    const title = provider === "libtv" ? "LibTV 一键拉片报告" : provider === "remake" ? "复刻脚本" : "AI 深度拆解";
+    const title = provider === "libtv" ? "LibTV 画布交接" : provider === "remake" ? "复刻脚本" : "AI 深度拆解";
     openModal(title, content);
   }
 

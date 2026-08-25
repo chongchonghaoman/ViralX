@@ -127,13 +127,15 @@ change this sequence.
 
 ## Runtime and deployment boundary
 
-- The Flask build is the full local product. It owns /api/analyze, /api/settings,
-  /api/keywords, /api/export-obsidian, TK Note, LibTV, local video/cache files, and
-  Obsidian export.
+- The Flask build is the full local product. It owns `/api/analyze`, `/api/settings`,
+  `/api/libtv/auth/*`, TK Note, official LibTV CLI browser login, local video/cache files,
+  and Obsidian export. ViralX asks the CLI for connection state but never reads its tokens.
 - The EdgeOne build combines the static website with a constrained Python Cloud Function. It
   may run one-video analysis with temporary `/tmp` assets, but must never claim persistent
   local files, browser cookies, arbitrary proxies, caches, or direct Obsidian writes exist at
   the edge.
+- EdgeOne cannot access a visitor's local LibTV CLI login. Its LibTV state is always
+  `local_only`; online analysis requires a configured model API.
 - `/settings.html` is a session-first BYOK surface. API keys stay in `sessionStorage`, travel
   only with same-origin HTTPS requests, are never echoed by health responses, and disappear
   when the tab closes. Project-level EdgeOne environment variables remain supported.
@@ -159,12 +161,15 @@ change this sequence.
 
 - Public availability is not analysis readiness. The homepage health check must route an
   unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
-  ready LibTV or model provider may expose the analysis action as the primary CTA.
+  locally connected LibTV or a ready model provider may expose the analysis action as the primary CTA.
 - API23 is explained at the source field: video URLs bypass it, while keyword discovery needs
-  it. Analysis still requires LibTV or a configured model provider.
+  it. Local analysis may use a browser-connected LibTV CLI; EdgeOne requires a model provider.
 - Model and LibTV settings use native `details` disclosure keyed to `analysis_mode`. Choosing a
   model provider switches the mode to `model`; inactive settings remain saved and are never
   deleted merely because their panel is collapsed.
+- LibTV connection UI exposes `disconnected`, `starting`, `awaiting_browser`, `connected`,
+  `error`, `unavailable`, and `local_only`. Starting/awaiting states prevent duplicate actions;
+  errors always expose a recovery action, and reduced motion removes the status pulse.
 - Settings validation is field-local. API key, model name and custom Base URL errors set
   `aria-invalid`, expose `aria-errormessage`, reveal the correct disclosure and move focus to
   the relevant control without forcing the user back to the page-level status region.

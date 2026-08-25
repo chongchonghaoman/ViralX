@@ -892,10 +892,6 @@ class AIAnalyzer:
         gemini_model: str = '',
         openrouter_api_key: str = '',
         openrouter_model: str = '',
-        libtv_access_key: str = '',
-        libtv_im_base: str = '',
-        libtv_poll_interval: float = None,
-        libtv_timeout: float = None,
         video_collector=None,
         video_cache_dir: str = '',
         tk_note_asr_backend: str = '',
@@ -937,10 +933,6 @@ class AIAnalyzer:
         self.model_base_url = model_config['model_base_url']
         self.model_name = model_config['model_name']
         self.model_config_error = model_config.get('model_config_error', '')
-        self.libtv_access_key = libtv_access_key or config.get('libtv_access_key', '')
-        self.libtv_im_base = libtv_im_base or config.get('libtv_im_base', 'https://im.liblib.tv')
-        self.libtv_poll_interval = libtv_poll_interval if libtv_poll_interval is not None else config.get('libtv_poll_interval', 8)
-        self.libtv_timeout = libtv_timeout if libtv_timeout is not None else config.get('libtv_timeout', 180)
         self.libtv_concurrency = max(1, min(int(config.get('libtv_concurrency', 2)), 5))
         self.video_collector = video_collector or VideoAssetCollector(
             cache_dir=video_cache_dir or config.get('video_cache_dir', './video_cache'),
@@ -962,13 +954,8 @@ class AIAnalyzer:
         self.use_model = self.analysis_mode == 'model'
 
         if self.use_libtv:
-            self.libtv = LibTVAnalyzer(
-                access_key=self.libtv_access_key,
-                im_base=self.libtv_im_base,
-                poll_interval=self.libtv_poll_interval,
-                timeout=self.libtv_timeout,
-            )
-            print("[AIAnalyzer] 模式0: LibTV 一键拉片")
+            self.libtv = LibTVAnalyzer()
+            print("[AIAnalyzer] 模式0: LibTV CLI 网页登录 + 画布交接")
         else:
             self.libtv = None
 
@@ -1046,9 +1033,15 @@ class AIAnalyzer:
         acquisition_details = {}
 
         if self.use_libtv:
-            if not self.libtv.access_key:
+            if not self.libtv.available:
                 return {
-                    'analysis': 'LibTV 拉片失败：未配置 LIBTV_ACCESS_KEY，请先在设置页填写',
+                    'analysis': 'LibTV 拉片失败：未找到官方 LibTV CLI，请先安装后在设置页连接',
+                    'analysis_provider': 'libtv',
+                    'libtv_status': 'error',
+                }
+            if not self.libtv.is_authenticated():
+                return {
+                    'analysis': 'LibTV 拉片失败：尚未登录，请在设置页点击“连接 LibTV”完成网页授权',
                     'analysis_provider': 'libtv',
                     'libtv_status': 'error',
                 }
@@ -1075,7 +1068,7 @@ class AIAnalyzer:
                     **ingest_error,
                 }
             try:
-                result = self.libtv.analyze(video_file_path, user_request='一键拉片')
+                result = self.libtv.analyze(video_file_path, user_request='逐帧拉片')
                 details = result.to_dict()
                 return {
                     'analysis': details.pop('analysis'),

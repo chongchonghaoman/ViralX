@@ -83,10 +83,4 @@ await cp(
   join(publicFunctions, "vendor", "tk_note"),
   { recursive: true },
 );
-await cp(
-  join(projectRoot, ".agents", "skills", "libtv-skill", "scripts"),
-  join(publicFunctions, "vendor", "libtv"),
-  { recursive: true },
-);
-
 console.log("EdgeOne web + Cloud Functions build ready:", publicDir);

@@ -107,7 +107,7 @@ python "$skill\scripts\archive_tk_note_assets.py" --out-dir ".\tk_note_output"
 - E2 independent subtitle track;
 - E3 local ASR transcript;
 - E4 visible comment sample;
-- E5 LibTV/keyframes/OCR visual evidence;
+- E5 LibTV canvas/keyframes/OCR visual evidence;
 - E6 external sources.
 
 ## ViralX / LibTV handoff
@@ -117,12 +117,13 @@ ViralX should consume TK Note's result JSON, not scrape stdout text. The handoff
 ```text
 extract_tiktok_text.py
   -> result.video_file
-  -> LibTV upload_file.py
-  -> create_session.py with the user's original request (`一键拉片`)
-  -> poll query_session.py
+  -> official `libtv` CLI (already connected through `libtv login web`)
+  -> `libtv project create`
+  -> `libtv upload --resource result.video_file --type video --project <uuid>`
+  -> return the LibTV canvas URL for continued shot analysis
 ```
 
-Do not place the transcript or a model-written prompt into the LibTV instruction unless the user asked for that. LibTV's backend Agent receives the original task plus the uploaded video URL.
+Do not read or copy the CLI credential file. ViralX only checks `libtv account info`, creates a canvas, and uploads the source video; the user continues shot analysis in the official LibTV web canvas.
 
 ## Output contract
 

@@ -41,7 +41,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertNotIn("access_key", json.dumps(payload).lower())
         self.assertNotIn("api_key", json.dumps(payload).lower())
 
-    def test_session_byok_headers_affect_readiness_without_echoing_secrets(self):
+    def test_libtv_is_explicitly_local_only_even_with_legacy_header(self):
         response = self.client.get(
             "/health",
             headers={
@@ -52,12 +52,25 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
-        self.assertTrue(payload["analysis_ready"])
-        self.assertTrue(payload["configured"]["libtv"])
+        self.assertFalse(payload["analysis_ready"])
+        self.assertFalse(payload["configured"]["libtv"])
         self.assertTrue(payload["configured"]["keyword_search"])
+        self.assertEqual(payload["libtv"]["connection_state"], "local_only")
+        self.assertEqual(payload["libtv"]["scope"], "local")
         serialized = json.dumps(payload)
         self.assertNotIn("session-secret-libtv", serialized)
         self.assertNotIn("session-secret-rapid", serialized)
+
+    def test_cloud_libtv_analysis_returns_local_runtime_recovery(self):
+        response = self.client.post(
+            "/analyze",
+            json={"keyword": "https://www.tiktok.com/@creator/video/123"},
+            headers={"X-ViralX-Analysis-Mode": "libtv"},
+        )
+        payload = json.loads(response.get_data(as_text=True).strip())
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("本机 CLI 网页登录", payload["message"])
+        self.assertIn("模型 API", payload["message"])
 
     def test_generic_model_headers_select_provider_without_echoing_key(self):
         response = self.client.get(
@@ -108,6 +121,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
     def test_private_settings_and_cache_routes_are_not_public(self):
         self.assertEqual(self.client.get("/settings").status_code, 404)
         self.assertEqual(self.client.post("/cache/clear").status_code, 404)
+        self.assertEqual(self.client.post("/libtv/auth/start").status_code, 404)
 
     def test_browser_obsidian_export_has_no_filesystem_write(self):
         response = self.client.post(

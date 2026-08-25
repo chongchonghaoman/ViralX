@@ -31,7 +31,7 @@
 
 ## ViralX 是什么
 
-ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出发，把原片、元数据、字幕、转写与可选评论组织成证据包，再交给 LibTV 拆解钩子、镜头、声音、节奏和转化路径。分析结果通过网页实时返回，并可整理成复刻脚本或导出为 Markdown / Obsidian 笔记。
+ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出发，把原片、元数据、字幕、转写与可选评论组织成证据包。本地版可通过官方 LibTV CLI 网页登录，把原片上传到新建画布继续逐帧拉片；EdgeOne 网页端则调用你选择的模型 API。结果通过网页实时返回，并可整理成复刻脚本或导出为 Markdown / Obsidian 笔记。
 
 当前产品只有一种交付形态：**Web**。
 
@@ -47,12 +47,12 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上功能不再是假演示**：EdgeOne Pages 搭配 Python Cloud Functions，支持同源健康检查、API23 搜索、单视频分析、流式进度和浏览器安全导出。
 - **搜索链路切换为 API23**：适配 API23 的请求参数、分页游标与多种响应结构；API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
-- **TK Note + LibTV 成为默认主链**：TK Note 采集原片、字幕 / ASR、元数据与评论证据，LibTV 负责真实拉片和结构分析；MiniMax 只保留旧接口兼容能力。
+- **LibTV 改用官方网页登录**：彻底移除旧 Access Key、Agent-IM 会话脚本和轮询参数；本地设置页启动官方 `libtv login web`，授权成功后创建画布并上传 TK Note 采集的原片。
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
-- **明确云端与本地边界**：网页端凭据仅保存在当前标签页；本地 Flask 继续提供持久缓存、目录访问、浏览器 Cookie、代理与 Obsidian 文件写入。
+- **明确云端与本地边界**：EdgeOne 不可能访问访客电脑上的 LibTV CLI 登录态，因此线上只开放模型 API 分析；本地 Flask 提供 LibTV、持久缓存、目录访问、浏览器 Cookie、代理与 Obsidian 文件写入。
 - **把“在线”和“可分析”分开**：首页读取健康状态；未连接 LibTV 或模型 API 时，主按钮会直接进入设置，不会把公开页面在线伪装成分析服务就绪。
-- **设置页改成渐进配置**：LibTV 与模型 API 按当前模式自动展开，保存栏始终可达；缺少 Key、模型名或自定义 Base URL 时，错误会落到对应字段并自动聚焦。
+- **设置页改成真实连接状态机**：LibTV 区明确区分未连接、启动中、等待网页授权、已连接、错误与仅本地可用；模型缺少 Key、模型名或自定义 Base URL 时，错误仍会落到对应字段并自动聚焦。
 - **报告渲染加固**：Marked 固定到明确版本并启用 SRI；模型和 LibTV 返回的 Markdown 在进入弹层前经过标签、属性和链接协议允许列表净化。
 - **首屏资源瘦身**：主视觉增加 640 / 1024 WebP 响应式资源，浏览器按视口选择约 58 KB 或 119 KB 文件，同时保留原 PNG 回退。
 
@@ -60,16 +60,16 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 
 ## 现在到底需要哪些 API
 
-默认主链是 **TK Note 采集 + LibTV 拉片**，MiniMax 不参与网页的默认分析流程。
+本地默认主链是 **TK Note 采集 + LibTV CLI 画布交接**；EdgeOne 网页端只运行模型 API 分析。MiniMax 不参与默认分析流程。
 
 | 你要做的事 | 实际调用 | 需要的凭据 |
 | --- | --- | --- |
-| 粘贴 TikTok / 抖音视频链接并拉片 | TK Note → LibTV | `LIBTV_ACCESS_KEY` |
-| 输入关键词搜索后拉片 | API23 → TK Note → LibTV | `RAPIDAPI_KEY` + `LIBTV_ACCESS_KEY` |
+| 本地粘贴视频链接并交给 LibTV | TK Note → LibTV CLI → 新画布 | 本机完成 `libtv login web` |
+| 本地输入关键词后交给 LibTV | API23 → TK Note → LibTV CLI | `RAPIDAPI_KEY` + 本机 LibTV 网页登录 |
 | 使用自选大模型分析 | TK Note → 已选模型服务商 | `MODEL_API_KEY`，并将 `analysis_mode` 设为 `model` |
 | 调用旧版脚本变体扩展接口 | MiniMax | 可选的 `MINIMAX_API_KEY` |
 
-因此：**RapidAPI 只用于你已选定的 API23 关键词搜索；直链分析不需要它。MiniMax 只是兼容保留项，不是启动网站、搜索视频或默认拉片的必需依赖。**
+因此：**RapidAPI 只用于 API23 关键词搜索，直链分析不需要它。LibTV 不再接受 Access Key，只认官方 CLI 的本机网页登录。MiniMax 只是兼容保留项。**
 
 ## 在 Codex 中直接调用 ViralX
 
@@ -109,17 +109,17 @@ $viralx 分析这个 TikTok 视频：https://www.tiktok.com/@creator/video/123
 $viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
 ```
 
-Skill 默认调用线上 `https://viralx.metrolabs.mobi/api/*`，因此只需要 Python 3。凭据从目标电脑的环境变量读取，不要把 Key 发到聊天里：
+Skill 默认调用线上 `https://viralx.metrolabs.mobi/api/*`，线上分析需要模型 API。凭据从目标电脑的环境变量读取，不要把 Key 发到聊天里：
 
 ```powershell
-$env:LIBTV_ACCESS_KEY = "your-libtv-key"
 $env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
-# 可选：改用模型 API 分析
 $env:ANALYSIS_MODE = "model"
 $env:MODEL_PROVIDER = "openai"
 $env:MODEL_API_KEY = "your-model-key"
 $env:MODEL_NAME = "gpt-4.1-mini"
 ```
+
+若 Codex 要调用本机已登录的 LibTV，请先运行本地 Flask、在 `/settings` 点击“连接 LibTV”，再设置 `$env:VIRALX_BASE_URL = "http://127.0.0.1:5001"`。线上 EdgeOne 不会接收或转发 LibTV 登录凭据。
 
 仓库内的入口位于 [`.agents/skills/viralx`](.agents/skills/viralx)。如果直接克隆仓库并用 Codex 打开，根目录 `AGENTS.md` 也会把 ViralX 调用请求路由到同一个 Skill。
 
@@ -130,7 +130,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 | API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频，支持游标分页、热度过滤和响应归一化 |
 | 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 API23，直接进入视频采集与拉片链路 |
 | TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据 |
-| LibTV 一键拉片 | 上传视频、创建会话、轮询真实进度，并返回分析报告与项目画布 |
+| LibTV 网页连接 | 本地调用官方 `libtv login web`，不读取 token；连接后创建画布、上传原视频并返回画布入口 |
 | 网页流式结果 | `/api/analyze` 使用 NDJSON 持续返回进度、结果、错误与恢复提示 |
 | 产品复刻脚本 | 在首页填写产品名称和卖点，让分析结果转化为可执行的拍摄脚本 |
 | 网页导出 | 在线生成 Obsidian URI 或下载 Markdown；不伪装拥有浏览器之外的文件权限 |
@@ -146,7 +146,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 ### 2. 网页设置
 
-设置页集中管理 API23、TK Note、LibTV 和模型 API。模型区提供 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 常用预设，也支持自定义 OpenAI Chat Completions / Anthropic Messages 兼容接口。在线环境只显示云端安全字段；本地目录、浏览器 Cookie、代理和持久缓存设置只在本地 Flask 运行时出现。
+设置页集中管理 API23、TK Note、LibTV 和模型 API。本地 LibTV 区提供“连接 / 刷新 / 断开”官方网页登录；EdgeOne 会明确显示“仅本地可用”并禁用 LibTV 分析选项。模型区提供 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 常用预设，也支持自定义 OpenAI Chat Completions / Anthropic Messages 兼容接口。
 
 ![ViralX 网页设置页](docs/assets/viralx-settings.png)
 
@@ -163,8 +163,11 @@ flowchart LR
     C -->|兼容视频链接| E[yt-dlp]
     D --> F[原片 + 元数据 + 字幕/ASR + 资产清单]
     E --> F
-    F --> G[LibTV 一键拉片]
-    G --> H[NDJSON 实时进度与报告]
+    F --> G{运行位置与分析模式}
+    G -->|本地 LibTV| L[官方 CLI 创建画布并上传原片]
+    G -->|本地或 EdgeOne 模型| M[已选模型 API]
+    L --> H[NDJSON 返回画布入口]
+    M --> H[NDJSON 实时报告]
     H --> I[网页结果与报告弹层]
     I --> J[复刻脚本]
     I --> K[Obsidian URI / Markdown]
@@ -174,7 +177,7 @@ flowchart LR
 
 - 输入关键词：API23 负责找到候选 TikTok 视频。
 - 粘贴链接：不需要 API23，由 TK Note / yt-dlp 采集视频资产。
-- 开始拉片：默认交给 LibTV；选择“模型 API 分析”时，明确调用设置页中选定的服务商，不会静默回退到 MiniMax。
+- 开始拉片：本地可交给已网页登录的 LibTV CLI；EdgeOne 只调用设置页中选定的模型服务商，不会伪装拥有本地 LibTV 登录态，也不会静默回退到 MiniMax。
 
 ## Web 架构
 
@@ -187,8 +190,10 @@ Browser
     └── EdgeOne Python Cloud Functions
         ├── API23             关键词发现
         ├── TK Note / yt-dlp  视频证据采集
-        ├── LibTV             一键拉片
-        └── Models            脚本和兼容分析
+        └── Models            线上分析
+
+Local Flask
+└── official libtv CLI        网页登录、创建画布、上传原片
 ```
 
 生产站和本地开发环境使用同一套页面、交互和 API 合同，区别只在后端运行边界：
@@ -201,19 +206,20 @@ Browser
 | 凭据 | 当前标签页 BYOK 或项目环境变量 | `config.json` 或环境变量 |
 | 临时文件 | `/tmp`，不承诺持久化 | 可使用本地持久目录 |
 | Obsidian | URI 或 Markdown 下载 | 可直接写入本地 Vault |
+| LibTV | 不可用；明确提示改用模型 API | 官方 CLI 网页登录与画布上传 |
 
 ## 在线使用
 
 1. 打开 [ViralX](https://viralx.metrolabs.mobi)。
-2. 前往[网页设置](https://viralx.metrolabs.mobi/settings.html)，填写本次需要使用的 API23、LibTV 或模型凭据。
+2. 前往[网页设置](https://viralx.metrolabs.mobi/settings.html)，选择模型服务商并填写当前会话的模型 API；关键词搜索时再填写 API23。
 3. 返回首页，输入关键词或粘贴单条视频链接。
 4. 点击“开始拉片”，在页面中查看真实进度与结果。
 
-公开站默认不内置第三方服务 Key。页面可以直接访问，但 API23 搜索、LibTV 拉片和模型调用只有在对应凭据已配置时才会运行。`/api/health` 只报告服务和凭据是否就绪，不会回显密钥，也不会把“网页在线”伪装成“第三方分析成功”。
+公开站默认不内置第三方服务 Key。页面可以直接访问，但线上只运行模型 API 分析；LibTV 卡片明确标记“仅本地可用”。`/api/health` 不回显密钥，也不会把“网页在线”伪装成“第三方分析成功”。
 
 ## 本地 Web 开发
 
-环境要求：Python 3.10+。只有构建或部署 EdgeOne 时才需要 Node.js 18+。
+环境要求：Python 3.10+。使用 LibTV 时还需安装[官方 LibTV CLI](https://www.liblib.tv/cli)；只有构建或部署 EdgeOne 时才需要 Node.js 18+。
 
 ```bash
 python -m pip install -r requirements.txt
@@ -236,7 +242,6 @@ Copy-Item config.json.example config.json
 ```json
 {
   "analysis_mode": "libtv",
-  "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY",
   "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY"
 }
 ```
@@ -247,14 +252,14 @@ Copy-Item config.json.example config.json
 python web_app.py
 ```
 
-浏览器访问 `http://localhost:5001`。本地运行仍然使用同一套 Web 界面。
+浏览器访问 `http://localhost:5001`，进入 `/settings` 点击“连接 LibTV”。ViralX 会启动 `libtv login web` 并打开官方授权页；官方 CLI 将登录状态保存在自己的本机目录，ViralX 只通过 `libtv account info` 判断是否已连接。
 
 ## 服务配置
 
 | 环境变量 / 设置项 | 用途 | 是否必需 |
 | --- | --- | --- |
 | `RAPIDAPI_KEY` / `rapidapi_key` | API23 关键词搜索 | 仅搜索关键词时需要 |
-| `LIBTV_ACCESS_KEY` / `libtv_access_key` | 默认的一键拉片分析 | 使用 LibTV 时需要 |
+| `LIBTV_CLI_BINARY` | 官方 `libtv` 可执行文件路径；通常可自动发现 | 仅自动发现失败时填写 |
 | `MODEL_PROVIDER` / `model_provider` | `openai`、`anthropic`、`gemini`、`deepseek`、`openrouter`、`custom` | 使用模型 API 时需要 |
 | `MODEL_API_KEY` / `model_api_key` | 当前服务商的 API Key | 使用模型 API 时需要 |
 | `MODEL_NAME` / `model_name` | 当前账户可调用的完整模型 ID | 使用模型 API 时需要 |
@@ -275,8 +280,11 @@ python web_app.py
 | `/api/analyze` | POST | NDJSON 流式视频分析 |
 | `/api/generate_variants` | POST | 生成脚本变体的扩展 API |
 | `/api/export-obsidian` | POST | 生成 Obsidian URI 或 Markdown 下载 |
+| `/api/libtv/auth/status` | GET | 本地：读取无凭据值的 CLI 连接状态 |
+| `/api/libtv/auth/start` | POST | 本地：启动官方 `libtv login web` |
+| `/api/libtv/auth/logout` | POST | 本地：断开官方 CLI 登录 |
 
-`/api/settings` 和 `/api/cache/clear` 只属于本地 Flask 开发运行时，不会公开到 EdgeOne。
+`/api/settings`、`/api/cache/clear` 和 `/api/libtv/auth/*` 只属于本地 Flask，不公开到 EdgeOne。
 
 ## 设计与动效
 
@@ -308,7 +316,7 @@ ViralX/
 ├── scripts/build-edgeone.mjs      网页与云函数构建
 ├── tiktok_viral_analyzer.py       API23 搜索与响应归一化
 ├── video_ingest.py                TK Note / yt-dlp 采集路由
-├── libtv_analyzer.py              LibTV 上传、会话和轮询
+├── libtv_analyzer.py              官方 CLI 网页登录、画布创建与视频上传
 ├── ai_analyzer.py                 分析编排
 ├── web_app.py                     本地 Web 开发服务器
 ├── tests/                          网页、API、采集与分析测试
@@ -323,7 +331,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集共 41 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界、浏览器版 Obsidian 导出，以及首页/设置页字段、就绪 CTA、Markdown 净化与响应式主视觉的前端合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集共 44 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV CLI 网页登录边界、本地 Flask、EdgeOne BYOK、公私路由边界、浏览器版 Obsidian 导出，以及首页/设置页字段、就绪 CTA、Markdown 净化与响应式主视觉的前端合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 

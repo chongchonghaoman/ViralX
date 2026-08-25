@@ -1,7 +1,8 @@
-"""LibTV 一键拉片适配器。
+"""Official LibTV CLI integration for local ViralX.
 
-ViralX 通过项目内安装的官方 ``libtv-skill`` 脚本完成上传、创建会话和
-查询进度。本模块只负责编排这些脚本，不改写 LibTV 的用户指令。
+LibTV authentication is owned by the official CLI. ViralX only asks the CLI
+whether it is signed in and starts ``libtv login web`` when the user requests
+it; credential files and tokens are never read by this module.
 """
 
 from __future__ import annotations
@@ -9,338 +10,439 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
-import sys
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Optional
+from urllib.parse import urlparse
 
 
-DEFAULT_IM_BASE = "https://im.liblib.tv"
-DEFAULT_REQUEST = "一键拉片"
+LIBTV_CLI_PAGE = "https://www.liblib.tv/cli"
+LIBTV_CANVAS_URL = "https://www.liblib.tv/canvas?projectId={}"
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
-
-MEDIA_URL_RE = re.compile(
-    r"https?://[^\s\"'<>]+\.(?:png|jpe?g|webp|mp4|mov|webm)(?:\?[^\s\"'<>]*)?",
-    re.IGNORECASE,
-)
-REPORT_MARKERS = (
-    "拉片",
-    "镜头",
-    "分镜",
-    "时间轴",
-    "画面",
-    "景别",
-    "运镜",
-    "旁白",
-    "##",
-    "|---",
-)
-PROGRESS_MARKERS = ("正在", "处理中", "请稍候", "排队中", "生成中", "分析中")
-FINAL_STATES = {"completed", "complete", "done", "finished", "success", "succeeded"}
+_LOGIN_URL_RE = re.compile(r"https://www\.liblib\.tv/[^\s]+callback_url=[^\s]+")
 
 
 class LibTVError(RuntimeError):
-    """LibTV 调用失败，错误内容已移除密钥。"""
+    """A safe, user-facing LibTV integration error."""
 
 
 @dataclass
 class LibTVAnalysisResult:
     analysis: str
     status: str
-    session_id: str
-    project_uuid: str
-    project_url: str
-    result_urls: List[str]
+    session_id: str = ""
+    project_uuid: str = ""
+    project_url: str = ""
+    result_urls: list[str] | None = None
 
-    def to_dict(self) -> Dict[str, object]:
-        return asdict(self)
-
-
-def _content_to_text(content: object) -> str:
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts = []
-        for item in content:
-            if isinstance(item, dict):
-                value = item.get("text") or item.get("content")
-                if value:
-                    parts.append(_content_to_text(value))
-            elif item:
-                parts.append(str(item))
-        return "\n".join(part for part in parts if part).strip()
-    if isinstance(content, dict):
-        value = content.get("text") or content.get("content")
-        if value:
-            return _content_to_text(value)
-        return json.dumps(content, ensure_ascii=False)
-    return str(content).strip() if content is not None else ""
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["result_urls"] = self.result_urls or []
+        return payload
 
 
-def _message_state(message: Dict[str, object]) -> str:
-    candidates = [
-        message.get("status"),
-        message.get("state"),
-        message.get("finishReason"),
-        message.get("finish_reason"),
-    ]
-    metadata = message.get("metadata")
-    if isinstance(metadata, dict):
-        candidates.extend((metadata.get("status"), metadata.get("state")))
-    for value in candidates:
-        if value:
-            return str(value).strip().lower()
+def find_libtv_cli() -> str:
+    """Find the official CLI without assuming the shell has refreshed PATH."""
+    configured = os.environ.get("LIBTV_CLI_BINARY", "").strip()
+    if configured and Path(configured).is_file():
+        return str(Path(configured))
+
+    discovered = shutil.which("libtv") or shutil.which("libtv.exe")
+    if discovered:
+        return discovered
+
+    cli_home = Path.home() / ".libtv"
+    for candidate in (cli_home / "libtv.exe", cli_home / "libtv"):
+        if candidate.is_file():
+            return str(candidate)
     return ""
 
 
-def _extract_result_urls(messages: Iterable[Dict[str, object]]) -> List[str]:
-    urls: List[str] = []
-    for message in messages:
-        content = message.get("content", "")
-        text = _content_to_text(content)
-        urls.extend(MEDIA_URL_RE.findall(text))
-
-        if message.get("role") != "tool" or not isinstance(content, str):
-            continue
-        try:
-            payload = json.loads(content)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        task_result = payload.get("task_result", {}) if isinstance(payload, dict) else {}
-        if not isinstance(task_result, dict):
-            continue
-        for key in ("images", "videos"):
-            for item in task_result.get(key, []) or []:
-                if not isinstance(item, dict):
-                    continue
-                url = item.get("previewPath") or item.get("url")
-                if url:
-                    urls.append(str(url))
-
-    unique: List[str] = []
-    seen = set()
-    for url in urls:
-        if url not in seen:
-            seen.add(url)
-            unique.append(url)
-    return unique
+def _hidden_process_options() -> dict[str, Any]:
+    if os.name != "nt":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = 0
+    return {
+        "startupinfo": startupinfo,
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    }
 
 
-def _extract_report(messages: Iterable[Dict[str, object]]) -> Optional[str]:
-    """返回最近一条看起来已经完成的 assistant 拉片结果。"""
-    candidates: List[str] = []
-    for message in messages:
-        if message.get("role") != "assistant":
-            continue
-        text = _content_to_text(message.get("content", ""))
-        if not text:
-            continue
-
-        state = _message_state(message)
-        is_progress = any(marker in text for marker in PROGRESS_MARKERS)
-        looks_structured = len(text) >= 80 or any(marker in text for marker in REPORT_MARKERS)
-        explicitly_done = state in FINAL_STATES or ("完成" in text and not is_progress)
-        if (looks_structured and not is_progress) or explicitly_done:
-            candidates.append(text)
-
-    return candidates[-1] if candidates else None
+def _safe_message(value: Any) -> str:
+    """Keep CLI diagnostics useful without ever echoing token-shaped values."""
+    text = str(value or "").strip()
+    text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(authorization|access[_ -]?token|refresh[_ -]?token|api[_ -]?key)\s*[:=]\s*\S+",
+        r"\1=[redacted]",
+        text,
+    )
+    return text[:600]
 
 
-def _latest_assistant_text(messages: Iterable[Dict[str, object]]) -> str:
-    latest = ""
-    for message in messages:
-        if message.get("role") == "assistant":
-            text = _content_to_text(message.get("content", ""))
-            if text:
-                latest = text
-    return latest
+def _default_runner(cli_path: str, args: list[str], timeout: float) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [cli_path, *args],
+        cwd=str(Path(__file__).parent),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+        **_hidden_process_options(),
+    )
 
 
-class LibTVAnalyzer:
-    """使用官方 libtv-skill 脚本执行一次完整的视频拉片。"""
-
-    def __init__(
-        self,
-        access_key: str = "",
-        im_base: str = "",
-        poll_interval: float = 8,
-        timeout: float = 180,
-        skill_dir: Optional[Path] = None,
-        runner: Optional[Callable[[str, List[str], float], Dict[str, object]]] = None,
-        sleeper: Callable[[float], None] = time.sleep,
-        clock: Callable[[], float] = time.monotonic,
-    ):
-        self.access_key = access_key or os.environ.get("LIBTV_ACCESS_KEY", "")
-        self.im_base = (
-            im_base
-            or os.environ.get("OPENAPI_IM_BASE")
-            or os.environ.get("IM_BASE_URL")
-            or DEFAULT_IM_BASE
+def libtv_authenticated(cli_path: str = "") -> bool:
+    """Ask the CLI for account state; do not inspect its credential storage."""
+    binary = cli_path or find_libtv_cli()
+    if not binary:
+        return False
+    try:
+        completed = subprocess.run(
+            [binary, "account", "info"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=8,
+            check=False,
+            **_hidden_process_options(),
         )
-        self.poll_interval = max(float(poll_interval), 0)
-        self.timeout = max(float(timeout), 1)
-        self.skill_dir = skill_dir or (
-            Path(__file__).parent / ".agents" / "skills" / "libtv-skill"
-        )
-        configured_scripts_dir = os.environ.get("VIRALX_LIBTV_SCRIPTS_DIR", "")
-        self.scripts_dir = (
-            self.skill_dir / "scripts"
-            if skill_dir is not None
-            else Path(configured_scripts_dir)
-            if configured_scripts_dir
-            else self.skill_dir / "scripts"
-        )
-        self._runner = runner
-        self._sleep = sleeper
-        self._clock = clock
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
 
-    def _redact(self, value: str) -> str:
-        if self.access_key:
-            return value.replace(self.access_key, "[REDACTED]")
-        return value
 
-    def _run_script(
-        self, script_name: str, args: List[str], timeout: float
-    ) -> Dict[str, object]:
-        if self._runner:
-            return self._runner(script_name, args, timeout)
+class LibTVAuthManager:
+    """Own the local CLI web-login process and expose a token-free state model."""
 
-        script_path = self.scripts_dir / script_name
-        if not script_path.exists():
-            raise LibTVError(f"缺少官方 LibTV 脚本：{script_path}")
+    def __init__(self, cwd: Path | str | None = None, cli_path: str = ""):
+        self.cwd = Path(cwd or Path(__file__).parent)
+        self.cli_path = cli_path or find_libtv_cli()
+        self._process: Optional[subprocess.Popen] = None
+        self._login_url = ""
+        self._error = ""
+        self._lock = threading.RLock()
+        self._condition = threading.Condition(self._lock)
+        self._auth_cache = (0.0, False)
 
-        env = os.environ.copy()
-        env["LIBTV_ACCESS_KEY"] = self.access_key
-        if self.im_base:
-            env["OPENAPI_IM_BASE"] = self.im_base
-
+    def _version(self) -> str:
+        if not self.cli_path:
+            return ""
         try:
             completed = subprocess.run(
-                [sys.executable, str(script_path), *args],
-                cwd=str(Path(__file__).parent),
-                env=env,
+                [self.cli_path, "--version"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=timeout,
+                timeout=5,
                 check=False,
+                **_hidden_process_options(),
+            )
+            return _safe_message(completed.stdout or completed.stderr).splitlines()[0]
+        except (OSError, subprocess.SubprocessError, IndexError):
+            return ""
+
+    def _is_authenticated(self, force: bool = False) -> bool:
+        now = time.monotonic()
+        checked_at, cached = self._auth_cache
+        if not force and now - checked_at < 3:
+            return cached
+        connected = libtv_authenticated(self.cli_path)
+        self._auth_cache = (now, connected)
+        return connected
+
+    def status(self, force: bool = False) -> dict[str, Any]:
+        with self._lock:
+            if not self.cli_path:
+                return {
+                    "state": "unavailable",
+                    "connected": False,
+                    "cli_installed": False,
+                    "cli_version": "",
+                    "login_url": "",
+                    "message": "未找到官方 LibTV CLI，请先安装后重新连接。",
+                    "install_url": LIBTV_CLI_PAGE,
+                }
+
+            connected = self._is_authenticated(force=force)
+            if connected:
+                self._error = ""
+                return {
+                    "state": "connected",
+                    "connected": True,
+                    "cli_installed": True,
+                    "cli_version": self._version(),
+                    "login_url": "",
+                    "message": "已通过官方 LibTV CLI 登录，本机拉片已就绪。",
+                    "install_url": LIBTV_CLI_PAGE,
+                }
+
+            running = self._process is not None and self._process.poll() is None
+            if running:
+                state = "awaiting_browser" if self._login_url else "starting"
+                return {
+                    "state": state,
+                    "connected": False,
+                    "cli_installed": True,
+                    "cli_version": self._version(),
+                    "login_url": self._login_url,
+                    "message": (
+                        "请在 LibTV 官方网页完成授权，完成后会自动同步到本机。"
+                        if self._login_url
+                        else "正在启动 LibTV 网页授权…"
+                    ),
+                    "install_url": LIBTV_CLI_PAGE,
+                }
+
+            if self._error:
+                state, message = "error", self._error
+            else:
+                state, message = "disconnected", "尚未连接 LibTV；连接时会打开官方授权页。"
+            return {
+                "state": state,
+                "connected": False,
+                "cli_installed": True,
+                "cli_version": self._version(),
+                "login_url": "",
+                "message": message,
+                "install_url": LIBTV_CLI_PAGE,
+            }
+
+    def _watch_login(self, process: subprocess.Popen) -> None:
+        output: list[str] = []
+        try:
+            if process.stdout:
+                for line in process.stdout:
+                    output.append(line)
+                    match = _LOGIN_URL_RE.search(line)
+                    if match:
+                        candidate = match.group(0).rstrip(".,)")
+                        parsed = urlparse(candidate)
+                        if parsed.scheme == "https" and parsed.hostname == "www.liblib.tv":
+                            with self._condition:
+                                self._login_url = candidate
+                                self._condition.notify_all()
+            return_code = process.wait()
+        except Exception as exc:  # pragma: no cover - defensive process boundary
+            return_code = -1
+            output.append(str(exc))
+
+        with self._condition:
+            self._auth_cache = (0.0, False)
+            if return_code != 0 and not self._is_authenticated(force=True):
+                diagnostic = _safe_message(" ".join(output))
+                self._error = diagnostic or "LibTV 网页授权未完成，请重试。"
+            self._process = None
+            self._login_url = ""
+            self._condition.notify_all()
+
+    def start_login(self) -> dict[str, Any]:
+        with self._condition:
+            if not self.cli_path:
+                return self.status(force=True)
+            if self._is_authenticated(force=True):
+                return self.status(force=True)
+            if self._process is None or self._process.poll() is not None:
+                self._error = ""
+                self._login_url = ""
+                try:
+                    self._process = subprocess.Popen(
+                        [self.cli_path, "login", "web"],
+                        cwd=str(self.cwd),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        bufsize=1,
+                        **_hidden_process_options(),
+                    )
+                except OSError as exc:
+                    self._error = f"无法启动 LibTV CLI：{_safe_message(exc)}"
+                    return self.status(force=True)
+                threading.Thread(
+                    target=self._watch_login,
+                    args=(self._process,),
+                    name="libtv-web-login",
+                    daemon=True,
+                ).start()
+
+            deadline = time.monotonic() + 4
+            while not self._login_url and self._process and self._process.poll() is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._condition.wait(timeout=min(remaining, 0.25))
+            return self.status(force=False)
+
+    def logout(self) -> dict[str, Any]:
+        with self._lock:
+            if self._process is not None and self._process.poll() is None:
+                self._process.terminate()
+            self._process = None
+            self._login_url = ""
+            self._error = ""
+            if self.cli_path:
+                try:
+                    subprocess.run(
+                        [self.cli_path, "logout"],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=8,
+                        check=False,
+                        **_hidden_process_options(),
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    pass
+            self._auth_cache = (0.0, False)
+            return self.status(force=True)
+
+
+def _find_project_uuid(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("uuid", "projectUuid", "project_uuid", "projectId", "project_id", "id"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        for item in value.values():
+            found = _find_project_uuid(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_project_uuid(item)
+            if found:
+                return found
+    elif isinstance(value, str):
+        text = value.strip()
+        patterns = (
+            r"[?&]projectId=([A-Za-z0-9_-]{6,})",
+            r"(?i)(?:projectUuid|project_uuid|projectId|project_id|uuid)\s*['\"]?\s*[:=：]\s*['\"]?([A-Za-z0-9_-]{6,})",
+            r"(?i)(?:项目|画布)(?:\s*(?:UUID|ID|标识))?\s*[:=：]\s*([A-Za-z0-9_-]{6,})",
+            r"\b([0-9a-fA-F]{8}-[0-9a-fA-F-]{27,})\b",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+    return ""
+
+
+class LibTVAnalyzer:
+    """Create a LibTV canvas and upload the collected source video via CLI."""
+
+    def __init__(
+        self,
+        cli_path: str = "",
+        runner: Optional[Callable[[list[str], float], Any]] = None,
+        auth_checker: Optional[Callable[[], bool]] = None,
+        cwd: Path | str | None = None,
+        timeout: float = 180,
+    ):
+        self.cli_path = cli_path or find_libtv_cli()
+        self.cwd = Path(cwd or Path(__file__).parent)
+        self.timeout = max(15.0, float(timeout or 180))
+        self.runner = runner
+        self.auth_checker = auth_checker or (lambda: libtv_authenticated(self.cli_path))
+
+    @property
+    def available(self) -> bool:
+        return bool(self.cli_path)
+
+    def is_authenticated(self) -> bool:
+        return bool(self.available and self.auth_checker())
+
+    def _run_json(self, args: list[str], timeout: float) -> dict[str, Any]:
+        try:
+            result = (
+                self.runner(args, timeout)
+                if self.runner
+                else _default_runner(self.cli_path, args, timeout)
             )
         except subprocess.TimeoutExpired as exc:
-            raise LibTVError(f"LibTV {script_name} 调用超时") from exc
+            raise LibTVError("LibTV CLI 操作超时，请稍后重试。") from exc
+        except OSError as exc:
+            raise LibTVError(f"无法启动 LibTV CLI：{_safe_message(exc)}") from exc
 
-        if completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout or "未知错误").strip()
-            raise LibTVError(self._redact(f"LibTV {script_name} 失败：{detail}"))
+        if isinstance(result, dict):
+            return result
 
+        return_code = getattr(result, "returncode", 0)
+        stdout = getattr(result, "stdout", "") or ""
+        stderr = getattr(result, "stderr", "") or ""
+        if return_code != 0:
+            detail = _safe_message(stderr or stdout)
+            lowered = detail.lower()
+            if any(word in lowered for word in ("login", "unauth", "401", "credential")):
+                raise LibTVError("LibTV 登录已失效，请在设置页重新连接。")
+            raise LibTVError(detail or "LibTV CLI 执行失败。")
         try:
-            return json.loads(completed.stdout)
-        except json.JSONDecodeError as exc:
-            preview = self._redact(completed.stdout[:300])
-            raise LibTVError(f"LibTV {script_name} 返回了无效 JSON：{preview}") from exc
+            payload = json.loads(stdout or "{}")
+        except json.JSONDecodeError:
+            payload = {"raw": stdout}
+        if isinstance(payload, dict):
+            return payload
+        return {"data": payload, "raw": stdout}
 
-    @staticmethod
-    def _message_key(message: Dict[str, object]) -> str:
-        if message.get("id"):
-            return f"id:{message['id']}"
-        return json.dumps(message, ensure_ascii=False, sort_keys=True, default=str)
+    def analyze(self, video_file_path: str, user_request: str = "逐帧拉片") -> LibTVAnalysisResult:
+        if not self.available:
+            raise LibTVError("未找到官方 LibTV CLI，请先安装并在设置页连接。")
+        if not self.is_authenticated():
+            raise LibTVError("尚未登录 LibTV，请在设置页点击“连接 LibTV”完成网页授权。")
 
-    @staticmethod
-    def _max_seq(messages: Iterable[Dict[str, object]], current: int) -> int:
-        maximum = current
-        for message in messages:
-            try:
-                maximum = max(maximum, int(message.get("seq", 0) or 0))
-            except (TypeError, ValueError):
-                continue
-        return maximum
-
-    def analyze(
-        self, video_file_path: str, user_request: str = DEFAULT_REQUEST
-    ) -> LibTVAnalysisResult:
-        if not self.access_key:
-            raise LibTVError("未配置 LIBTV_ACCESS_KEY，请先在设置页填写 LibTV Access Key")
-
-        video_path = Path(video_file_path)
+        video_path = Path(video_file_path).resolve()
         if not video_path.is_file():
-            raise LibTVError(f"待拉片视频不存在：{video_path}")
+            raise LibTVError("待上传的视频文件不存在。")
         if video_path.stat().st_size > MAX_UPLOAD_BYTES:
-            raise LibTVError("LibTV 仅支持 200MB 以内的视频，请先压缩后重试")
+            raise LibTVError("视频超过 LibTV CLI 当前 200 MB 上传限制。")
 
-        upload = self._run_script("upload_file.py", [str(video_path)], timeout=150)
-        oss_url = str(upload.get("url", "")).strip()
-        if not oss_url:
-            raise LibTVError("LibTV 上传成功但未返回视频地址")
+        project_name = f"ViralX 拉片 · {video_path.stem[:48]}"
+        created = self._run_json(
+            ["project", "create", project_name, "--description", "由 ViralX 采集并交给 LibTV 继续逐帧拉片"],
+            min(self.timeout, 45),
+        )
+        project_uuid = _find_project_uuid(created)
+        if not project_uuid:
+            raise LibTVError("LibTV 已响应，但没有返回画布项目 ID。")
 
-        request_text = (user_request or DEFAULT_REQUEST).strip()
-        message = f"{request_text}\n参考视频：{oss_url}"
-        session = self._run_script("create_session.py", [message], timeout=45)
-        session_id = str(session.get("sessionId", "")).strip()
-        project_uuid = str(session.get("projectUuid", "")).strip()
-        project_url = str(session.get("projectUrl", "")).strip()
-        if not session_id:
-            raise LibTVError("LibTV 未返回 sessionId")
-
-        started_at = self._clock()
-        after_seq = 0
-        consecutive_errors = 0
-        seen = set()
-        messages: List[Dict[str, object]] = []
-
-        while self._clock() - started_at < self.timeout:
-            try:
-                args = [session_id, "--after-seq", str(after_seq)]
-                if project_uuid:
-                    args.extend(("--project-id", project_uuid))
-                payload = self._run_script("query_session.py", args, timeout=45)
-                consecutive_errors = 0
-            except LibTVError:
-                consecutive_errors += 1
-                if consecutive_errors >= 3:
-                    raise
-                self._sleep(min(self.poll_interval, 1))
-                continue
-
-            batch = payload.get("messages", [])
-            if not isinstance(batch, list):
-                batch = []
-            for item in batch:
-                if not isinstance(item, dict):
-                    continue
-                key = self._message_key(item)
-                if key not in seen:
-                    seen.add(key)
-                    messages.append(item)
-            after_seq = self._max_seq(batch, after_seq)
-
-            result_urls = _extract_result_urls(messages)
-            report = _extract_report(messages)
-            if report or result_urls:
-                analysis = report or "LibTV 已完成拉片，结果见下方链接。"
-                if result_urls and not all(url in analysis for url in result_urls):
-                    analysis += "\n\n## LibTV 结果\n" + "\n".join(
-                        f"- {url}" for url in result_urls
-                    )
-                return LibTVAnalysisResult(
-                    analysis=analysis,
-                    status="completed",
-                    session_id=session_id,
-                    project_uuid=project_uuid,
-                    project_url=project_url,
-                    result_urls=result_urls,
-                )
-
-            self._sleep(self.poll_interval)
-
-        latest = _latest_assistant_text(messages)
-        timeout_text = latest or "LibTV 拉片仍在处理中，可稍后从项目画布继续查看。"
+        self._run_json(
+            [
+                "upload",
+                "ViralX 原视频",
+                "--resource",
+                str(video_path),
+                "--type",
+                "video",
+                "--project",
+                project_uuid,
+                "--x",
+                "0",
+                "--y",
+                "0",
+            ],
+            self.timeout,
+        )
+        project_url = LIBTV_CANVAS_URL.format(project_uuid)
+        analysis = (
+            f"视频已上传到 LibTV 画布。请打开画布继续“{user_request}”；"
+            "ViralX 不会读取或回显你的 LibTV 登录凭据。"
+        )
         return LibTVAnalysisResult(
-            analysis=timeout_text,
-            status="timeout",
-            session_id=session_id,
+            analysis=analysis,
+            status="uploaded",
             project_uuid=project_uuid,
             project_url=project_url,
-            result_urls=_extract_result_urls(messages),
+            result_urls=[project_url],
         )

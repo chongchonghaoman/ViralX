@@ -11,9 +11,7 @@
   };
 
   const DEFAULTS = {
-    rapidapi_key: "", analysis_mode: "libtv", libtv_access_key: "",
-    libtv_im_base: "https://im.liblib.tv", libtv_poll_interval: 8,
-    libtv_timeout: 100, libtv_concurrency: 1, tk_note_asr_backend: "auto",
+    rapidapi_key: "", analysis_mode: "libtv", libtv_concurrency: 1, tk_note_asr_backend: "auto",
     tk_note_language: "auto", tk_note_cookies_from_browser: "", tk_note_proxy: "",
     tk_note_timeout: 90, video_cache_dir: "./video_cache", model_provider: "openai",
     model_protocol: "openai", model_api_key: "", model_base_url: "https://api.openai.com/v1",
@@ -28,6 +26,7 @@
   let runtimeMode = "local";
   let activeProvider = "openai";
   let providerDrafts = {};
+  let libtvPollTimer = 0;
   const byId = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const apiFetch = (url, options) => window.ViralXCloudConfig
@@ -145,11 +144,6 @@
   function collectSettings() {
     settings.rapidapi_key = byId("rapidapi_key").value.trim();
     settings.analysis_mode = byId("analysis_mode").value;
-    settings.libtv_access_key = byId("libtv_access_key").value.trim();
-    settings.libtv_im_base = byId("libtv_im_base").value.trim() || DEFAULTS.libtv_im_base;
-    settings.libtv_poll_interval = Number.parseInt(byId("libtv_poll_interval").value, 10) || DEFAULTS.libtv_poll_interval;
-    settings.libtv_timeout = Number.parseInt(byId("libtv_timeout").value, 10) || DEFAULTS.libtv_timeout;
-    settings.libtv_concurrency = Number.parseInt(byId("libtv_concurrency").value, 10) || DEFAULTS.libtv_concurrency;
     settings.tk_note_asr_backend = byId("tk_note_asr_backend").value || DEFAULTS.tk_note_asr_backend;
     settings.tk_note_language = byId("tk_note_language").value.trim() || DEFAULTS.tk_note_language;
     settings.tk_note_cookies_from_browser = byId("tk_note_cookies_from_browser").value;
@@ -251,7 +245,7 @@
     const note = byId("runtime-note");
     if (runtimeMode !== "edgeone") { note.hidden = true; return; }
     const configured = health.configured || {};
-    const provider = String(health.analysis_provider || settings.model_provider || settings.analysis_mode || "libtv");
+    const provider = String(health.analysis_provider || settings.model_provider || "openai");
     const providerLabel = PROVIDERS[provider]?.name || (provider === "libtv" ? "LibTV" : provider);
     const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
     note.replaceChildren();
@@ -259,7 +253,7 @@
     const title = document.createElement("strong");
     title.textContent = "当前标签页的安全配置";
     const description = document.createElement("p");
-    description.textContent = "密钥只保存在浏览器 sessionStorage，并通过 HTTPS 发送给 ViralX 云函数；关闭标签页后自动清除。不要在共享设备上填写。";
+    description.textContent = "模型与 API23 密钥只保存在浏览器 sessionStorage，并通过 HTTPS 发送给 ViralX 云函数；LibTV 网页授权只在本机版可用。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
@@ -279,14 +273,115 @@
       field.hidden = true;
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
-    document.querySelector(".settings-hero > p:last-child").textContent = "网页端使用当前标签页的临时凭据调用 EdgeOne 云函数；本地目录、浏览器 Cookie 与持久缓存仍由本地 Flask 管理。";
+    const libtvOption = byId("analysis_mode").querySelector('option[value="libtv"]');
+    libtvOption.disabled = true;
+    libtvOption.textContent = "LibTV 画布拉片 · 需本地运行";
+    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 网页端使用当前标签页的模型 API 与 API23 临时凭据；LibTV 网页授权、本地目录和 Obsidian 文件写入由本地 Flask 管理。";
     document.querySelector(".settings-actions > p").textContent = "保存到当前标签页；关闭后自动清除。";
     byId("save-btn").textContent = "保存到当前会话";
     byId("reset-btn").textContent = "恢复会话值";
     byId("clear-session-btn").hidden = false;
-    byId("libtv_timeout").max = "100";
     byId("tk_note_timeout").min = "30";
     byId("tk_note_timeout").max = "90";
+  }
+
+  function renderLibTVState(state = {}) {
+    const panel = byId("libtv-connection");
+    const connectionState = String(state.state || "disconnected");
+    const labels = {
+      connected: "已连接",
+      awaiting_browser: "等待网页授权",
+      starting: "正在启动",
+      unavailable: "需要安装 CLI",
+      error: "连接失败",
+      local_only: "仅本地可用",
+      disconnected: "尚未连接",
+    };
+    panel.dataset.connectionState = connectionState;
+    byId("libtv-auth-label").textContent = labels[connectionState] || "尚未连接";
+    byId("libtv-auth-message").textContent = state.message || "点击连接后，将打开 LibTV 官方授权页。";
+    byId("libtv-summary-state").textContent = labels[connectionState] || "尚未连接";
+
+    const busy = ["starting", "awaiting_browser"].includes(connectionState);
+    const connected = connectionState === "connected";
+    const unavailable = connectionState === "unavailable";
+    const localOnly = connectionState === "local_only";
+    const connect = byId("libtv-connect-btn");
+    connect.hidden = connected || unavailable;
+    connect.disabled = busy || localOnly;
+    connect.toggleAttribute("aria-busy", busy);
+    connect.textContent = busy ? "等待授权" : (connectionState === "error" ? "重新连接" : "连接 LibTV");
+    byId("libtv-refresh-btn").hidden = localOnly;
+    byId("libtv-disconnect-btn").hidden = !connected;
+    byId("libtv-install-link").hidden = !unavailable && !localOnly;
+  }
+
+  function stopLibTVPolling() {
+    if (libtvPollTimer) window.clearTimeout(libtvPollTimer);
+    libtvPollTimer = 0;
+  }
+
+  async function refreshLibTVState({ force = false, poll = false } = {}) {
+    if (runtimeMode === "edgeone") {
+      renderLibTVState({
+        state: "local_only",
+        message: "EdgeOne 无法访问你电脑上的 LibTV CLI 登录态；线上分析请选择模型 API。",
+      });
+      return;
+    }
+    try {
+      const response = await window.fetch(`/api/libtv/auth/status${force ? "?refresh=1" : ""}`, { cache: "no-store" });
+      const state = await response.json();
+      if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
+      renderLibTVState(state);
+      if (poll && ["starting", "awaiting_browser"].includes(state.state)) {
+        stopLibTVPolling();
+        libtvPollTimer = window.setTimeout(() => refreshLibTVState({ force: true, poll: true }), 1500);
+      } else {
+        stopLibTVPolling();
+      }
+    } catch (error) {
+      stopLibTVPolling();
+      renderLibTVState({ state: "error", message: `无法读取 LibTV 连接状态：${error.message}` });
+    }
+  }
+
+  async function startLibTVLogin() {
+    if (runtimeMode === "edgeone") return;
+    const popup = window.open("about:blank", "ViralXLibTVLogin");
+    renderLibTVState({ state: "starting", message: "正在向本机 LibTV CLI 请求官方授权地址…" });
+    try {
+      const response = await window.fetch("/api/libtv/auth/start", { method: "POST" });
+      const state = await response.json();
+      if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
+      renderLibTVState(state);
+      if (state.login_url) {
+        if (popup) popup.location.replace(state.login_url);
+        else window.open(state.login_url, "_blank", "noopener,noreferrer");
+      } else if (popup) {
+        popup.close();
+      }
+      if (["starting", "awaiting_browser"].includes(state.state)) {
+        stopLibTVPolling();
+        libtvPollTimer = window.setTimeout(() => refreshLibTVState({ force: true, poll: true }), 1500);
+      }
+    } catch (error) {
+      if (popup) popup.close();
+      renderLibTVState({ state: "error", message: `LibTV 没有连接：${error.message}` });
+    }
+  }
+
+  async function disconnectLibTV() {
+    stopLibTVPolling();
+    try {
+      const response = await window.fetch("/api/libtv/auth/logout", { method: "POST" });
+      const state = await response.json();
+      if (!response.ok) throw new Error(state.message || `HTTP ${response.status}`);
+      renderLibTVState(state);
+      showStatus("已断开本机 LibTV CLI 登录。", "success");
+    } catch (error) {
+      renderLibTVState({ state: "error", message: `无法断开 LibTV：${error.message}` });
+    }
   }
 
   async function loadLocalSettings() {
@@ -299,8 +394,10 @@
   async function loadCloudSettings(health) {
     configureCloudPage();
     settings = { ...DEFAULTS, ...migrateLegacySettings(window.ViralXCloudConfig?.read() || {}) };
+    if (settings.analysis_mode === "libtv") settings.analysis_mode = "model";
     applySettings();
     updateRuntimeNote(health);
+    renderLibTVState({ state: "local_only", message: "EdgeOne 无法访问你电脑上的 LibTV CLI 登录态；线上分析请选择模型 API。" });
   }
 
   async function loadSettings() {
@@ -310,7 +407,10 @@
       const health = await healthResponse.json();
       runtimeMode = health.runtime || "local";
       if (runtimeMode === "edgeone") await loadCloudSettings(health);
-      else await loadLocalSettings();
+      else {
+        await loadLocalSettings();
+        await refreshLibTVState();
+      }
     } catch (error) {
       showStatus(`配置没有载入：${error.message}。确认分析服务可访问后重试。`, "error");
     }
@@ -364,7 +464,6 @@
       clearFieldErrors();
       collectSettings();
       if (runtimeMode === "edgeone") {
-        settings.libtv_timeout = Math.min(Math.max(settings.libtv_timeout, 30), 100);
         settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 30), 90);
         window.ViralXCloudConfig.write(settings);
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
@@ -420,6 +519,9 @@
     byId("settings-form").addEventListener("submit", (event) => { event.preventDefault(); saveSettings(); });
     byId("reset-btn").addEventListener("click", loadSettings);
     byId("clear-session-btn").addEventListener("click", clearCloudSession);
+    byId("libtv-connect-btn").addEventListener("click", startLibTVLogin);
+    byId("libtv-refresh-btn").addEventListener("click", () => refreshLibTVState({ force: true }));
+    byId("libtv-disconnect-btn").addEventListener("click", disconnectLibTV);
     byId("new-keyword").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { event.preventDefault(); addKeyword(event.currentTarget.value); }
     });

@@ -6,21 +6,21 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 
 1. 打开 [viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。
 2. 在[网页设置](https://viralx.metrolabs.mobi/settings.html)中配置本次会话需要的凭据。
-3. 粘贴 TikTok / 抖音视频链接，或输入一个 TikTok 搜索主题。
-4. 点击“开始拉片”，等待 TK Note 采集证据并由 LibTV 返回报告。
+3. 选择并配置一个模型 API；关键词搜索时再填写 API23 Key。
+4. 粘贴 TikTok / 抖音视频链接，或输入一个 TikTok 搜索主题，然后开始分析。
 5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
 
-公开网站不会内置第三方 Key。会话级 Key 只写入当前标签页的 `sessionStorage`，关闭标签页后清除。
+公开网站不会内置第三方 Key。会话级模型 / API23 Key 只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只在本地 Flask 中可用。
 
 ## API 依赖边界
 
 | 输入方式 | 调用链 | 必要凭据 |
 | --- | --- | --- |
-| TikTok / 抖音视频链接 | TK Note → LibTV | `LIBTV_ACCESS_KEY` |
-| TikTok 搜索主题 | API23 → TK Note → LibTV | `RAPIDAPI_KEY` + `LIBTV_ACCESS_KEY` |
+| 本地 TikTok / 抖音视频链接 | TK Note → 官方 LibTV CLI → 画布 | 本机 LibTV 网页登录 |
+| 本地 TikTok 搜索主题 | API23 → TK Note → LibTV CLI | `RAPIDAPI_KEY` + 本机 LibTV 网页登录 |
 | 视频链接 + 模型 API | TK Note → 已选模型服务商 | `MODEL_API_KEY` |
 
-RapidAPI 只承载 API23 关键词发现，不解析已知视频链接。MiniMax 不属于默认链路，仅在显式调用旧版 `/api/generate_variants` 扩展时可选使用。
+RapidAPI 只承载 API23 关键词发现，不解析已知视频链接。LibTV 不再使用 Access Key；EdgeOne 无法读取电脑上的 CLI 登录态，因此线上必须选择模型 API。MiniMax 不属于默认链路。
 
 ## 本地 Web 运行
 
@@ -38,19 +38,18 @@ Copy-Item config.json.example config.json
 python web_app.py
 ```
 
-浏览器打开 `http://localhost:5001`。默认分析模式是 `libtv`。
+浏览器打开 `http://localhost:5001`。使用 LibTV 前先安装[官方 CLI](https://www.liblib.tv/cli)，再进入 `/settings` 点击“连接 LibTV”。ViralX 会启动 `libtv login web`，并等待你在官方网页完成授权。
 
 最小配置：
 
 ```json
 {
   "analysis_mode": "libtv",
-  "libtv_access_key": "YOUR_LIBTV_ACCESS_KEY",
   "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY"
 }
 ```
 
-如果只分析视频直链，可以不配置 `rapidapi_key`。
+如果只分析视频直链，可以不配置 `rapidapi_key`。LibTV token 由官方 CLI 保存，ViralX 不读取或写入凭据文件。
 
 ## 使用常用模型或自定义 API
 
@@ -110,7 +109,7 @@ $viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
 | `/api/export-obsidian` | POST | 生成 Obsidian URI 或 Markdown 下载 |
 | `/api/generate_variants` | POST | 可选的旧版脚本变体扩展 |
 
-本地 Flask 另外提供 `/api/settings` 和 `/api/cache/clear`；生产 EdgeOne 不公开这两个本地管理接口。
+本地 Flask 另外提供 `/api/settings`、`/api/cache/clear` 和 `/api/libtv/auth/*`；生产 EdgeOne 不公开这些本地管理接口。
 
 ## 测试与构建
 

@@ -15,6 +15,7 @@ import threading
 import queue
 from tiktok_viral_analyzer import TikTokViralAnalyzer
 from ai_analyzer import AIAnalyzer
+from libtv_analyzer import LIBTV_CLI_PAGE, LibTVAuthManager
 from model_providers import model_is_ready, normalize_model_config
 
 app = Flask(__name__)
@@ -40,10 +41,6 @@ MAX_ANALYZE_VIDEOS = max(
 DEFAULT_CONFIG = {
     'rapidapi_key': '',
     'analysis_mode': 'libtv',
-    'libtv_access_key': '',
-    'libtv_im_base': 'https://im.liblib.tv',
-    'libtv_poll_interval': 8,
-    'libtv_timeout': 180,
     'libtv_concurrency': 2,
     'tk_note_asr_backend': 'auto',
     'tk_note_language': 'auto',
@@ -73,15 +70,12 @@ def load_config():
     loaded = {}
     if CONFIG_PATH.exists():
         loaded = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+        loaded = {key: value for key, value in loaded.items() if key in DEFAULT_CONFIG}
     merged = {**DEFAULT_CONFIG, **loaded}
 
     env_map = {
         'RAPIDAPI_KEY': ('rapidapi_key', str),
         'ANALYSIS_MODE': ('analysis_mode', str),
-        'LIBTV_ACCESS_KEY': ('libtv_access_key', str),
-        'OPENAPI_IM_BASE': ('libtv_im_base', str),
-        'LIBTV_POLL_INTERVAL': ('libtv_poll_interval', float),
-        'LIBTV_TIMEOUT': ('libtv_timeout', float),
         'LIBTV_CONCURRENCY': ('libtv_concurrency', int),
         'TK_NOTE_ASR_BACKEND': ('tk_note_asr_backend', str),
         'TK_NOTE_LANGUAGE': ('tk_note_language', str),
@@ -122,7 +116,6 @@ def load_config():
     if IS_EDGE_RUNTIME:
         merged['output_dir'] = os.environ.get('VIRALX_OUTPUT_DIR', '/tmp/viralx/data')
         merged['video_cache_dir'] = os.environ.get('VIRALX_VIDEO_CACHE_DIR', '/tmp/viralx/video_cache')
-        merged['libtv_timeout'] = min(float(merged.get('libtv_timeout', 100)), 100)
         merged['tk_note_timeout'] = min(float(merged.get('tk_note_timeout', 90)), 90)
     return normalize_model_config(merged, allow_private_custom=not IS_EDGE_RUNTIME)
 
@@ -130,7 +123,8 @@ def save_config(data):
     """保存配置到 config.json"""
     if IS_EDGE_RUNTIME:
         raise RuntimeError('云端设置由 EdgeOne 环境变量管理，不能从网页写入')
-    merged = {**DEFAULT_CONFIG, **(data or {})}
+    clean_data = {key: value for key, value in (data or {}).items() if key in DEFAULT_CONFIG}
+    merged = {**DEFAULT_CONFIG, **clean_data}
     CONFIG_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding='utf-8')
 
 
@@ -164,6 +158,7 @@ def direct_video_data(video_url):
 
 # 全局配置
 config = load_config()
+libtv_auth = LibTVAuthManager(Path(__file__).parent)
 
 @app.route('/')
 def index():
@@ -191,6 +186,39 @@ def save_settings():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/api/libtv/auth/status', methods=['GET'])
+def libtv_auth_status():
+    """Return official CLI login state without reading or exposing credentials."""
+    if IS_EDGE_RUNTIME:
+        return jsonify({
+            'state': 'local_only',
+            'connected': False,
+            'cli_installed': False,
+            'login_url': '',
+            'message': 'LibTV 网页授权只适用于本地 ViralX；云端请选择模型 API。',
+            'install_url': LIBTV_CLI_PAGE,
+        }), 400
+    return jsonify(libtv_auth.status(force=request.args.get('refresh') == '1'))
+
+
+@app.route('/api/libtv/auth/start', methods=['POST'])
+def libtv_auth_start():
+    """Start ``libtv login web`` and return only the official authorization URL."""
+    if IS_EDGE_RUNTIME:
+        return libtv_auth_status()
+    state = libtv_auth.start_login()
+    status_code = 200 if state.get('state') != 'unavailable' else 503
+    return jsonify(state), status_code
+
+
+@app.route('/api/libtv/auth/logout', methods=['POST'])
+def libtv_auth_logout():
+    """Disconnect the local official CLI account."""
+    if IS_EDGE_RUNTIME:
+        return libtv_auth_status()
+    return jsonify(libtv_auth.logout())
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """返回不含密钥的运行状态，供本地与 EdgeOne 前端探活。"""
@@ -198,8 +226,18 @@ def health():
     runtime = 'edgeone' if IS_EDGE_RUNTIME else 'local'
     mode = str(current_config.get('analysis_mode', 'libtv')).lower()
     provider = current_config.get('model_provider', 'openai') if mode == 'model' else 'libtv'
+    libtv_state = (
+        {
+            'state': 'local_only',
+            'connected': False,
+            'cli_installed': False,
+            'message': 'LibTV CLI 网页授权仅适用于本地运行。',
+        }
+        if IS_EDGE_RUNTIME
+        else libtv_auth.status()
+    )
     readiness = {
-        'libtv': bool(current_config.get('libtv_access_key')),
+        'libtv': bool(libtv_state.get('connected')),
         'model': model_is_ready(current_config),
     }
     return jsonify({
@@ -211,6 +249,13 @@ def health():
         'configured': {
             **readiness,
             'keyword_search': bool(current_config.get('rapidapi_key')),
+        },
+        'libtv': {
+            'auth': 'web',
+            'scope': 'local',
+            'connection_state': libtv_state.get('state', 'disconnected'),
+            'connected': bool(libtv_state.get('connected')),
+            'cli_installed': bool(libtv_state.get('cli_installed')),
         },
         'limits': {
             'max_videos': MAX_ANALYZE_VIDEOS,
@@ -278,10 +323,6 @@ def analyze():
                 model_api_key=current_config.get('model_api_key', ''),
                 model_base_url=current_config.get('model_base_url', ''),
                 model_name=current_config.get('model_name', ''),
-                libtv_access_key=current_config.get('libtv_access_key', ''),
-                libtv_im_base=current_config.get('libtv_im_base', 'https://im.liblib.tv'),
-                libtv_poll_interval=current_config.get('libtv_poll_interval', 8),
-                libtv_timeout=current_config.get('libtv_timeout', 180),
                 video_cache_dir=current_config.get('video_cache_dir', './video_cache'),
                 tk_note_asr_backend=current_config.get('tk_note_asr_backend', 'auto'),
                 tk_note_language=current_config.get('tk_note_language', 'auto'),

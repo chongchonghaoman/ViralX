@@ -36,11 +36,6 @@ class FrontendContractTests(unittest.TestCase):
             "tk_note_proxy": "tk_note_proxy",
             "tk_note_timeout": "tk_note_timeout",
             "video_cache_dir": "video_cache_dir",
-            "libtv_access_key": "libtv_access_key",
-            "libtv_im_base": "libtv_im_base",
-            "libtv_poll_interval": "libtv_poll_interval",
-            "libtv_timeout": "libtv_timeout",
-            "libtv_concurrency": "libtv_concurrency",
             "model_api_key": "model_api_key",
             "model_name": "model_name",
             "model_protocol": "model_protocol",
@@ -50,6 +45,8 @@ class FrontendContractTests(unittest.TestCase):
         for control_id, name in controls.items():
             with self.subTest(control_id=control_id):
                 self.assert_named_control(self.settings, control_id, name)
+        self.assertNotIn('id="libtv_access_key"', self.settings)
+        self.assertNotIn('X-ViralX-LibTV-Key', self.settings_js)
 
     def test_settings_progressive_disclosure_and_actions_are_preserved(self):
         self.assertIn('data-mode-details="libtv"', self.settings)
@@ -60,8 +57,15 @@ class FrontendContractTests(unittest.TestCase):
             ("save-btn", "submit"),
             ("reset-btn", "button"),
             ("clear-session-btn", "button"),
+            ("libtv-connect-btn", "button"),
+            ("libtv-refresh-btn", "button"),
+            ("libtv-disconnect-btn", "button"),
         ):
             self.assertRegex(self.settings, rf'<button\b[^>]*\bid="{button_id}"[^>]*\btype="{button_type}"')
+        self.assertIn('data-connection-state="starting"', self.settings)
+        self.assertIn("function renderLibTVState", self.settings_js)
+        for state in ("connected", "awaiting_browser", "starting", "unavailable", "error", "local_only", "disconnected"):
+            self.assertIn(f'{state}:', self.settings_js)
 
     def test_field_validation_targets_the_relevant_control(self):
         self.assertIn("class SettingsValidationError", self.settings_js)
