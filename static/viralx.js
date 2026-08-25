@@ -24,6 +24,69 @@
       .replaceAll("'", "&#039;");
   }
 
+  const REPORT_ALLOWED_TAGS = new Set([
+    "a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3", "h4", "h5", "h6",
+    "hr", "li", "ol", "p", "pre", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul",
+  ]);
+  const REPORT_DROPPED_TAGS = new Set([
+    "button", "embed", "form", "iframe", "input", "link", "math", "meta", "object", "script", "style", "svg", "template",
+  ]);
+
+  function safeReportHref(value) {
+    const candidate = String(value || "").trim();
+    if (!candidate) return "";
+    if (candidate.startsWith("#")) return candidate;
+    try {
+      const url = new URL(candidate, window.location.href);
+      return ["http:", "https:", "mailto:"].includes(url.protocol) ? url.href : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function sanitizeReportHtml(html) {
+    const source = document.createElement("template");
+    const shell = document.createElement("div");
+    source.innerHTML = String(html || "");
+
+    const copyNode = (node, parent) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        parent.appendChild(document.createTextNode(node.textContent || ""));
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = node.tagName.toLowerCase();
+      if (REPORT_DROPPED_TAGS.has(tag)) return;
+      if (!REPORT_ALLOWED_TAGS.has(tag)) {
+        Array.from(node.childNodes).forEach((child) => copyNode(child, parent));
+        return;
+      }
+
+      const clean = document.createElement(tag);
+      if (tag === "a") {
+        const href = safeReportHref(node.getAttribute("href"));
+        if (href) clean.setAttribute("href", href);
+        const title = String(node.getAttribute("title") || "").trim();
+        if (title) clean.setAttribute("title", title.slice(0, 240));
+        clean.setAttribute("rel", "noopener noreferrer");
+      }
+      if (tag === "td" || tag === "th") {
+        ["colspan", "rowspan"].forEach((attribute) => {
+          const value = node.getAttribute(attribute);
+          if (/^\d{1,2}$/.test(value || "") && Number(value) >= 1 && Number(value) <= 12) {
+            clean.setAttribute(attribute, value);
+          }
+        });
+      }
+      parent.appendChild(clean);
+      Array.from(node.childNodes).forEach((child) => copyNode(child, clean));
+    };
+
+    Array.from(source.content.childNodes).forEach((node) => copyNode(node, shell));
+    return shell.innerHTML;
+  }
+
   function compactCount(value) {
     return new Intl.NumberFormat("zh-CN", {
       notation: "compact",
@@ -176,6 +239,25 @@
     error.hidden = true;
   }
 
+  function settingsUrl() {
+    const deployedToEdgeOne = document.documentElement.dataset.deployment === "edgeone";
+    return runtimeMode === "edgeone" || deployedToEdgeOne ? "/settings.html" : "/settings";
+  }
+
+  function syncPrimaryActions() {
+    const destination = runtimeReady ? "#analysis-studio" : settingsUrl();
+    document.querySelectorAll("[data-runtime-action]").forEach((action) => {
+      action.href = destination;
+      action.textContent = runtimeReady
+        ? (action.classList.contains("nav-cta") ? "开始拉片" : "开始分析")
+        : "连接分析服务";
+    });
+    const analyzeButton = byId("analyze-btn");
+    if (analyzeButton && !analyzeButton.disabled) {
+      analyzeButton.textContent = runtimeReady ? "开始拉片" : "打开设置";
+    }
+  }
+
   async function checkRuntime() {
     const chip = byId("runtime-chip");
     const label = byId("runtime-label");
@@ -208,11 +290,13 @@
           ? `云端接口在线 · 待配置 ${provider}`
           : `本地服务在线 · 待配置 ${provider}`;
       }
+      syncPrimaryActions();
     } catch (_) {
       runtimeMode = "offline";
       runtimeReady = false;
       chip.dataset.state = "offline";
       label.textContent = "分析服务暂不可用";
+      syncPrimaryActions();
     }
   }
 
@@ -227,7 +311,9 @@
     currentModalTitle = title;
     currentModalContent = content;
     byId("modal-title").textContent = title;
-    byId("modal-content").innerHTML = window.marked ? window.marked.parse(content || "暂无报告内容") : escapeHtml(content || "暂无报告内容");
+    const report = content || "暂无报告内容";
+    const rendered = window.marked ? window.marked.parse(report) : escapeHtml(report);
+    byId("modal-content").innerHTML = sanitizeReportHtml(rendered);
 
     if (!modal.open) modal.showModal();
     document.body.dataset.modalOpen = "true";
@@ -361,7 +447,15 @@
     analyzeButton.disabled = isBusy;
     refreshButton.disabled = isBusy;
     analyzeButton.setAttribute("aria-busy", String(isBusy));
-    analyzeButton.textContent = isBusy ? "正在拉片" : "开始拉片";
+    analyzeButton.textContent = isBusy ? "正在拉片" : runtimeReady ? "开始拉片" : "打开设置";
+  }
+
+  function handleAnalyzeAction(refresh = false) {
+    if (!runtimeReady) {
+      window.location.assign(settingsUrl());
+      return;
+    }
+    analyze(refresh);
   }
 
   function renderVideoCard(video, index) {
@@ -552,8 +646,8 @@
   }
 
   function bindEvents() {
-    byId("analyze-btn").addEventListener("click", () => analyze(false));
-    byId("refresh-btn").addEventListener("click", () => analyze(true));
+    byId("analyze-btn").addEventListener("click", () => handleAnalyzeAction(false));
+    byId("refresh-btn").addEventListener("click", () => handleAnalyzeAction(true));
     byId("focus-source").addEventListener("click", () => byId("keyword").focus());
     byId("export-btn").addEventListener("click", exportToObsidian);
     document.querySelector(".modal-close").addEventListener("click", closeModal);
@@ -583,6 +677,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindEvents();
     initMotion();
+    syncPrimaryActions();
     checkRuntime();
     loadKeywords();
     updateProgress("等待视频来源", 0);

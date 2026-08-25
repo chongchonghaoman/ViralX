@@ -14,8 +14,10 @@
     "legacy MiniMax generate_variants endpoint"
   ],
   "validation": {
-    "playwright": "settings model section passed at 1440x1024, 390px and 320px; custom-only fields disclose correctly and no horizontal overflow was found",
-    "slop_audit": "58/58 passed after adding explicit provider focus, active and disabled states, replacing an ad hoc micro-gap with the shared spacing token, and confirming contrast and reduced motion",
-    "runtime_boundary": "EdgeOne custom model endpoints require public HTTPS and session keys are never echoed; Flask remains the full local product and may reach user-owned HTTP or private endpoints"
+    "playwright": "homepage and settings passed visual review at 1440x1024, 390x844 and 320x760; 320, 375, 414 and 768 pixel overflow checks passed; model validation reveals, scrolls to and focuses the API key field",
+    "slop_audit": "58/58 passed after preserving the approved macrostructures, reducing settings-page vertical drag, making the save action persistently reachable, and confirming contrast and reduced motion",
+    "runtime_boundary": "EdgeOne and local settings routes stay distinct; unready analysis routes to settings instead of pretending the public shell is analysis-ready; session keys are never echoed",
+    "security": "Marked 15.0.12 and GSAP 3.13.0 use SRI; provider-authored Markdown passes a local tag, attribute and URL-protocol allowlist before innerHTML",
+    "verification": "41 Python contract tests, JavaScript syntax checks and the EdgeOne build passed"
   }
 }

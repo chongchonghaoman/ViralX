@@ -247,6 +247,11 @@ img {
   mix-blend-mode: multiply;
 }
 
+.hero-visual picture {
+  display: block;
+  width: 100%;
+}
+
 .hero-visual figcaption {
   position: absolute;
   width: 1px;
@@ -464,6 +469,12 @@ img {
   color: var(--color-ink-2);
   font-size: var(--text-sm);
   font-weight: 600;
+}
+
+.source-help {
+  color: var(--color-paper-3);
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
 .source-field input,

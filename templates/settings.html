@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#EDEDED">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
-  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='settings.js') }}"></script>
 </head>
@@ -59,6 +61,15 @@
       <form class="settings-form" id="settings-form" novalidate>
         <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
 
+        <div class="settings-actions" data-motion="reveal" aria-label="设置保存操作">
+          <p>保存后，新任务立即使用这组配置。</p>
+          <div>
+            <button class="btn btn-primary" id="save-btn" type="submit">保存设置</button>
+            <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
+            <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
+          </div>
+        </div>
+
         <section class="settings-section" id="runtime" data-motion="reveal">
           <div class="settings-section__head">
             <span>01</span>
@@ -67,7 +78,7 @@
           <div class="settings-grid">
             <div class="settings-field">
               <label for="analysis_mode">默认分析模式</label>
-              <select id="analysis_mode">
+              <select id="analysis_mode" name="analysis_mode">
                 <option value="libtv">LibTV 一键拉片</option>
                 <option value="model">模型 API 分析</option>
               </select>
@@ -75,17 +86,17 @@
             </div>
             <div class="settings-field">
               <label for="min_likes">关键词检索最低点赞数</label>
-              <input type="number" id="min_likes" min="0" step="100" placeholder="5000">
+              <input type="number" id="min_likes" name="min_likes" min="0" step="100" placeholder="5000">
               <small class="field-note">直接视频链接不受这个阈值影响。</small>
             </div>
             <div class="settings-field">
               <label for="rapidapi_key">API23 RapidAPI Key</label>
-              <input type="password" id="rapidapi_key" autocomplete="off" placeholder="用于 API23 关键词搜索">
+              <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" placeholder="用于 API23 关键词搜索">
               <small class="field-note">仅关键词搜索需要；粘贴视频链接仍走 TK Note。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="output_dir">分析输出目录</label>
-              <input type="text" id="output_dir" data-mono="true" placeholder="./data">
+              <input type="text" id="output_dir" name="output_dir" data-mono="true" placeholder="./data">
               <small class="field-note">报告、缓存与导出前的本地工作目录。</small>
             </div>
           </div>
@@ -99,7 +110,7 @@
           <div class="settings-grid">
             <div class="settings-field">
               <label for="tk_note_asr_backend">字幕 / ASR 策略</label>
-              <select id="tk_note_asr_backend">
+              <select id="tk_note_asr_backend" name="tk_note_asr_backend">
                 <option value="auto">字幕优先，ASR 兜底</option>
                 <option value="none">只下载与字幕</option>
                 <option value="qwen3-asr">固定 Qwen3-ASR</option>
@@ -109,12 +120,12 @@
             </div>
             <div class="settings-field">
               <label for="tk_note_language">转写语言</label>
-              <input type="text" id="tk_note_language" placeholder="auto">
+              <input type="text" id="tk_note_language" name="tk_note_language" placeholder="auto">
               <small class="field-note">可填 Chinese、English、ja 等后端支持值。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="tk_note_cookies_from_browser">授权浏览器 Cookie</label>
-              <select id="tk_note_cookies_from_browser">
+              <select id="tk_note_cookies_from_browser" name="tk_note_cookies_from_browser">
                 <option value="">不使用</option>
                 <option value="chrome">Chrome</option>
                 <option value="edge">Edge</option>
@@ -125,17 +136,17 @@
             </div>
             <div class="settings-field" data-local-only>
               <label for="tk_note_proxy">本地代理</label>
-              <input type="password" id="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
+              <input type="password" id="tk_note_proxy" name="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
               <small class="field-note">代理凭据不会写入视频资产或日志。</small>
             </div>
             <div class="settings-field">
               <label for="tk_note_timeout">单条采集等待上限</label>
-              <input type="number" id="tk_note_timeout" min="120" max="7200" step="60" placeholder="1800">
+              <input type="number" id="tk_note_timeout" name="tk_note_timeout" min="120" max="7200" step="60" placeholder="1800">
               <small class="field-note">单位为秒；长视频可适当提高。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="video_cache_dir">证据缓存目录</label>
-              <input type="text" id="video_cache_dir" data-mono="true" placeholder="./video_cache">
+              <input type="text" id="video_cache_dir" name="video_cache_dir" data-mono="true" placeholder="./video_cache">
               <small class="field-note">保存原片、元数据、转写和资产清单。</small>
             </div>
           </div>
@@ -146,33 +157,36 @@
             <span>03</span>
             <div><h2>LibTV 一键拉片</h2><p>上传原视频、创建会话、轮询报告，并保留项目画布。</p></div>
           </div>
-          <div class="settings-grid">
+          <details class="section-disclosure" data-mode-details="libtv" open>
+            <summary><span><strong>LibTV 凭据与参数</strong><small>默认分析链</small></span></summary>
+            <div class="section-disclosure__body settings-grid">
             <div class="settings-field settings-field--wide">
               <label for="libtv_access_key">LibTV Access Key</label>
-              <input type="password" id="libtv_access_key" autocomplete="off" placeholder="LIBTV_ACCESS_KEY">
+              <input type="password" id="libtv_access_key" name="libtv_access_key" autocomplete="off" placeholder="LIBTV_ACCESS_KEY">
               <small class="field-note">也可以通过系统环境变量配置。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="libtv_im_base">服务地址</label>
-              <input type="url" id="libtv_im_base" data-mono="true" placeholder="https://im.liblib.tv">
+              <input type="url" id="libtv_im_base" name="libtv_im_base" data-mono="true" placeholder="https://im.liblib.tv">
               <small class="field-note">通常不需要修改。</small>
             </div>
             <div class="settings-field">
               <label for="libtv_poll_interval">轮询间隔</label>
-              <input type="number" id="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
+              <input type="number" id="libtv_poll_interval" name="libtv_poll_interval" min="1" max="60" step="1" placeholder="8">
               <small class="field-note">单位为秒。</small>
             </div>
             <div class="settings-field">
               <label for="libtv_timeout">拉片等待上限</label>
-              <input type="number" id="libtv_timeout" min="30" max="900" step="10" placeholder="180">
+              <input type="number" id="libtv_timeout" name="libtv_timeout" min="30" max="900" step="10" placeholder="180">
               <small class="field-note">超时后仍保留项目画布入口。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="libtv_concurrency">并发拉片数</label>
-              <input type="number" id="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
+              <input type="number" id="libtv_concurrency" name="libtv_concurrency" min="1" max="5" step="1" placeholder="2">
               <small class="field-note">默认 2，避免同一 Key 创建过多会话。</small>
             </div>
-          </div>
+            </div>
+          </details>
         </section>
 
         <section class="settings-section" id="models" data-motion="reveal">
@@ -180,6 +194,9 @@
             <span>04</span>
             <div><h2>模型 API</h2><p>先选服务商，再填写一组 Key 与模型名。切换服务商时会带入官方接口地址，你仍可以修改模型。</p></div>
           </div>
+          <details class="section-disclosure" data-mode-details="model">
+            <summary><span><strong>模型服务商与凭据</strong><small>模型分析链</small></span></summary>
+            <div class="section-disclosure__body">
           <fieldset class="provider-picker" aria-describedby="provider-help">
             <legend>选择模型服务商</legend>
             <p class="field-note" id="provider-help">这里只决定分析模型；API23 搜索、TK Note 采集和 LibTV 拉片保持独立。</p>
@@ -220,17 +237,17 @@
             <div class="settings-grid">
               <div class="settings-field settings-field--wide">
                 <label for="model_api_key">API Key</label>
-                <input type="password" id="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴当前服务商的 API Key">
+                <input type="password" id="model_api_key" name="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴当前服务商的 API Key">
                 <small class="field-note" id="model-key-note">网页端只保存在当前标签页；本地 Flask 写入本机 config.json。</small>
               </div>
               <div class="settings-field settings-field--wide">
                 <label for="model_name">模型名称</label>
-                <input type="text" id="model_name" data-mono="true" aria-describedby="model-name-note" placeholder="model-id">
+                <input type="text" id="model_name" name="model_name" data-mono="true" aria-describedby="model-name-note" placeholder="model-id">
                 <small class="field-note" id="model-name-note">使用账户实际可调用的完整模型 ID。</small>
               </div>
               <div class="settings-field" data-custom-model hidden>
                 <label for="model_protocol">接口协议</label>
-                <select id="model_protocol">
+                <select id="model_protocol" name="model_protocol">
                   <option value="openai">OpenAI Chat Completions 兼容</option>
                   <option value="anthropic">Anthropic Messages 兼容</option>
                 </select>
@@ -238,12 +255,14 @@
               </div>
               <div class="settings-field" data-custom-model hidden>
                 <label for="model_base_url">Base URL</label>
-                <input type="url" id="model_base_url" data-mono="true" aria-describedby="model-url-note" placeholder="https://api.example.com/v1">
+                <input type="url" id="model_base_url" name="model_base_url" data-mono="true" aria-describedby="model-url-note" placeholder="https://api.example.com/v1">
                 <small class="field-note" id="model-url-note">填 API 根地址，不要包含 /chat/completions 或查询参数。</small>
               </div>
             </div>
             <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。云端自定义地址仅允许公网 HTTPS；本地 Flask 可连接你自己的 HTTP / 内网服务。</p>
           </div>
+            </div>
+          </details>
         </section>
 
         <section class="settings-section" id="topics" data-motion="reveal">
@@ -255,20 +274,11 @@
             <div class="keywords-list" id="keywords-list" aria-live="polite"></div>
             <div class="settings-field">
               <label for="new-keyword">新主题</label>
-              <input type="text" id="new-keyword" autocomplete="off" placeholder="例如：camping light review">
+              <input type="text" id="new-keyword" name="new_keyword" autocomplete="off" placeholder="例如：camping light review">
               <small class="field-note">输入后按 Enter 添加。</small>
             </div>
           </div>
         </section>
-
-        <div class="settings-actions" data-motion="reveal">
-          <p>保存后，新任务立即使用这组配置。</p>
-          <div>
-            <button class="btn btn-primary" id="save-btn" type="submit">保存设置</button>
-            <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
-            <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
-          </div>
-        </div>
       </form>
     </div>
   </main>

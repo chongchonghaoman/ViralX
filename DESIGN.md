@@ -152,3 +152,25 @@ change this sequence.
 - static/settings.js: settings interaction and route entrance motion.
 - static/assets/viralx-title-shuei-wide.svg: exact one-line outlined homepage claim.
 - static/assets/viralx-title-shuei-stacked.svg: exact two-line outlined mobile claim.
+- static/assets/viralx-signal-orbit-640.webp: mobile and compact-display hero source.
+- static/assets/viralx-signal-orbit-1024.webp: desktop and high-density hero source.
+
+## Production UX and security contract
+
+- Public availability is not analysis readiness. The homepage health check must route an
+  unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
+  ready LibTV or model provider may expose the analysis action as the primary CTA.
+- API23 is explained at the source field: video URLs bypass it, while keyword discovery needs
+  it. Analysis still requires LibTV or a configured model provider.
+- Model and LibTV settings use native `details` disclosure keyed to `analysis_mode`. Choosing a
+  model provider switches the mode to `model`; inactive settings remain saved and are never
+  deleted merely because their panel is collapsed.
+- Settings validation is field-local. API key, model name and custom Base URL errors set
+  `aria-invalid`, expose `aria-errormessage`, reveal the correct disclosure and move focus to
+  the relevant control without forcing the user back to the page-level status region.
+- Markdown is untrusted, even when it comes from an analysis provider. Marked output must pass
+  through the local allowlist sanitizer before reaching `innerHTML`; scripts, embedded content,
+  forms, SVG/MathML, event attributes, style attributes and unsafe URL schemes are dropped.
+- CDN scripts are exact-version resources protected by SRI, and page-level CSP limits scripts,
+  styles, fonts, images and connections to the smallest required origins. GSAP enhancement remains optional;
+  the page is fully visible and operable when it is blocked or reduced motion is requested.

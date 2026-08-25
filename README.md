@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/assets/viralx-signal-orbit.png" width="420" alt="ViralX 视频证据信号主视觉">
+  <img src="static/assets/viralx-signal-orbit-1024.webp" width="420" alt="ViralX 视频证据信号主视觉">
 </p>
 
 <h1 align="center">ViralX</h1>
@@ -25,6 +25,8 @@
   <a href="DEPLOYMENT.md">部署说明</a>
 </p>
 
+<p align="center"><sub>最后更新：2026-08-25 · 当前版本：Web 产品 + EdgeOne Python Cloud Functions</sub></p>
+
 ![ViralX 网页首页](docs/assets/viralx-homepage.png)
 
 ## ViralX 是什么
@@ -49,6 +51,10 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
 - **明确云端与本地边界**：网页端凭据仅保存在当前标签页；本地 Flask 继续提供持久缓存、目录访问、浏览器 Cookie、代理与 Obsidian 文件写入。
+- **把“在线”和“可分析”分开**：首页读取健康状态；未连接 LibTV 或模型 API 时，主按钮会直接进入设置，不会把公开页面在线伪装成分析服务就绪。
+- **设置页改成渐进配置**：LibTV 与模型 API 按当前模式自动展开，保存栏始终可达；缺少 Key、模型名或自定义 Base URL 时，错误会落到对应字段并自动聚焦。
+- **报告渲染加固**：Marked 固定到明确版本并启用 SRI；模型和 LibTV 返回的 Markdown 在进入弹层前经过标签、属性和链接协议允许列表净化。
+- **首屏资源瘦身**：主视觉增加 640 / 1024 WebP 响应式资源，浏览器按视口选择约 58 KB 或 119 KB 文件，同时保留原 PNG 回退。
 
 下面的依赖表、调用方式、页面说明和部署章节均以这一版 Web 架构为准。
 
@@ -317,7 +323,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集共 26 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界和浏览器版 Obsidian 导出。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集共 41 项，覆盖 ViralX Skill 调用脚本、API23、TK Note、LibTV、本地 Flask、EdgeOne BYOK、公私路由边界、浏览器版 Obsidian 导出，以及首页/设置页字段、就绪 CTA、Markdown 净化与响应式主视觉的前端合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 
