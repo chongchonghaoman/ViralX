@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dpiap6td6czw`
+- Production deployment ID: `dpmxxtcu571t`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpiap6td6czw`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dpmxxtcu571t`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -29,6 +29,8 @@ Verified on the public custom domain:
 - `GET /` -> `200 text/html`
 - `GET /settings.html` -> `200 text/html`
 - `GET /api/health` -> `200 application/json`
+- `GET /api/health` -> `keyword_search_provider: api23`
+- `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 
