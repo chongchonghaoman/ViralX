@@ -40,6 +40,7 @@ from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message  # noq
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
+VIRALX_RELEASE = "2026-08-26-api23-status4-fallback-v2"
 
 
 def _number(name, fallback, cast):
@@ -171,8 +172,10 @@ def health():
     provider = config.get("model_provider", "openai") if mode == "model" else "libtv"
     return jsonify({
         "status": "ok",
+        "release": VIRALX_RELEASE,
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
+        "keyword_search_strategy": "search-video+discover-status4-fallback",
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
         "configured": {
