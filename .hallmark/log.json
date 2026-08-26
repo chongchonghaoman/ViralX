@@ -1,5 +1,17 @@
 [
   {
+    "date": "2026-08-27",
+    "scope": "evidence-first pipeline and shot-provider settings",
+    "macrostructure": "Centered Marquee + Embedded Studio; Long Form + Sticky Category Index",
+    "theme": "studied-DNA (source: https://www.butter.video/)",
+    "genre": "refined product editorial",
+    "enrichment": "five-stage evidence state machine with ShotLoom-first provider strategy and explicit blocked states",
+    "brief": "Make ViralX reliable from first principles: preserve source identity, separate objective shot facts from final reasoning, stop on incomplete evidence, and expose every runtime dependency honestly",
+    "knob_deltas": "mandatory LibTV stage to ShotLoom-first provider router; one visual model to separate shot and final-model responsibilities; implicit partial completion to blocked and fallback states; squeezed runtime copy to balanced flexible status columns",
+    "validation": "82 tests, Python and Node syntax checks, EdgeOne build, live production health checks, desktop and mobile Chromium screenshots, 320/375/414/768/1280/1920 overflow matrix, 1280x800 fold and zero-console-error checks passed",
+    "slop_audit": "58/58 change-scope gates passed; studied Butter DNA and approved marquee retained, with no new generic card-grid, chrome, token, contrast, motion or responsive violations"
+  },
+  {
     "date": "2026-08-25",
     "scope": "official LibTV CLI browser-login migration",
     "macrostructure": "Long Form + Sticky Category Index",

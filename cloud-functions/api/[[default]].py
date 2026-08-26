@@ -59,7 +59,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-26-scraper7-search-v1"
+VIRALX_RELEASE = "2026-08-26-shot-evidence-v1"
 
 
 def _number(name, fallback, cast):
@@ -74,6 +74,12 @@ def load_config():
     config = {
         "rapidapi_key": os.environ.get("RAPIDAPI_KEY", ""),
         "analysis_mode": os.environ.get("ANALYSIS_MODE", "pipeline"),
+        "shot_engine": os.environ.get("VIRALX_SHOT_ENGINE", "auto"),
+        "shot_model_source": os.environ.get("SHOT_MODEL_SOURCE", "inherit"),
+        "shot_model_api_key": os.environ.get("SHOT_MODEL_API_KEY", ""),
+        "shot_model_base_url": os.environ.get("SHOT_MODEL_BASE_URL", ""),
+        "shot_model_name": os.environ.get("SHOT_MODEL_NAME", ""),
+        "shot_scene_threshold": _number("SHOT_SCENE_THRESHOLD", 27, float),
         "tk_note_asr_backend": os.environ.get("TK_NOTE_ASR_BACKEND", "auto"),
         "tk_note_language": os.environ.get("TK_NOTE_LANGUAGE", "auto"),
         "tk_note_cookies_from_browser": "",
@@ -114,6 +120,11 @@ def load_config():
         "X-ViralX-Model-Key": "model_api_key",
         "X-ViralX-Model-Base-URL": "model_base_url",
         "X-ViralX-Model-Name": "model_name",
+        "X-ViralX-Shot-Engine": "shot_engine",
+        "X-ViralX-Shot-Model-Source": "shot_model_source",
+        "X-ViralX-Shot-Model-Key": "shot_model_api_key",
+        "X-ViralX-Shot-Model-Base-URL": "shot_model_base_url",
+        "X-ViralX-Shot-Model-Name": "shot_model_name",
         "X-ViralX-Gemini-Key": "gemini_api_key",
         "X-ViralX-Gemini-Model": "gemini_model",
         "X-ViralX-OpenRouter-Key": "openrouter_api_key",
@@ -134,6 +145,7 @@ def load_config():
     numeric_headers = {
         "X-ViralX-Min-Likes": ("min_likes", 0, 1_000_000_000, int),
         "X-ViralX-TK-Timeout": ("tk_note_timeout", 30, 90, float),
+        "X-ViralX-Shot-Threshold": ("shot_scene_threshold", 5, 80, float),
     }
     for header_name, (config_name, minimum, maximum, cast) in numeric_headers.items():
         value = request.headers.get(header_name)
@@ -179,6 +191,7 @@ def _configured_state():
     mode = str(config.get("analysis_mode") or "pipeline").lower()
     provider_ready = {
         "libtv": False,
+        "shot": False,
         "model": model_is_ready(config),
         "pipeline": False,
     }
@@ -209,6 +222,16 @@ def health():
             "connection_state": "local_only",
             "connected": False,
             "cli_installed": False,
+        },
+        "shot": {
+            "engine": str(config.get("shot_engine") or "auto"),
+            "ready": False,
+            "collection_only": str(config.get("shot_engine") or "auto") == "skip",
+            "shotloom": {
+                "ready": False,
+                "installed": False,
+                "message": "ShotLoom Core 需要本机 Connector 读取原片并运行 OpenCV。",
+            },
         },
         "limits": {
             "max_videos": MAX_ANALYZE_VIDEOS,
@@ -246,7 +269,7 @@ def analyze():
             if str(config.get("analysis_mode") or "pipeline").lower() == "pipeline":
                 yield json.dumps({
                     "status": "error",
-                    "message": "完整链路需要本机 Connector 执行 TK Note 与 LibTV，再调用模型 API；请启动 Connector，或在本地运行 ViralX。",
+                    "message": "完整链路需要本机 Connector 执行 TK Note、镜头取证与证据合并，再调用最终模型 API；请启动 Connector，或在本地运行 ViralX。",
                     "done": True,
                 }, ensure_ascii=False) + "\n"
                 return

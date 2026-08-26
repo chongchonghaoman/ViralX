@@ -28,6 +28,12 @@ ENV_HEADER_MAP = {
     "MODEL_API_KEY": "X-ViralX-Model-Key",
     "MODEL_BASE_URL": "X-ViralX-Model-Base-URL",
     "MODEL_NAME": "X-ViralX-Model-Name",
+    "VIRALX_SHOT_ENGINE": "X-ViralX-Shot-Engine",
+    "SHOT_MODEL_SOURCE": "X-ViralX-Shot-Model-Source",
+    "SHOT_MODEL_API_KEY": "X-ViralX-Shot-Model-Key",
+    "SHOT_MODEL_BASE_URL": "X-ViralX-Shot-Model-Base-URL",
+    "SHOT_MODEL_NAME": "X-ViralX-Shot-Model-Name",
+    "SHOT_SCENE_THRESHOLD": "X-ViralX-Shot-Threshold",
     "GEMINI_API_KEY": "X-ViralX-Gemini-Key",
     "GEMINI_MODEL": "X-ViralX-Gemini-Model",
     "OPENROUTER_API_KEY": "X-ViralX-OpenRouter-Key",
@@ -124,8 +130,14 @@ def stream_analyze(
                 if output_handle:
                     output_handle.write(normalized + "\n")
                     output_handle.flush()
-                if isinstance(event, dict) and event.get("status") == "error":
-                    application_error = True
+                if isinstance(event, dict):
+                    video = event.get("video") if isinstance(event.get("video"), dict) else {}
+                    if (
+                        event.get("status") == "error"
+                        or (video and video.get("pipeline_status") != "completed")
+                        or int(event.get("failed_videos") or 0) > 0
+                    ):
+                        application_error = True
     finally:
         if output_handle:
             output_handle.close()
@@ -166,6 +178,18 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--model-protocol", choices=("openai", "anthropic"), help="Protocol for a custom provider")
     analyze.add_argument("--model-base-url", help="Base URL for a custom provider")
     analyze.add_argument("--model-name", help="Provider model ID")
+    analyze.add_argument(
+        "--shot-engine",
+        choices=("auto", "shotloom", "libtv", "skip"),
+        help="Shot evidence strategy; auto prefers ShotLoom and may fall back to LibTV",
+    )
+    analyze.add_argument(
+        "--shot-model-source",
+        choices=("inherit", "qwen", "custom"),
+        help="Vision model used by ShotLoom Core",
+    )
+    analyze.add_argument("--shot-model-base-url", help="OpenAI-compatible shot-model API root")
+    analyze.add_argument("--shot-model-name", help="Shot-model ID")
     analyze.add_argument("--output", type=Path, help="Also save the NDJSON stream to this path")
     return parser
 
@@ -198,6 +222,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             headers["X-ViralX-Model-Base-URL"] = args.model_base_url
         if args.model_name:
             headers["X-ViralX-Model-Name"] = args.model_name
+        if args.shot_engine:
+            headers["X-ViralX-Shot-Engine"] = args.shot_engine
+        if args.shot_model_source:
+            headers["X-ViralX-Shot-Model-Source"] = args.shot_model_source
+        if args.shot_model_base_url:
+            headers["X-ViralX-Shot-Model-Base-URL"] = args.shot_model_base_url
+        if args.shot_model_name:
+            headers["X-ViralX-Shot-Model-Name"] = args.shot_model_name
         return stream_analyze(
             args.base_url,
             payload,

@@ -732,6 +732,13 @@ h3 {
   color: var(--color-error);
 }
 
+.stage[data-state="blocked"] > span,
+.stage[data-state="blocked"] .stage__state,
+.stage[data-state="degraded"] > span,
+.stage[data-state="degraded"] .stage__state {
+  color: var(--color-warning);
+}
+
 .loading,
 .error {
   margin-block-start: var(--space-md);
@@ -1153,7 +1160,8 @@ h3 {
 }
 
 .provider-badge.pending,
-.provider-badge.timeout {
+.provider-badge.timeout,
+.provider-badge.blocked {
   color: var(--color-warning);
 }
 

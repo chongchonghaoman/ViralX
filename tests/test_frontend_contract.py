@@ -38,6 +38,11 @@ class FrontendContractTests(unittest.TestCase):
             "tk_note_proxy": "tk_note_proxy",
             "tk_note_timeout": "tk_note_timeout",
             "video_cache_dir": "video_cache_dir",
+            "shot_model_source": "shot_model_source",
+            "shot_model_api_key": "shot_model_api_key",
+            "shot_model_base_url": "shot_model_base_url",
+            "shot_model_name": "shot_model_name",
+            "shot_scene_threshold": "shot_scene_threshold",
             "model_api_key": "model_api_key",
             "model_name": "model_name",
             "model_protocol": "model_protocol",
@@ -54,6 +59,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('value="pipeline"', self.settings)
         self.assertIn('class="pipeline-contract"', self.settings)
         self.assertIn('TK Note', self.settings)
+        self.assertIn('ShotLoom Core', self.settings)
         self.assertIn('LibTV', self.settings)
         self.assertIn('模型 API', self.settings)
         self.assertIn("function syncAnalysisMode()", self.settings_js)
@@ -69,6 +75,9 @@ class FrontendContractTests(unittest.TestCase):
             self.assertRegex(self.settings, rf'<button\b[^>]*\bid="{button_id}"[^>]*\btype="{button_type}"')
         self.assertIn('data-connection-state="starting"', self.settings)
         self.assertIn("function renderLibTVState", self.settings_js)
+        self.assertIn("function renderShotEngine", self.settings_js)
+        for mode in ("auto", "shotloom", "libtv", "skip"):
+            self.assertIn(f'name="shot_engine" value="{mode}"', self.settings)
         for state in ("connected", "awaiting_browser", "starting", "unavailable", "error", "local_only", "disconnected"):
             self.assertIn(f'{state}:', self.settings_js)
 
@@ -92,6 +101,8 @@ class FrontendContractTests(unittest.TestCase):
         )[1].split("])", 1)[0]
         self.assertIn("x-viralx-model-key", connector_header_block.lower())
         self.assertIn("x-viralx-model-base-url", connector_header_block.lower())
+        self.assertIn("x-viralx-shot-engine", connector_header_block.lower())
+        self.assertIn("x-viralx-shot-model-key", connector_header_block.lower())
         self.assertIn("connector_missing:", self.settings_js)
         self.assertIn("pairing_required:", self.settings_js)
         self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)
@@ -107,6 +118,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('SettingsValidationError("model_api_key"', self.settings_js)
         self.assertIn('SettingsValidationError("model_name"', self.settings_js)
         self.assertIn('SettingsValidationError("model_base_url"', self.settings_js)
+        self.assertIn('SettingsValidationError("shot_model_source"', self.settings_js)
         self.assertIn('control.setAttribute("aria-invalid", "true")', self.settings_js)
         self.assertIn('control.setAttribute("aria-errormessage", error.id)', self.settings_js)
 

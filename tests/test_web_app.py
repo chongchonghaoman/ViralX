@@ -48,7 +48,7 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(payload['configured']['model'])
         self.assertNotIn('local-secret', json.dumps(payload))
 
-    def test_direct_douyin_url_reports_missing_browser_login(self):
+    def test_direct_url_skips_discovery_and_reports_shot_block(self):
         config = {
             **web_app.DEFAULT_CONFIG,
             'analysis_mode': 'pipeline',
@@ -57,11 +57,25 @@ class WebAppTests(unittest.TestCase):
             'model_base_url': 'https://api.openai.com/v1',
             'model_name': 'gpt-4.1-mini',
         }
-        with patch.object(web_app, 'load_config', return_value=config), patch(
-            'ai_analyzer.LibTVAnalyzer'
-        ) as analyzer_class:
-            analyzer_class.return_value.available = True
-            analyzer_class.return_value.is_authenticated.return_value = False
+        class FakeAI:
+            def __init__(self, **_kwargs):
+                pass
+
+            def batch_analyze_streaming(self, videos, **_kwargs):
+                yield {
+                    **videos[0],
+                    'ai_analysis': '镜头证据不可用，最终模型未调用',
+                    'analysis_provider': 'pipeline',
+                    'pipeline_stage': 'shot-analysis',
+                    'pipeline_status': 'blocked',
+                    'shot_provider': 'shotloom',
+                    'shot_status': 'blocked',
+                    'model_status': 'blocked',
+                }
+
+        with patch.object(web_app, 'load_config', return_value=config), patch.object(
+            web_app, 'AIAnalyzer', FakeAI,
+        ):
             response = self.client.post(
                 '/api/analyze',
                 json={'keyword': 'https://www.douyin.com/video/123456'},
@@ -78,8 +92,8 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payloads[0]['stage'], 'discovery')
         self.assertEqual(payloads[0]['stage_status'], 'skipped')
         self.assertEqual(progress['video']['analysis_provider'], 'pipeline')
-        self.assertEqual(progress['video']['libtv_status'], 'error')
-        self.assertIn('LibTV 尚未登录', progress['video']['ai_analysis'])
+        self.assertEqual(progress['video']['shot_status'], 'blocked')
+        self.assertIn('最终模型未调用', progress['video']['ai_analysis'])
         self.assertEqual(completed['failed_videos'], 1)
 
     def test_libtv_auth_start_returns_only_safe_browser_state(self):

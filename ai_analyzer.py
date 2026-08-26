@@ -15,6 +15,13 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from libtv_analyzer import LibTVAnalyzer, LibTVError
 from model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config
+from shot_analyzers import (
+    EVIDENCE_BUNDLE_SCHEMA,
+    LibTVProviderAdapter,
+    ShotAnalyzerRouter,
+    normalize_shot_config,
+    validate_shot_evidence,
+)
 from video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
 
 def load_config():
@@ -32,6 +39,12 @@ def load_config():
         'GEMINI_MODEL': 'gemini_model',
         'OPENROUTER_API_KEY': 'openrouter_api_key',
         'OPENROUTER_MODEL': 'openrouter_model',
+        'VIRALX_SHOT_ENGINE': 'shot_engine',
+        'SHOT_MODEL_SOURCE': 'shot_model_source',
+        'SHOT_MODEL_API_KEY': 'shot_model_api_key',
+        'SHOT_MODEL_BASE_URL': 'shot_model_base_url',
+        'SHOT_MODEL_NAME': 'shot_model_name',
+        'SHOT_SCENE_THRESHOLD': 'shot_scene_threshold',
         'VIRALX_VIDEO_CACHE_DIR': 'video_cache_dir',
     }
     for env_name, config_name in env_map.items():
@@ -43,7 +56,7 @@ def load_config():
 
 
 def _evidence_bundle_text(video_data: dict, limit: int = 80000) -> str:
-    """Serialize the merged TK Note + LibTV evidence for final synthesis."""
+    """Serialize the merged platform, TK Note, and shot evidence."""
     bundle = video_data.get('evidence_bundle')
     if not bundle:
         return '（尚无合并证据包）'
@@ -58,11 +71,11 @@ def _grounded_sources_text(video_data: dict, limit: int = 80000) -> str:
     bundle = video_data.get('evidence_bundle') or {}
     platform = bundle.get('platform_evidence') or {}
     tk_note = bundle.get('tk_note_evidence') or {}
-    libtv = bundle.get('libtv_evidence') or {}
+    shot = bundle.get('shot_evidence') or bundle.get('libtv_evidence') or {}
     comments = platform.get('comments_data') or []
     hashtags = platform.get('hashtags') or []
     transcript = str(tk_note.get('transcript') or '').strip()
-    shot_analysis = str(libtv.get('shot_analysis') or '').strip()
+    shot_analysis = str(shot.get('shot_analysis') or '').strip()
 
     sources = f"""[META:title]
 标题：{platform.get('title') or '未采集'}
@@ -86,13 +99,55 @@ def _grounded_sources_text(video_data: dict, limit: int = 80000) -> str:
 转写来源：{tk_note.get('transcript_source') or '未知'}
 警告：{json.dumps(tk_note.get('warnings') or [], ensure_ascii=False, default=str)}
 
-[LIBTV:shot]
-{shot_analysis or '未获得 LibTV 镜头证据；必须停止分析'}
+[SHOT:evidence]
+下列每行都带有唯一镜头引用；引用画面事实时必须保留对应的 [SHOT:Sxxx]：
+{shot_analysis or '未获得镜头证据；必须停止分析'}
 
-[LIBTV:project]
-画布：{libtv.get('project_url') or '未返回'}
+[SHOT:project]
+镜头引擎：{shot.get('provider') or '未返回'}；模型：{shot.get('model') or '未返回'}；画布：{shot.get('project_url') or '不适用'}
 """
     return sources[:limit]
+
+
+def _final_evidence_prompt(video_data: dict) -> str:
+    """One evidence-only final prompt shared by every model protocol."""
+    return f"""你是 ViralX 的最终证据综合模型。你不能直接观看原视频，也不能补全缺失信息；只能使用下列命名证据源。
+
+=== 可引用证据源 ===
+{_grounded_sources_text(video_data)}
+
+=== 不可违反的规则 ===
+1. 每条关于原视频的具体事实必须在句末引用来源标签。平台数据使用 [META:title]、[META:metrics]、[META:comments]、[META:hashtags]；转写使用 [TK:transcript]。
+2. 每条画面、动作、镜头、屏幕文字事实必须引用它实际来自的镜头 ID，例如 [SHOT:S001]。不得只引用汇总标签 [SHOT:evidence]。
+3. 声音和台词只能来自 [TK:transcript]；关键帧不能证明音频。没有评论正文、标签、价格或 CTA 证据时不得补写。
+4. 所有营销机制、受众和因果解释必须明确标为“推断”，并同时引用支撑它的事实。
+5. 翻拍内容必须标为“创意提案”，不能伪装成原片复原；缺少产品资料时只给结构。
+6. 证据不足就写“未采集”或“无法判断”，不要为了完整而填空。
+
+=== 输出格式 ===
+## 证据覆盖
+用表格列出平台元数据、评论正文、TK Note 转写、镜头证据是否可用和局限，每行附来源。
+
+## 原视频事实
+按时间顺序列出可核验事实，每条引用对应 [SHOT:Sxxx]；平台数字另加 [META:metrics]。
+
+## 爆款机制
+分为“观察事实”和“推断”两栏，每项都带来源；没有足够证据时明确无法判断。
+
+## 用户反馈与受众
+没有评论正文就明确写“评论正文未采集，无法判断真实用户诉求” [META:comments]。
+
+## 可复用结构
+只抽象证据支持的结构，说明适用边界并附来源。
+
+## 创意提案：翻拍框架
+这是新创作，不是原片复原。逐段注明借用了哪些已引用结构。"""
+
+
+def _tiktok_numeric_id(value: object) -> str:
+    """Return only TikTok's auditable numeric post id, never an opaque media id."""
+    match = re.search(r"(?<!\d)(\d{10,24})(?!\d)", str(value or ""))
+    return match.group(1) if match else ""
 
 
 def _libtv_evidence_error(details: dict) -> str:
@@ -114,12 +169,15 @@ def _grounding_error(report: str, video_data: dict | None = None) -> str:
     text = str(report or '').strip()
     if not text:
         return "模型没有返回报告"
-    citations = re.findall(r"\[(?:META|TK|LIBTV|FRAME):[^\]]+\]", text)
+    citations = re.findall(r"\[(?:META|TK|SHOT):[^\]]+\]", text)
     unique = set(citations)
     if not any(item.startswith('[META:') for item in unique):
         return "报告没有引用平台元数据"
-    if not any(item.startswith('[LIBTV:') for item in unique):
-        return "报告没有引用 LibTV 镜头证据"
+    shot_citations = {item for item in unique if re.fullmatch(r"\[SHOT:S\d{3}\]", item)}
+    evidence = (((video_data or {}).get('evidence_bundle') or {}).get('shot_evidence') or {})
+    required_shots = min(2, max(int(evidence.get('shot_count') or 1), 1))
+    if len(shot_citations) < required_shots:
+        return f"报告没有引用足够的具体镜头证据（需要至少 {required_shots} 个镜头 ID）"
     if len(unique) < 3 or len(citations) < 4:
         return "报告的证据引用不足，无法区分事实与推断"
     platform = ((video_data or {}).get('evidence_bundle') or {}).get('platform_evidence') or {}
@@ -134,24 +192,24 @@ def _grounding_error(report: str, video_data: dict | None = None) -> str:
     return ''
 
 
-def _persist_evidence_audit(video_file_path: str, evidence_bundle: dict, libtv_text: str, report: str = '') -> dict:
+def _persist_evidence_audit(video_file_path: str, evidence_bundle: dict, shot_text: str, report: str = '') -> dict:
     """Keep a local, secret-free audit copy beside the downloaded evidence package."""
     try:
         audit_dir = Path(video_file_path).resolve().parent / 'viralx-evidence'
         audit_dir.mkdir(parents=True, exist_ok=True)
         bundle_path = audit_dir / 'evidence-bundle.json'
-        libtv_path = audit_dir / 'libtv-shot-analysis.md'
+        shot_path = audit_dir / 'shot-evidence.md'
         report_path = audit_dir / 'final-model-report.raw.md'
         bundle_path.write_text(
             json.dumps(evidence_bundle, ensure_ascii=False, default=str, indent=2),
             encoding='utf-8',
         )
-        libtv_path.write_text(str(libtv_text or '').strip(), encoding='utf-8')
+        shot_path.write_text(str(shot_text or '').strip(), encoding='utf-8')
         if report:
             report_path.write_text(str(report).strip(), encoding='utf-8')
         return {
             'evidence_bundle_path': str(bundle_path),
-            'libtv_evidence_path': str(libtv_path),
+            'shot_evidence_path': str(shot_path),
             'raw_model_report_path': str(report_path) if report else '',
         }
     except OSError as exc:
@@ -465,43 +523,11 @@ class OpenAICompatibleAnalyzer:
 高赞评论:
 {comments_text or '（无评论数据）'}
 
-=== TK Note + LibTV 合并证据包 ===
+=== ViralX 统一证据包 ===
 {_evidence_bundle_text(video_data)}"""
 
     def _analyze_text_prompt(self, video_data: dict) -> str:
-        return f"""你是 ViralX 的最终证据综合模型。你不能直接观看视频，只能使用下列命名证据源。
-
-=== 可引用证据源 ===
-{_grounded_sources_text(video_data)}
-
-=== 不可违反的规则 ===
-1. 每条关于原视频的具体事实必须在句末引用至少一个来源标签，标签只能是：
-   [META:title] [META:metrics] [META:comments] [META:hashtags]
-   [TK:metadata] [TK:transcript] [LIBTV:shot] [LIBTV:project]
-2. 画面、动作、镜头、屏幕文字和声音只允许来自 [LIBTV:shot]；ASR 只代表听到的文本，不代表画面。
-3. 没有评论正文时，不得声称“用户认为/评论反映”；没有标签时，不得生成标签策略；没有价格、购买按钮或 CTA 证据时，不得补写。
-4. 所有营销或受众解释必须明确标为“推断”，并引用支撑推断的事实。
-5. 翻拍内容必须明确标为“创意提案”，不能写成原视频真实发生的内容。
-6. 证据不足就写“未采集”或“无法判断”。不要为了完整而填空。
-
-=== 输出格式 ===
-## 证据覆盖
-用表格列出平台元数据、评论正文、TK Note 转写、LibTV 拉片各自是否可用及局限，每行附来源标签。
-
-## 原视频事实
-按时间码整理可核验事实。每条必须引用 [LIBTV:shot]，平台数字另加 [META:metrics]。
-
-## 爆款机制
-分成“观察事实”和“推断”两栏；每项都必须有来源标签。
-
-## 用户反馈与受众
-没有评论正文就明确写“评论正文未采集，无法判断真实用户诉求” [META:comments]。
-
-## 可复用结构
-只抽象已有证据支持的结构，说明适用边界并附来源标签。
-
-## 创意提案：翻拍框架
-这是新创作，不是原片复原。逐段注明借用了哪条已引用结构；缺少产品资料时只给结构，不虚构卖点。"""
+        return _final_evidence_prompt(video_data)
 
     def grounding_error(self, report: str, video_data: dict | None = None) -> str:
         return _grounding_error(report, video_data)
@@ -823,12 +849,13 @@ class GeminiAnalyzer:
 高赞评论:
 {comments_text or '（无评论数据）'}
 
-=== TK Note + LibTV 合并证据包 ===
+=== ViralX 统一证据包 ===
 {_evidence_bundle_text(video_data)}"""
 
     def _analyze_text_only(self, video_data: dict) -> str:
         """纯文本分析（无视频文件时）"""
-        prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+        prompt = _final_evidence_prompt(video_data)
+        _legacy_prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
 
 {self._build_metadata_text(video_data)}
 
@@ -1023,7 +1050,7 @@ class MiniMaxAnalyzer:
 *拆解完毕*"""
 
 class AIAnalyzer:
-    """Serial analyzer: TK Note -> LibTV evidence -> final model synthesis."""
+    """Evidence-first analyzer: TK Note -> shot evidence -> final model synthesis."""
 
     _cache = None
     MAX_CONCURRENT = 5
@@ -1051,6 +1078,13 @@ class AIAnalyzer:
         tk_note_cookies_from_browser: str = '',
         tk_note_proxy: str = '',
         tk_note_timeout: float = None,
+        shot_engine: str = '',
+        shot_model_source: str = '',
+        shot_model_api_key: str = '',
+        shot_model_base_url: str = '',
+        shot_model_name: str = '',
+        shot_scene_threshold: float = None,
+        shot_router=None,
     ):
         config = load_config()
 
@@ -1084,6 +1118,7 @@ class AIAnalyzer:
         self.model_api_key = model_config['model_api_key']
         self.model_base_url = model_config['model_base_url']
         self.model_name = model_config['model_name']
+        self.model_supports_vision = bool(model_config.get('model_supports_vision'))
         self.model_config_error = model_config.get('model_config_error', '')
         self.libtv_concurrency = max(1, min(int(config.get('libtv_concurrency', 2)), 5))
         self.video_collector = video_collector or VideoAssetCollector(
@@ -1108,7 +1143,28 @@ class AIAnalyzer:
         self.use_libtv = self.use_pipeline
         self.use_model = self.use_pipeline
         self.libtv = LibTVAnalyzer()
-        print("[AIAnalyzer] 串联链路: TK Note -> LibTV 拉片 -> 模型终审")
+        shot_config = {
+            **model_config,
+            'shot_engine': shot_engine or config.get('shot_engine', 'auto'),
+            'shot_model_source': shot_model_source or config.get('shot_model_source', 'inherit'),
+            'shot_model_api_key': shot_model_api_key or config.get('shot_model_api_key', ''),
+            'shot_model_base_url': shot_model_base_url or config.get('shot_model_base_url', ''),
+            'shot_model_name': shot_model_name or config.get('shot_model_name', ''),
+            'shot_scene_threshold': (
+                shot_scene_threshold
+                if shot_scene_threshold is not None
+                else config.get('shot_scene_threshold', 27.0)
+            ),
+        }
+        self.shot_config = normalize_shot_config(shot_config)
+        self.shot_router = shot_router or ShotAnalyzerRouter(
+            shot_config,
+            libtv=LibTVProviderAdapter(self.libtv),
+        )
+        print(
+            "[AIAnalyzer] 串联链路: TK Note -> "
+            f"{self.shot_config['engine']} 镜头证据 -> 模型终审"
+        )
 
         self.model_analyzer = None
         self.gemini = None
@@ -1292,8 +1348,9 @@ class AIAnalyzer:
         }
 
     def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False, progress_callback=None) -> dict:
-        """Run TK Note, LibTV shot analysis, evidence merge, then the final model."""
+        """Run collection, auditable shot evidence, evidence merge, then synthesis."""
         video_id = video_data.get('video_id', '')
+        expected_video_id = str(video_id or '')
         acquisition_provider = 'tk-note' if is_tiktok_url(video_url or '') else 'yt-dlp'
 
         def emit(stage, status, label, progress):
@@ -1306,23 +1363,8 @@ class AIAnalyzer:
                     'stage_progress': progress,
                 })
 
-        if not self.libtv.available:
-            return {
-                'analysis': '串联分析失败：未找到官方 LibTV CLI，请先安装并连接',
-                'analysis_provider': 'pipeline',
-                'pipeline_stage': 'shot-analysis',
-                'pipeline_status': 'error',
-                'libtv_status': 'error',
-            }
-        if not self.libtv.is_authenticated():
-            return {
-                'analysis': '串联分析失败：LibTV 尚未登录，请在设置页完成网页授权',
-                'analysis_provider': 'pipeline',
-                'pipeline_stage': 'shot-analysis',
-                'pipeline_status': 'error',
-                'libtv_status': 'error',
-            }
-        if not self.model_api_key:
+        collection_only = self.shot_config['engine'] == 'skip'
+        if not collection_only and not self.model_api_key:
             return {
                 'analysis': '串联分析失败：最终模型 API Key 尚未配置',
                 'analysis_provider': self.model_provider,
@@ -1330,7 +1372,7 @@ class AIAnalyzer:
                 'pipeline_status': 'error',
                 'model_status': 'error',
             }
-        if self.model_config_error:
+        if not collection_only and self.model_config_error:
             return {
                 'analysis': f'串联分析失败：模型 API 配置无效：{self.model_config_error}',
                 'analysis_provider': self.model_provider,
@@ -1338,7 +1380,7 @@ class AIAnalyzer:
                 'pipeline_status': 'error',
                 'model_status': 'error',
             }
-        if not self.model_analyzer:
+        if not collection_only and not self.model_analyzer:
             return {
                 'analysis': '串联分析失败：最终模型 API 尚未配置或无法初始化',
                 'analysis_provider': self.model_provider,
@@ -1371,39 +1413,71 @@ class AIAnalyzer:
                 ('tk_note_status' if acquisition_provider == 'tk-note' else 'video_ingest_status'): 'error',
             }
 
-        emit('collection', 'complete', 'TK Note 证据包已保存', 40)
-        emit('shot-analysis', 'running', 'LibTV 正在逐镜头分析原视频', 48)
-        try:
-            libtv_result = self.libtv.analyze(
-                video_file_path,
-                user_request='逐镜头拉片并输出结构化证据',
-            )
-            libtv_details = libtv_result.to_dict()
-        except LibTVError as exc:
+        expected_numeric_id = _tiktok_numeric_id(expected_video_id) or _tiktok_numeric_id(video_url)
+        actual_numeric_id = (
+            _tiktok_numeric_id(getattr(asset, 'video_id', ''))
+            or _tiktok_numeric_id((getattr(asset, 'metadata', {}) or {}).get('video_id'))
+            or _tiktok_numeric_id(getattr(asset, 'source_url', ''))
+        )
+        if is_tiktok_url(video_url or '') and expected_numeric_id and actual_numeric_id != expected_numeric_id:
+            emit('collection', 'error', '原片身份校验失败，流水线已阻断', 40)
             return {
-                'analysis': f'LibTV 拉片失败：{exc}',
+                'analysis': (
+                    'TK Note 下载结果与搜索候选不是同一条 TikTok 视频；'
+                    '最终模型未调用，避免分析错误原片。'
+                ),
                 'analysis_provider': 'pipeline',
-                'pipeline_stage': 'shot-analysis',
+                'pipeline_stage': 'collection',
                 'pipeline_status': 'error',
-                'libtv_status': 'error',
-                **acquisition_details,
-            }
-
-        libtv_evidence_error = _libtv_evidence_error(libtv_details)
-        if libtv_evidence_error:
-            emit('shot-analysis', 'error', 'LibTV 证据未通过完整性检查', 68)
-            return {
-                'analysis': f'LibTV 拉片证据不可用：{libtv_evidence_error}。最终模型未调用，避免无证据猜测。',
-                'analysis_provider': 'pipeline',
-                'pipeline_stage': 'shot-analysis',
-                'pipeline_status': 'error',
-                'libtv_status': 'error',
+                'identity_status': 'mismatch',
+                'expected_video_id': expected_numeric_id,
+                'actual_video_id': actual_numeric_id or 'missing',
                 'model_status': 'blocked',
                 **acquisition_details,
             }
 
-        emit('shot-analysis', 'complete', 'LibTV 拉片证据已生成', 68)
-        emit('evidence-merge', 'running', '正在合并 TK Note 与 LibTV 证据', 72)
+        emit('collection', 'complete', 'TK Note 证据包已保存', 40)
+        engine_label = {
+            'auto': 'ShotLoom Core（失败时回退 LibTV）',
+            'shotloom': 'ShotLoom Core',
+            'libtv': 'LibTV',
+            'skip': '只采集模式',
+        }.get(self.shot_config['engine'], self.shot_config['engine'])
+        emit('shot-analysis', 'running', f'{engine_label} 正在生成镜头证据', 48)
+        try:
+            shot_result = self.shot_router.analyze(
+                video_file_path,
+                user_request='逐镜头记录直接可见事实；不要输出营销结论',
+            )
+            shot_details = shot_result.to_dict()
+        except Exception as exc:
+            shot_details = {
+                'provider': self.shot_config['engine'],
+                'model': '',
+                'status': 'blocked',
+                'analysis': '',
+                'evidence': {},
+                'block_reason': f'{type(exc).__name__}: {str(exc)[:180]}',
+                'fallback_used': False,
+                'fallback_chain': [],
+            }
+        shot_evidence_error = (
+            validate_shot_evidence(shot_details)
+            if shot_details.get('status') == 'completed'
+            else str(shot_details.get('block_reason') or '镜头证据没有完成')
+        )
+        emit(
+            'shot-analysis',
+            'blocked' if shot_evidence_error else 'complete',
+            (
+                '只采集模式：镜头分析与最终模型已跳过'
+                if collection_only else
+                f"镜头证据不可用：{shot_evidence_error[:100]}" if shot_evidence_error else
+                f"{shot_details.get('provider')} 镜头证据已生成"
+            ),
+            68,
+        )
+        emit('evidence-merge', 'running', '正在合并平台、TK Note 与镜头证据', 72)
 
         def read_evidence(path_value, limit=60000):
             try:
@@ -1424,7 +1498,7 @@ class AIAnalyzer:
             'blocked_stages': list(getattr(asset, 'blocked_stages', []) or []),
         }
         evidence_bundle = {
-            'schema': 'viralx.evidence.v1',
+            'schema': EVIDENCE_BUNDLE_SCHEMA,
             'platform_evidence': {
                 key: video_data.get(key)
                 for key in (
@@ -1433,13 +1507,23 @@ class AIAnalyzer:
                 )
             },
             'tk_note_evidence': tk_note_evidence,
-            'libtv_evidence': libtv_details.get('evidence') or {
-                'shot_analysis': libtv_details.get('analysis', ''),
-                'project_url': libtv_details.get('project_url', ''),
+            'shot_evidence': shot_details.get('evidence') or {
+                'schema': 'viralx.shot_evidence.v1',
+                'provider': shot_details.get('provider'),
+                'model': shot_details.get('model'),
+                'status': shot_details.get('status'),
+                'block_reason': shot_evidence_error,
+                'shots': [],
             },
         }
+        evidence_bundle['shot_evidence'].update({
+            'provider': shot_details.get('provider'),
+            'model': shot_details.get('model'),
+            'status': shot_details.get('status'),
+            'project_url': shot_details.get('project_url', ''),
+        })
         video_data['evidence_bundle'] = evidence_bundle
-        shot_analysis = str((evidence_bundle.get('libtv_evidence') or {}).get('shot_analysis') or '')
+        shot_analysis = str((evidence_bundle.get('shot_evidence') or {}).get('shot_analysis') or '')
         audit_details = _persist_evidence_audit(
             video_file_path,
             evidence_bundle,
@@ -1447,16 +1531,41 @@ class AIAnalyzer:
         )
         emit('evidence-merge', 'complete', '统一证据包已就绪', 82)
 
+        if shot_evidence_error:
+            return {
+                'analysis': (
+                    '只采集已完成：平台与 TK Note 证据包已保存；根据设置，未生成镜头证据和最终报告。'
+                    if collection_only else
+                    f'镜头证据不可用：{shot_evidence_error}。最终模型未调用，避免无证据猜测。'
+                ),
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'shot-analysis',
+                'pipeline_status': 'blocked',
+                'evidence_status': 'partial',
+                'evidence_bundle': evidence_bundle,
+                'shot_provider': shot_details.get('provider'),
+                'shot_model': shot_details.get('model'),
+                'shot_status': shot_details.get('status', 'blocked'),
+                'shot_evidence_quality': (shot_details.get('evidence') or {}).get('quality', {}),
+                'shot_block_reason': shot_evidence_error,
+                'fallback_used': bool(shot_details.get('fallback_used')),
+                'fallback_chain': shot_details.get('fallback_chain', []),
+                'model_status': 'blocked',
+                **audit_details,
+                **acquisition_details,
+            }
+
         emit('final-analysis', 'running', f'{self.model_provider} 正在进行最终综合分析', 86)
-        final_analysis = self.model_analyzer.analyze(video_data, video_file_path)
+        # The final model is evidence-only. It never receives the original file
+        # and therefore cannot silently re-interpret frames outside the shot log.
+        final_analysis = self.model_analyzer.analyze(video_data, None)
         audit_details.update(_persist_evidence_audit(
             video_file_path,
             evidence_bundle,
             shot_analysis,
             final_analysis,
         ))
-        validator = getattr(self.model_analyzer, 'grounding_error', None)
-        grounding_error = validator(final_analysis, video_data) if callable(validator) else ''
+        grounding_error = _grounding_error(final_analysis, video_data)
         model_failed = '失败' in final_analysis or not final_analysis.strip() or bool(grounding_error)
         visible_analysis = final_analysis
         if grounding_error:
@@ -1478,11 +1587,18 @@ class AIAnalyzer:
             'pipeline_status': 'error' if model_failed else 'completed',
             'evidence_status': 'merged',
             'evidence_bundle': evidence_bundle,
-            'libtv_status': libtv_details.get('status', 'completed'),
-            'libtv_session_id': libtv_details.get('session_id', ''),
-            'libtv_project_uuid': libtv_details.get('project_uuid', ''),
-            'libtv_project_url': libtv_details.get('project_url', ''),
-            'libtv_result_urls': libtv_details.get('result_urls', []),
+            'shot_provider': shot_details.get('provider'),
+            'shot_model': shot_details.get('model'),
+            'shot_status': shot_details.get('status', 'completed'),
+            'shot_evidence_quality': (shot_details.get('evidence') or {}).get('quality', {}),
+            'shot_block_reason': '',
+            'fallback_used': bool(shot_details.get('fallback_used')),
+            'fallback_chain': shot_details.get('fallback_chain', []),
+            'libtv_status': shot_details.get('status') if shot_details.get('provider') == 'libtv' else 'not_used',
+            'libtv_session_id': shot_details.get('session_id', ''),
+            'libtv_project_uuid': shot_details.get('project_uuid', ''),
+            'libtv_project_url': shot_details.get('project_url', ''),
+            'libtv_result_urls': shot_details.get('result_urls', []),
             'model_status': 'error' if model_failed else 'completed',
             'model_grounding_error': grounding_error,
             **audit_details,
@@ -1517,8 +1633,8 @@ class AIAnalyzer:
         sorted_videos = sorted(videos, key=hot_score, reverse=True)[:max_videos]
         urls = video_urls or {}
 
-        # The five evidence stages are intentionally serial per task. This also
-        # prevents concurrent LibTV canvases from racing the local CLI session.
+        # The five evidence stages are intentionally serial per task. This keeps
+        # one source file, one evidence bundle, and one final report in lockstep.
         workers = 1
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_video = {
@@ -1547,7 +1663,7 @@ class AIAnalyzer:
                         and product_info
                         and analysis
                         and '分析异常' not in analysis
-                        and result.get('libtv_status') not in {'error', 'timeout'}
+                        and result.get('pipeline_status') == 'completed'
                     )
                     if can_remake:
                         remake_script = self._generate_remake_with_retry(video, analysis, product_name, product_info)

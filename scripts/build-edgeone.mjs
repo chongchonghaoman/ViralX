@@ -40,8 +40,8 @@ settingsHtml = settingsHtml
   .replaceAll("{{ url_for('static', filename='connector.js') }}", "/static/connector.js")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
   .replaceAll("{{ url_for('static', filename='settings.js') }}", "/static/settings.js")
-  .replace("配置留在本地；证据留在你的工作区。", "模型请求走云函数；LibTV 请求只发往本机 Connector。")
-  .replace("静态 EdgeOne 展示", "EdgeOne 云函数")
+  .replace("配置留在本地；证据留在你的工作区。", "网页负责配置与展示；分析请求只发往本机 Connector。")
+  .replace("静态 EdgeOne 展示", "EdgeOne 网页 + 健康检查")
   .replace("LOCAL-FIRST · 2026", "SESSION-FIRST · EDGEONE · 2026");
 await writeFile(join(publicDir, "settings.html"), settingsHtml, "utf8");
 
@@ -77,6 +77,7 @@ for (const moduleName of [
   "model_providers.py",
   "video_ingest.py",
   "libtv_analyzer.py",
+  "shot_analyzers.py",
   "tiktok_viral_analyzer.py",
 ]) {
   await cp(join(projectRoot, moduleName), join(publicFunctions, moduleName));

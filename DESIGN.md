@@ -103,13 +103,21 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
   applicable.
 - Local settings preserve secrets and local directories in the Flask runtime. EdgeOne settings
   keep credentials in the current browser session and may connect to the loopback-only ViralX
-  Connector after an explicit one-time pairing. There is one fixed analysis pipeline, not modes.
+  Connector after an explicit one-time pairing. There is one fixed evidence pipeline; the shot
+  stage alone exposes an explicit provider strategy: Auto, ShotLoom, LibTV, or collection-only.
+- ShotLoom Core is the recommended shot provider. It reuses the exact file already downloaded by
+  TK Note and exposes readiness, dependency, fallback, blocked, and evidence-quality states. LibTV
+  remains visible as an optional fallback, never as a hidden mandatory dependency.
+- The shot model and final model are separate responsibilities. Shot model controls use the same
+  provider-option anatomy and progressive disclosure as final-model controls, but must explain
+  that frame evidence cannot prove audio, audience, retention, or conversion claims.
 - Model configuration is one progressive-disclosure flow: choose OpenAI, Claude, Gemini,
   DeepSeek, OpenRouter, or Custom; then fill one API key and one model ID. Only Custom reveals
   protocol and Base URL. The provider grid is one column on phones and two columns from 40rem.
 - Each provider keeps an in-memory draft while the page is open, so changing providers never
   places one service's key into another service's field. The provider is always the final stage
-  after TK Note and LibTV evidence merge; failed calls never consume a fallback provider.
+  after TK Note and shot evidence merge; failed final-model calls never consume a fallback
+  provider. A failed shot provider may use the explicitly configured LibTV fallback in Auto mode.
 - Do not invent customer logos, performance metrics, case studies, or model results.
 
 ## Responsive order
@@ -128,16 +136,17 @@ change this sequence.
 
 ## Runtime and deployment boundary
 
-- The Flask build is the full local product. It owns `/api/analyze`, `/api/settings`,
-  `/api/libtv/auth/*`, TK Note, official LibTV CLI browser login, local video/cache files,
-  and Obsidian export. ViralX asks the CLI for connection state but never reads its tokens.
+- The Flask build is the full local product. It owns `/api/analyze`, `/api/settings`, TK Note,
+  ShotLoom Core, local video/cache files, Obsidian export and optional `/api/libtv/auth/*`.
+  ViralX asks the official LibTV CLI for connection state but never reads its tokens.
 - The EdgeOne build combines the static website with a constrained Python Cloud Function. It
   must not claim it can run the full pipeline because it cannot access a visitor's local source
   files, CLI login, browser cookies, persistent caches, or direct Obsidian filesystem writes.
 - EdgeOne Cloud Functions cannot access a visitor's local LibTV CLI login. The top-level
   production page connects directly to `http://127.0.0.1:57231` after the browser grants
   loopback access and a one-use fragment secret is exchanged for an in-memory session. The
-  Connector runs TK Note, LibTV shot analysis, evidence merge, then the selected model API.
+  Connector runs TK Note, ShotLoom Core (or the configured LibTV fallback), evidence merge, then
+  the selected final model API. The final model receives evidence only, never the source file.
 - Connector binds only to `127.0.0.1`, allows exact trusted Origins, validates CORS/PNA
   preflights, requires a short-lived session for every action, and limits hosted analysis to one
   video. It never exposes local settings, cache clearing, arbitrary file export, or CLI tokens.
@@ -166,13 +175,14 @@ change this sequence.
 ## Production UX and security contract
 
 - Public availability is not analysis readiness. The homepage health check must route an
-  unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
-  paired Connector with connected LibTV and a ready model provider may expose analysis as the primary CTA.
+  unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne. Readiness
+  depends on the selected shot strategy: ShotLoom configuration and dependencies, LibTV login, or
+  either provider in Auto mode; a final model is additionally required unless collection-only is selected.
 - TikTok Scraper7 is explained at the source field: video URLs bypass it, while keyword discovery needs
   it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> LibTV -> evidence merge ->
-  final model`. LibTV and model disclosures are both visible because both are required; changing
-  the provider never changes the pipeline.
+- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> shot evidence ->
+  evidence merge -> final model`. ShotLoom is recommended, LibTV is an optional fallback, and
+  collection-only states plainly that it will not generate a final report.
 - LibTV connection UI exposes `connector_missing`, `pairing_required`, `disconnected`, `starting`,
   `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
   Starting/awaiting states prevent duplicate actions; errors always expose a recovery action,
@@ -196,3 +206,8 @@ change this sequence.
 - Desktop and mobile preserve the same information order. The five-stage progress grid expands
   only when space allows and falls back to a readable linear list on narrow screens.
 - Readiness copy names the missing dependency instead of using a generic online/offline state.
+- Replaced the LibTV-mandatory UI with a provider-neutral shot-evidence stage without changing the
+  established palette, typography, spacing, navigation, hero, or motion language. The added
+  controls reuse the existing native radio, select, disclosure, field-error, and status patterns.
+- Added explicit blocked and fallback states. The UI never renders partial evidence as a completed
+  report and never calls collection-only mode a full analysis.

@@ -1,5 +1,5 @@
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
-/* Hallmark · macrostructure: Long Form + Sticky Category Index · genre: refined product editorial · tone: calm and technical · anchor: signal blue · theme: studied-DNA (source: https://www.butter.video/) · contrast: pass (40–41) · nav: N2 · footer: Ft2 · slop: pass (42–49) · mobile: pass (34, 49, 50–57) */
+/* Hallmark · macrostructure: Long Form + Sticky Category Index · genre: refined product editorial · tone: calm and technical · anchor: signal blue · theme: studied-DNA (source: https://www.butter.video/) · contrast: pass (40–41) · nav: N2 · footer: Ft2 · slop: pass (1–58) · mobile: pass (34, 49, 50–57) */
 
 .settings-page {
   background: var(--color-page);
@@ -68,6 +68,11 @@
   font-weight: 500;
 }
 
+.settings-runtime-note > div:first-child {
+  min-width: 16rem;
+  flex: 0 1 24rem;
+}
+
 .settings-runtime-note p {
   max-width: 64ch;
   margin: 0;
@@ -77,7 +82,8 @@
 
 .runtime-badges {
   display: flex;
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 1 1 38rem;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-xs);
@@ -730,6 +736,10 @@
 
   .runtime-badges {
     justify-content: flex-start;
+  }
+
+  .settings-runtime-note > div:first-child {
+    min-width: 0;
   }
 
   .settings-section {

@@ -17,6 +17,7 @@ from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message
 from ai_analyzer import AIAnalyzer
 from libtv_analyzer import LIBTV_CLI_PAGE, LibTVAuthManager
 from model_providers import model_is_ready, normalize_model_config
+from shot_analyzers import ShotLoomCoreAnalyzer, normalize_shot_config
 
 app = Flask(__name__)
 CONFIG_PATH = Path(__file__).parent / "config.json"
@@ -42,6 +43,12 @@ DEFAULT_CONFIG = {
     'rapidapi_key': '',
     'analysis_mode': 'pipeline',
     'libtv_concurrency': 2,
+    'shot_engine': 'auto',
+    'shot_model_source': 'inherit',
+    'shot_model_api_key': '',
+    'shot_model_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    'shot_model_name': 'qwen-vl-max',
+    'shot_scene_threshold': 27.0,
     'tk_note_asr_backend': 'auto',
     'tk_note_language': 'auto',
     'tk_note_cookies_from_browser': '',
@@ -77,6 +84,12 @@ def load_config():
         'RAPIDAPI_KEY': ('rapidapi_key', str),
         'ANALYSIS_MODE': ('analysis_mode', str),
         'LIBTV_CONCURRENCY': ('libtv_concurrency', int),
+        'VIRALX_SHOT_ENGINE': ('shot_engine', str),
+        'SHOT_MODEL_SOURCE': ('shot_model_source', str),
+        'SHOT_MODEL_API_KEY': ('shot_model_api_key', str),
+        'SHOT_MODEL_BASE_URL': ('shot_model_base_url', str),
+        'SHOT_MODEL_NAME': ('shot_model_name', str),
+        'SHOT_SCENE_THRESHOLD': ('shot_scene_threshold', float),
         'TK_NOTE_ASR_BACKEND': ('tk_note_asr_backend', str),
         'TK_NOTE_LANGUAGE': ('tk_note_language', str),
         'TK_NOTE_COOKIES_FROM_BROWSER': ('tk_note_cookies_from_browser', str),
@@ -240,7 +253,22 @@ def health():
         'libtv': bool(libtv_state.get('connected')),
         'model': model_is_ready(current_config),
     }
-    readiness['pipeline'] = readiness['libtv'] and readiness['model']
+    shot_config = normalize_shot_config(current_config)
+    shotloom_state = ShotLoomCoreAnalyzer(current_config).status()
+    if IS_EDGE_RUNTIME:
+        shotloom_state.update({
+            'ready': False,
+            'message': 'ShotLoom Core 需要本机 Connector 读取原视频并运行 OpenCV。',
+        })
+    engine = shot_config['engine']
+    engine_ready = {
+        'auto': bool(shotloom_state.get('ready') or readiness['libtv']),
+        'shotloom': bool(shotloom_state.get('ready')),
+        'libtv': readiness['libtv'],
+        'skip': True,
+    }.get(engine, False)
+    readiness['shot'] = engine_ready
+    readiness['pipeline'] = engine_ready and (readiness['model'] or engine == 'skip')
     return jsonify({
         'status': 'ok',
         'runtime': runtime,
@@ -250,6 +278,12 @@ def health():
         'configured': {
             **readiness,
             'keyword_search': bool(current_config.get('rapidapi_key')),
+        },
+        'shot': {
+            'engine': engine,
+            'ready': engine_ready,
+            'collection_only': engine == 'skip',
+            'shotloom': shotloom_state,
         },
         'libtv': {
             'auth': 'web',
@@ -366,10 +400,16 @@ def build_analyze_response(config_override=None, max_videos=None):
                 tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
                 tk_note_proxy=current_config.get('tk_note_proxy', ''),
                 tk_note_timeout=current_config.get('tk_note_timeout', 1800),
+                shot_engine=current_config.get('shot_engine', 'auto'),
+                shot_model_source=current_config.get('shot_model_source', 'inherit'),
+                shot_model_api_key=current_config.get('shot_model_api_key', ''),
+                shot_model_base_url=current_config.get('shot_model_base_url', ''),
+                shot_model_name=current_config.get('shot_model_name', ''),
+                shot_scene_threshold=current_config.get('shot_scene_threshold', 27.0),
             )
 
             # Run the local pipeline in a worker so stage callbacks can stream
-            # to the browser while TK Note, LibTV and the model are busy.
+            # to the browser while collection, shot evidence, and the model are busy.
             events = queue.Queue()
 
             def progress_callback(event):
@@ -401,11 +441,12 @@ def build_analyze_response(config_override=None, max_videos=None):
                 elif event_type == 'video':
                     results.append(payload)
                     result_stage = payload.get('pipeline_stage') or 'final-analysis'
-                    result_failed = payload.get('pipeline_status') == 'error'
+                    result_failed = payload.get('pipeline_status') != 'completed'
+                    result_state = payload.get('pipeline_status') or 'error'
                     yield json.dumps({
                         'status': 'progress',
                         'stage': result_stage,
-                        'stage_status': 'error' if result_failed else 'complete',
+                        'stage_status': 'blocked' if result_state == 'blocked' else ('error' if result_failed else 'complete'),
                         'stage_label': '完整证据链已生成最终报告' if not result_failed else f'{result_stage} 阶段没有完成',
                         'stage_progress': 100 if not result_failed else 0,
                         'done': False,
@@ -420,10 +461,10 @@ def build_analyze_response(config_override=None, max_videos=None):
 
             # 推送完成信号
             failed_videos = sum(
-                1 for item in results if item.get('pipeline_status') == 'error'
+                1 for item in results if item.get('pipeline_status') != 'completed'
             )
             pending_videos = sum(
-                1 for item in results if item.get('libtv_status') == 'timeout'
+                1 for item in results if item.get('shot_status') == 'timeout'
             )
             yield json.dumps({
                 'status': 'success',
@@ -439,6 +480,7 @@ def build_analyze_response(config_override=None, max_videos=None):
             secrets = (
                 current_config.get('rapidapi_key'),
                 current_config.get('model_api_key'),
+                current_config.get('shot_model_api_key'),
                 current_config.get('gemini_api_key'),
                 current_config.get('openrouter_api_key'),
                 current_config.get('minimax_api_key'),
@@ -514,9 +556,12 @@ def generate_variants():
             return jsonify({'status': 'error', 'message': '缺少原始视频分析内容'}), 400
 
         ai = AIAnalyzer(
-            api_key=current_config.get('minimax_api_key'),
-            base_url=current_config.get('minimax_base_url'),
-            model=current_config.get('minimax_model')
+            analysis_mode=current_config.get('analysis_mode', 'pipeline'),
+            model_provider=current_config.get('model_provider', 'openai'),
+            model_protocol=current_config.get('model_protocol', 'openai'),
+            model_api_key=current_config.get('model_api_key', ''),
+            model_base_url=current_config.get('model_base_url', ''),
+            model_name=current_config.get('model_name', ''),
         )
         variants = ai.generate_viral_variants(video, analysis)
 

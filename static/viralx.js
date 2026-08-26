@@ -18,6 +18,8 @@
     complete: "完成",
     completed: "完成",
     skipped: "跳过",
+    blocked: "已阻断",
+    degraded: "已降级",
     error: "失败",
   };
   const apiFetch = (url, options) => window.ViralXCloudConfig
@@ -281,22 +283,37 @@
       runtimeMode = data.runtime || "local";
       if (runtimeMode === "edgeone") {
         const session = window.ViralXCloudConfig?.read() || {};
-        const modelReady = Boolean(session.model_api_key && session.model_name && session.model_base_url);
+        const engine = session.shot_engine || "auto";
+        const collectionOnly = engine === "skip";
+        const modelReady = collectionOnly || Boolean(session.model_api_key && session.model_name && session.model_base_url);
         try {
           await window.ViralXConnector?.ready();
           const connector = await window.ViralXConnector?.probe();
           const paired = Boolean(connector?.paired);
           const libtv = connector?.libtv || {};
           const libtvReady = Boolean(libtv.connected || libtv.state === "connected");
-          runtimeReady = paired && libtvReady && modelReady;
+          const shotloomInstalled = Boolean(connector?.shotloom_core?.installed);
+          const shotModelReady = session.shot_model_source === "inherit"
+            ? Boolean(session.model_api_key && session.model_name)
+            : Boolean(session.shot_model_api_key && session.shot_model_base_url && session.shot_model_name);
+          const shotloomReady = shotloomInstalled && shotModelReady;
+          const shotReady = {
+            auto: shotloomReady || libtvReady,
+            shotloom: shotloomReady,
+            libtv: libtvReady,
+            skip: true,
+          }[engine] || false;
+          runtimeReady = paired && shotReady && modelReady;
           chip.dataset.state = runtimeReady ? "ready" : "warning";
           label.textContent = runtimeReady
-            ? "完整链路就绪 · TK Note → LibTV → 模型"
+            ? collectionOnly
+              ? "采集链就绪 · 只保存 TK Note 证据"
+              : `完整链路就绪 · TK Note → ${engine === "libtv" ? "LibTV" : "ShotLoom"} → 模型`
             : !paired
               ? "Connector 已启动 · 待安全配对"
-              : !libtvReady
-                ? "Connector 已配对 · 待登录 LibTV"
-                : "LibTV 已连接 · 待配置模型 API";
+              : !shotReady
+                ? "Connector 已配对 · 待配置镜头引擎"
+                : "镜头引擎已就绪 · 待配置最终模型";
         } catch (_) {
           runtimeReady = false;
           chip.dataset.state = "warning";
@@ -311,10 +328,13 @@
       runtimeReady = Boolean(data.analysis_ready);
       if (runtimeReady) {
         chip.dataset.state = "ready";
-        label.textContent = "本地完整链路就绪 · TK Note → LibTV → 模型";
+        const shot = data.shot || {};
+        label.textContent = shot.collection_only
+          ? "本地采集链就绪 · 不生成最终报告"
+          : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "镜头证据"} → 模型`;
       } else {
         chip.dataset.state = "warning";
-        label.textContent = "本地服务在线 · 待补齐 LibTV 与模型配置";
+        label.textContent = "本地服务在线 · 待补齐镜头引擎与最终模型配置";
       }
       syncPrimaryActions();
     } catch (_) {
@@ -489,7 +509,7 @@
     const analysisId = `analysis-${Date.now()}-${index}`;
     const remakeId = `remake-${Date.now()}-${index}`;
     const provider = String(video.analysis_provider || "model").toLowerCase();
-    const status = video.libtv_status || "";
+    const status = video.shot_status || video.libtv_status || "";
     const modelStatus = video.model_status || "";
     const acquisitionProvider = video.acquisition_provider || "";
     const acquisitionStatus = video.tk_note_status || video.video_ingest_status || "";
@@ -506,12 +526,13 @@
       openrouter: "OpenRouter",
       custom: "自定义模型",
     }[provider] || provider;
-    const libtvLabel = status === "error"
-      ? "LibTV · 拉片失败"
+    const shotProvider = video.shot_provider === "libtv" ? "LibTV" : video.shot_provider === "shotloom" ? "ShotLoom" : "镜头证据";
+    const shotLabel = ["error", "blocked"].includes(status)
+      ? `${shotProvider} · 已阻断`
       : status === "timeout" || status === "pending"
-        ? "LibTV · 处理中"
-        : "LibTV · 拉片完成";
-    const providerLabel = modelStatus === "error"
+        ? `${shotProvider} · 处理中`
+        : `${shotProvider} · 已完成`;
+    const providerLabel = ["error", "blocked"].includes(modelStatus)
       ? `${providerName} · 分析失败`
       : `${providerName} · 最终分析`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
@@ -530,12 +551,12 @@
       </div>
       <div class="provider-row">
         ${acquisitionLabel ? `<span class="provider-badge ${escapeHtml(acquisitionStatus)}">${escapeHtml(acquisitionLabel)}</span>` : ""}
-        <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(libtvLabel)}</span>
+        <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(shotLabel)}</span>
         <span class="provider-badge ${escapeHtml(modelStatus)}">${escapeHtml(providerLabel)}</span>
       </div>
       <div class="card-actions">
         <button class="analysis-btn" type="button">打开最终分析</button>
-        ${status === "error" ? runtimeMode === "edgeone" ? '<span class="project-link">云端配置未就绪</span>' : '<a class="project-link" href="/settings">检查 LibTV 设置</a>' : ""}
+        ${["error", "blocked"].includes(status) ? runtimeMode === "edgeone" ? '<span class="project-link">镜头证据未就绪</span>' : '<a class="project-link" href="/settings">检查镜头引擎设置</a>' : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
       <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || "")}</div>
@@ -661,7 +682,7 @@
     } catch (error) {
       failActiveStage();
       const hint = runtimeMode === "edgeone"
-        ? "确认本机 Connector 正在运行、LibTV 已登录且模型 API 已配置"
+        ? "确认本机 Connector 正在运行、镜头引擎与最终模型已配置"
         : "确认本地服务仍在运行";
       showInlineError(`分析没有完成：${error.message}。${hint}后重试。`);
       updateResultCount(received, "连接中断");

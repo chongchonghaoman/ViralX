@@ -20,9 +20,10 @@ from urllib.parse import quote
 from flask import Flask, jsonify, make_response, request
 
 import web_app
+from shot_analyzers import shotloom_dependency_status
 
 
-CONNECTOR_VERSION = "1.0.0"
+CONNECTOR_VERSION = "1.1.0"
 CONNECTOR_HOST = "127.0.0.1"
 CONNECTOR_PORT = 57231
 CONNECTOR_ORIGIN = f"http://{CONNECTOR_HOST}:{CONNECTOR_PORT}"
@@ -54,6 +55,12 @@ ALLOWED_REQUEST_HEADERS = {
     "x-viralx-model-key",
     "x-viralx-model-base-url",
     "x-viralx-model-name",
+    "x-viralx-shot-engine",
+    "x-viralx-shot-model-source",
+    "x-viralx-shot-model-key",
+    "x-viralx-shot-model-base-url",
+    "x-viralx-shot-model-name",
+    "x-viralx-shot-threshold",
 }
 
 
@@ -160,6 +167,22 @@ def _request_config() -> dict[str, Any]:
         if value:
             config[field] = value
 
+    shot_fields = {
+        "shot_model_api_key": "X-ViralX-Shot-Model-Key",
+        "shot_model_base_url": "X-ViralX-Shot-Model-Base-URL",
+        "shot_model_name": "X-ViralX-Shot-Model-Name",
+    }
+    engine = request.headers.get("X-ViralX-Shot-Engine", "").strip().lower()
+    if engine in {"auto", "shotloom", "libtv", "skip"}:
+        config["shot_engine"] = engine
+    source = request.headers.get("X-ViralX-Shot-Model-Source", "").strip().lower()
+    if source in {"inherit", "qwen", "custom"}:
+        config["shot_model_source"] = source
+    for field, header in shot_fields.items():
+        value = request.headers.get(header, "").strip()
+        if value:
+            config[field] = value
+
     try:
         min_likes = int(request.headers.get("X-ViralX-Min-Likes", ""))
         config["min_likes"] = min(max(min_likes, 0), 100_000_000)
@@ -169,6 +192,11 @@ def _request_config() -> dict[str, Any]:
     try:
         timeout = int(request.headers.get("X-ViralX-TK-Timeout", ""))
         config["tk_note_timeout"] = min(max(timeout, 30), 7200)
+    except (TypeError, ValueError):
+        pass
+    try:
+        threshold = float(request.headers.get("X-ViralX-Shot-Threshold", ""))
+        config["shot_scene_threshold"] = min(max(threshold, 5.0), 80.0)
     except (TypeError, ValueError):
         pass
     return config
@@ -245,6 +273,7 @@ def create_connector_app(
             payload["libtv"] = web_app.libtv_auth.status(
                 force=request.args.get("refresh") == "1"
             )
+            payload["shotloom_core"] = shotloom_dependency_status()
         else:
             payload["state"] = "pairing_required"
             payload["message"] = "Connector 已启动；请使用它自动打开的网页完成一次性配对。"

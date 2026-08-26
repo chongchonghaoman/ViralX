@@ -2,12 +2,12 @@
   "use strict";
 
   const PROVIDERS = {
-    openai: { name: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", keyPlaceholder: "OpenAI API Key" },
-    anthropic: { name: "Anthropic Claude", protocol: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", keyPlaceholder: "Anthropic API Key" },
-    gemini: { name: "Google Gemini", protocol: "gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-3.7-flash", keyPlaceholder: "Google AI Studio API Key" },
-    deepseek: { name: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash", keyPlaceholder: "DeepSeek API Key" },
-    openrouter: { name: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/auto", keyPlaceholder: "OpenRouter API Key" },
-    custom: { name: "自定义 API", protocol: "openai", baseUrl: "", model: "", keyPlaceholder: "自定义服务的 API Key" },
+    openai: { name: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", vision: true, keyPlaceholder: "OpenAI API Key" },
+    anthropic: { name: "Anthropic Claude", protocol: "anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-5", vision: true, keyPlaceholder: "Anthropic API Key" },
+    gemini: { name: "Google Gemini", protocol: "gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-3.7-flash", vision: true, keyPlaceholder: "Google AI Studio API Key" },
+    deepseek: { name: "DeepSeek", protocol: "openai", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash", vision: false, keyPlaceholder: "DeepSeek API Key" },
+    openrouter: { name: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/auto", vision: true, keyPlaceholder: "OpenRouter API Key" },
+    custom: { name: "自定义 API", protocol: "openai", baseUrl: "", model: "", vision: true, keyPlaceholder: "自定义服务的 API Key" },
   };
 
   const DEFAULTS = {
@@ -16,6 +16,9 @@
     tk_note_timeout: 90, video_cache_dir: "./video_cache", model_provider: "openai",
     model_protocol: "openai", model_api_key: "", model_base_url: "https://api.openai.com/v1",
     model_name: "gpt-4.1-mini", gemini_api_key: "", gemini_model: "gemini-3.7-flash", openrouter_api_key: "",
+    shot_engine: "auto", shot_model_source: "inherit", shot_model_api_key: "",
+    shot_model_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    shot_model_name: "qwen-vl-max", shot_scene_threshold: 27,
     openrouter_model: "openrouter/auto",
     minimax_api_key: "", minimax_base_url: "https://api.minimaxi.com/anthropic",
     minimax_model: "MiniMax-M2.7", min_likes: 5000, output_dir: "./data",
@@ -27,7 +30,7 @@
   let activeProvider = "openai";
   let providerDrafts = {};
   let libtvPollTimer = 0;
-  let connectorState = { available: false, paired: false, libtv: null };
+  let connectorState = { available: false, paired: false, libtv: null, shotloomCore: null };
   const byId = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const apiFetch = (url, options) => window.ViralXCloudConfig
@@ -97,6 +100,36 @@
     });
   }
 
+  function renderShotEngine() {
+    const engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "auto";
+    const source = byId("shot_model_source")?.value || "inherit";
+    const shotloomRelevant = ["auto", "shotloom"].includes(engine);
+    const libtvRelevant = ["auto", "libtv"].includes(engine);
+    const shotModelDisclosure = byId("shot-model-disclosure");
+    const libtvDisclosure = byId("libtv-fallback-disclosure");
+    if (shotModelDisclosure) shotModelDisclosure.hidden = !shotloomRelevant;
+    if (libtvDisclosure) {
+      libtvDisclosure.hidden = !libtvRelevant;
+      if (engine === "libtv") libtvDisclosure.open = true;
+    }
+    document.querySelectorAll("[data-shot-model-field]").forEach((field) => {
+      const credentialNeeded = source !== "inherit";
+      field.hidden = !credentialNeeded;
+      field.querySelectorAll("input, select").forEach((control) => { control.disabled = !credentialNeeded; });
+    });
+    if (source === "qwen") {
+      if (!byId("shot_model_base_url").value.trim()) setValue("shot_model_base_url", DEFAULTS.shot_model_base_url);
+      if (!byId("shot_model_name").value.trim()) setValue("shot_model_name", DEFAULTS.shot_model_name);
+    }
+    const dependency = connectorState.shotloomCore;
+    const summary = byId("shotloom-summary-state");
+    if (summary) {
+      summary.textContent = dependency?.installed === false
+        ? "依赖未安装"
+        : source === "inherit" ? "复用最终视觉模型" : "独立视觉模型";
+    }
+  }
+
   function selectProvider(provider, { restore = true, userInitiated = false } = {}) {
     const next = PROVIDERS[provider] ? provider : "openai";
     if (restore && activeProvider) providerDrafts[activeProvider] = providerDraft();
@@ -116,6 +149,7 @@
     setValue("model_base_url", draft.baseUrl || preset.baseUrl);
     setValue("model_protocol", draft.protocol || preset.protocol);
     renderProvider(next);
+    renderShotEngine();
     if (userInitiated) syncAnalysisMode();
   }
 
@@ -134,6 +168,10 @@
       },
     };
     selectProvider(activeProvider, { restore: false });
+    document.querySelectorAll('input[name="shot_engine"]').forEach((radio) => {
+      radio.checked = radio.value === (settings.shot_engine || "auto");
+    });
+    renderShotEngine();
     renderKeywords();
     clearFieldErrors();
     syncAnalysisMode();
@@ -148,6 +186,12 @@
     settings.tk_note_proxy = byId("tk_note_proxy").value.trim();
     settings.tk_note_timeout = Number.parseInt(byId("tk_note_timeout").value, 10) || DEFAULTS.tk_note_timeout;
     settings.video_cache_dir = byId("video_cache_dir").value.trim() || DEFAULTS.video_cache_dir;
+    settings.shot_engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "auto";
+    settings.shot_model_source = byId("shot_model_source").value || "inherit";
+    settings.shot_model_api_key = byId("shot_model_api_key").value.trim();
+    settings.shot_model_base_url = byId("shot_model_base_url").value.trim();
+    settings.shot_model_name = byId("shot_model_name").value.trim();
+    settings.shot_scene_threshold = Math.min(Math.max(Number(byId("shot_scene_threshold").value) || 27, 5), 80);
     const selectedProvider = document.querySelector('input[name="model_provider"]:checked')?.value || "openai";
     const preset = PROVIDERS[selectedProvider];
     settings.model_provider = selectedProvider;
@@ -158,14 +202,32 @@
     const parsedMinLikes = Number.parseInt(byId("min_likes").value, 10);
     settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
-    if (!settings.model_api_key) throw new SettingsValidationError("model_api_key", "完整分析链需要填写模型 API Key");
-    if (!settings.model_name) throw new SettingsValidationError("model_name", "完整分析链需要填写模型名称");
-    if (selectedProvider === "custom") {
+    if (settings.shot_engine !== "skip" && !settings.model_api_key) throw new SettingsValidationError("model_api_key", "完整分析链需要填写最终模型 API Key");
+    if (settings.shot_engine !== "skip" && !settings.model_name) throw new SettingsValidationError("model_name", "完整分析链需要填写最终模型名称");
+    if (settings.shot_engine !== "skip" && selectedProvider === "custom") {
       let endpoint;
       try { endpoint = new URL(settings.model_base_url); }
       catch (_) { throw new SettingsValidationError("model_base_url", "自定义 Base URL 不是有效的完整地址"); }
       if (!(["http:", "https:"].includes(endpoint.protocol)) || endpoint.search || endpoint.hash) {
         throw new SettingsValidationError("model_base_url", "自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
+      }
+    }
+    if (["auto", "shotloom"].includes(settings.shot_engine)) {
+      if (settings.shot_model_source === "inherit") {
+        const inheritsVision = preset.vision && settings.model_protocol === "openai";
+        if (!inheritsVision) {
+          throw new SettingsValidationError("shot_model_source", "当前最终模型不能作为 ShotLoom 视觉模型；请选择 Qwen VL 或自定义 OpenAI-compatible 视觉模型");
+        }
+      } else {
+        if (!settings.shot_model_api_key) throw new SettingsValidationError("shot_model_api_key", "ShotLoom Core 需要镜头视觉模型 API Key");
+        if (!settings.shot_model_base_url) throw new SettingsValidationError("shot_model_base_url", "镜头视觉模型需要 Base URL");
+        if (!settings.shot_model_name) throw new SettingsValidationError("shot_model_name", "镜头视觉模型需要模型名称");
+        let shotEndpoint;
+        try { shotEndpoint = new URL(settings.shot_model_base_url); }
+        catch (_) { throw new SettingsValidationError("shot_model_base_url", "镜头模型 Base URL 不是有效的完整地址"); }
+        if (!(["http:", "https:"].includes(shotEndpoint.protocol)) || shotEndpoint.search || shotEndpoint.hash) {
+          throw new SettingsValidationError("shot_model_base_url", "镜头模型 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
+        }
       }
     }
     return settings;
@@ -249,7 +311,7 @@
     const title = document.createElement("strong");
     title.textContent = "当前标签页的安全配置";
     const description = document.createElement("p");
-    description.textContent = "TikTok Scraper7 与模型密钥只保存在当前标签页。完整任务发送给仅监听 127.0.0.1 的 Connector，由它串联 TK Note、LibTV 与模型服务；EdgeOne 不代理分析内容。";
+    description.textContent = "TikTok Scraper7 与模型密钥只保存在当前标签页。完整任务发送给仅监听 127.0.0.1 的 Connector，由它串联 TK Note、镜头证据与最终模型；EdgeOne 不代理分析内容。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
@@ -260,7 +322,8 @@
         : "等待配对";
     const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
     const libtvConnected = connectorState.libtv?.state === "connected";
-    [["固定链路", "串联"], ["本机 Connector", connectorLabel], ["LibTV", libtvConnected ? "已连接" : "未连接"], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [`${searchProvider} 搜索`, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
+    const shotloomInstalled = Boolean(connectorState.shotloomCore?.installed);
+    [["证据链", "串联"], ["本机 Connector", connectorLabel], ["ShotLoom Core", shotloomInstalled ? "已安装" : "待安装"], ["LibTV 备用", libtvConnected ? "已连接" : "未连接"], [`${providerLabel} 最终模型`, modelConfigured ? "已配置" : "未配置"], [`${searchProvider} 搜索`, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;
@@ -276,7 +339,7 @@
       field.hidden = true;
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
-    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 只提供网页界面；本机 Connector 串联 TK Note、LibTV 与模型 API。密钥只留在当前标签页，登录态只留在官方 LibTV CLI。";
+    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 只提供网页界面；本机 Connector 串联 TK Note、ShotLoom Core、可选 LibTV 与最终模型。密钥只留在当前标签页。";
     document.querySelector(".settings-actions > p").textContent = "保存到当前标签页；关闭后自动清除。";
     byId("save-btn").textContent = "保存到当前会话";
     byId("reset-btn").textContent = "恢复会话值";
@@ -334,6 +397,7 @@
           available: true,
           paired: Boolean(status?.paired),
           libtv: status?.libtv || null,
+          shotloomCore: status?.shotloom_core || null,
         };
         if (!connectorState.paired) {
           renderLibTVState({
@@ -347,6 +411,7 @@
         }
         const state = connectorState.libtv || {};
         renderLibTVState(state);
+        renderShotEngine();
         updateRuntimeNote();
         if (poll && ["starting", "awaiting_browser"].includes(state.state)) {
           stopLibTVPolling();
@@ -355,7 +420,7 @@
           stopLibTVPolling();
         }
       } catch (_) {
-        connectorState = { available: false, paired: false, libtv: null };
+        connectorState = { available: false, paired: false, libtv: null, shotloomCore: null };
         stopLibTVPolling();
         const permission = await window.ViralXConnector?.permissionState();
         renderLibTVState({
@@ -364,6 +429,7 @@
             ? "浏览器已拒绝本机网络访问。请在本站点权限中允许本地网络，然后刷新状态。"
             : "这台电脑尚未运行 ViralX Connector，或浏览器尚未允许本机网络。启动后它会打开本页并自动完成一次性配对。",
         });
+        renderShotEngine();
         updateRuntimeNote();
       }
       return;
@@ -443,7 +509,7 @@
     applySettings();
     const pairing = await window.ViralXConnector?.ready();
     if (pairing?.attempted && pairing.paired) {
-      showStatus("已与本机 ViralX Connector 安全配对。现在可以连接 LibTV。", "success", { focus: false });
+      showStatus("已与本机 ViralX Connector 安全配对。现在可以运行 ShotLoom Core；LibTV 仅作备用。", "success", { focus: false });
     } else if (pairing?.attempted && pairing.error) {
       showStatus(`Connector 配对失败：${pairing.error}`, "error", { focus: false });
     }
@@ -581,6 +647,16 @@
       radio.addEventListener("change", (event) => {
         if (event.currentTarget.checked) selectProvider(event.currentTarget.value, { userInitiated: true });
       });
+    });
+    document.querySelectorAll('input[name="shot_engine"]').forEach((radio) => {
+      radio.addEventListener("change", () => renderShotEngine());
+    });
+    byId("shot_model_source").addEventListener("change", (event) => {
+      if (event.currentTarget.value === "qwen") {
+        setValue("shot_model_base_url", DEFAULTS.shot_model_base_url);
+        setValue("shot_model_name", DEFAULTS.shot_model_name);
+      }
+      renderShotEngine();
     });
     byId("model_base_url").addEventListener("input", () => renderProvider("custom"));
     document.querySelectorAll(".settings-field input, .settings-field select, .settings-field textarea").forEach((control) => {

@@ -118,7 +118,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
         self.assertIn("Connector", payload["message"])
-        self.assertIn("LibTV", payload["message"])
+        self.assertIn("镜头取证", payload["message"])
 
     def test_private_settings_and_cache_routes_are_not_public(self):
         self.assertEqual(self.client.get("/settings").status_code, 404)

@@ -2,13 +2,15 @@ flowchart LR
     K[搜索主题] --> A[01 Scraper7<br/>发现候选视频]
     U[视频直链] -->|跳过 Scraper7| T
     A --> T[02 TK Note / yt-dlp<br/>原片与平台证据]
-    T --> L[03 LibTV<br/>上传原片与多模态拉片]
-    L --> E[04 证据合并<br/>viralx.evidence.v1]
+    T --> S[03 ShotLoom Core<br/>同一原片的镜头证据]
+    S -. 失败且为自动模式 .-> L[LibTV 备用<br/>官方 CLI 拉片]
+    S --> E[04 证据合并<br/>viralx.evidence_bundle.v1]
+    L --> E
     E --> M[05 已选模型 API<br/>最终分析]
     M --> R[最终报告]
     M --> S[复刻脚本]
     M --> O[Obsidian / Markdown]
-    L --> C[LibTV 画布]
+    L --> C[可选 LibTV 画布]
 
     subgraph Browser[EdgeOne 浏览器界面]
         K
@@ -21,6 +23,7 @@ flowchart LR
 
     subgraph Connector[本机 Connector 串联编排]
         T
+        S
         L
         E
     end

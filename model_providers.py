@@ -153,6 +153,7 @@ def normalize_model_config(config: dict, *, allow_private_custom: bool = False) 
     normalized.update({
         "model_provider": provider,
         "model_protocol": protocol,
+        "model_supports_vision": bool(preset.get("vision", True)),
         "model_api_key": str(normalized.get("model_api_key") or legacy_key or "").strip(),
         "model_base_url": model_base_url,
         "model_name": str(normalized.get("model_name") or legacy_model or preset["model"]).strip(),

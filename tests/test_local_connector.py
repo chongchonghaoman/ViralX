@@ -49,7 +49,7 @@ class LocalConnectorTests(unittest.TestCase):
             headers={
                 "Origin": TRUSTED_ORIGIN,
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token, x-viralx-model-key, x-viralx-model-name",
+                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token, x-viralx-model-key, x-viralx-model-name, x-viralx-shot-engine, x-viralx-shot-model-key",
                 "Access-Control-Request-Private-Network": "true",
             },
         )
@@ -116,6 +116,7 @@ class LocalConnectorTests(unittest.TestCase):
         payload = response.get_json()
         self.assertTrue(payload["paired"])
         self.assertTrue(payload["libtv"]["connected"])
+        self.assertIn("installed", payload["shotloom_core"])
         self.assertNotIn(token, json.dumps(payload))
         self.assertNotIn(secret, json.dumps(payload))
 
@@ -156,6 +157,12 @@ class LocalConnectorTests(unittest.TestCase):
                     "X-ViralX-Model-Key": "session-model-key",
                     "X-ViralX-Model-Base-URL": "https://api.openai.com/v1",
                     "X-ViralX-Model-Name": "gpt-4.1-mini",
+                    "X-ViralX-Shot-Engine": "shotloom",
+                    "X-ViralX-Shot-Model-Source": "custom",
+                    "X-ViralX-Shot-Model-Key": "session-shot-key",
+                    "X-ViralX-Shot-Model-Base-URL": "https://vision.example.com/v1",
+                    "X-ViralX-Shot-Model-Name": "vision-model",
+                    "X-ViralX-Shot-Threshold": "31",
                 },
             )
 
@@ -166,6 +173,9 @@ class LocalConnectorTests(unittest.TestCase):
         self.assertEqual(captured["config_override"]["tk_note_timeout"], 180)
         self.assertEqual(captured["config_override"]["model_api_key"], "session-model-key")
         self.assertEqual(captured["config_override"]["model_name"], "gpt-4.1-mini")
+        self.assertEqual(captured["config_override"]["shot_engine"], "shotloom")
+        self.assertEqual(captured["config_override"]["shot_model_api_key"], "session-shot-key")
+        self.assertEqual(captured["config_override"]["shot_scene_threshold"], 31)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940" role="img" aria-labelledby="title desc">
-  <title id="title">ViralX 固定串联分析流程</title>
-  <desc id="desc">关键词通过 TikTok Scraper7 发现候选视频，视频直链跳过搜索；随后由本机 Connector 串联 TK Note、LibTV、证据合并与模型 API，输出最终报告、复刻脚本、LibTV 画布和 Markdown。</desc>
+  <title id="title">ViralX 证据优先串联分析流程</title>
+  <desc id="desc">关键词通过 TikTok Scraper7 发现候选视频，视频直链跳过搜索；本机 Connector 使用 TK Note 下载真实原片，ShotLoom Core 生成镜头证据并可回退 LibTV，质量检查通过后才调用最终模型 API。</desc>
   <defs>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
       <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F0F0F" flood-opacity="0.08"/>
@@ -28,11 +28,11 @@
   <g class="cn">
     <rect x="70" y="62" width="360" height="46" rx="23" fill="#0F0F0F"/>
     <text x="94" y="92" class="label" fill="#FAFAFA">VIRALX · EVIDENCE PIPELINE</text>
-    <text x="70" y="174" font-size="54" font-weight="700" fill="#0F0F0F">一条固定串联链路，证据逐层累积</text>
-    <text x="72" y="215" class="body muted">先找到真实视频，再采集、拉片、合并证据，最后才交给模型判断。</text>
+    <text x="70" y="174" font-size="54" font-weight="700" fill="#0F0F0F">先完成证据，再允许模型判断</text>
+    <text x="72" y="215" class="body muted">同一份真实原片贯穿采集和逐镜取证；证据不足就阻断，不用模型补空白。</text>
     <rect x="1242" y="160" width="286" height="54" rx="27" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
     <circle cx="1272" cy="187" r="7" fill="#63AD45"/>
-    <text x="1291" y="194" class="small" fill="#0F0F0F">固定流程 · 不切分析模式</text>
+    <text x="1291" y="194" class="small" fill="#0F0F0F">ShotLoom 优先 · LibTV 备用</text>
 
     <rect x="70" y="264" width="258" height="74" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
     <text x="94" y="294" font-size="15" font-weight="700" letter-spacing=".12em" fill="#656565">入口 A</text>
@@ -75,29 +75,29 @@
     <text x="392" y="614" class="body muted">字幕 / ASR · 资产清单</text>
     <text x="392" y="645" class="body muted">兼容链接可回退 yt-dlp</text>
 
-    <text x="690" y="438" class="label" fill="#B8B8B8">03 · WATCH</text>
-    <text x="690" y="485" font-size="29" font-weight="700" fill="#FAFAFA">LibTV</text>
-    <text x="690" y="517" font-size="21" font-weight="700" fill="#FAFAFA">多模态拉片</text>
+    <text x="690" y="438" class="label" fill="#B8B8B8">03 · EVIDENCE</text>
+    <text x="690" y="485" font-size="29" font-weight="700" fill="#FAFAFA">ShotLoom Core</text>
+    <text x="690" y="517" font-size="21" font-weight="700" fill="#FAFAFA">逐镜事实取证</text>
     <line x1="690" y1="548" x2="900" y2="548" stroke="#3C3C3C" stroke-width="2"/>
-    <text x="690" y="583" class="body" fill="#D6D6D6">创建画布 · 上传原片</text>
-    <text x="690" y="614" class="body" fill="#D6D6D6">运行 GVLM 节点</text>
-    <text x="690" y="645" class="body" fill="#D6D6D6">输出镜头与视听证据</text>
+    <text x="690" y="583" class="body" fill="#D6D6D6">读取 TK Note 同一原片</text>
+    <text x="690" y="614" class="body" fill="#D6D6D6">镜头 ID · 时间线 · SHA-256</text>
+    <text x="690" y="645" class="body" fill="#D6D6D6">失败时可回退 LibTV</text>
 
     <text x="988" y="438" class="label" fill="#0F0F0F">04 · MERGE</text>
     <text x="988" y="485" font-size="29" font-weight="700" fill="#0F0F0F">Evidence</text>
     <text x="988" y="517" font-size="21" font-weight="700" fill="#0F0F0F">统一证据合同</text>
     <line x1="988" y1="548" x2="1182" y2="548" stroke="#0F0F0F" stroke-opacity=".22" stroke-width="2"/>
     <text x="988" y="583" class="body" fill="#0F0F0F">平台数据 + TK Note</text>
-    <text x="988" y="614" class="body" fill="#0F0F0F">+ LibTV 拉片证据</text>
-    <text x="988" y="645" class="body" fill="#0F0F0F">viralx.evidence.v1</text>
+    <text x="988" y="614" class="body" fill="#0F0F0F">+ 逐镜视觉事实</text>
+    <text x="988" y="645" class="body" fill="#0F0F0F">evidence_bundle.v1</text>
 
     <text x="1270" y="438" class="label" fill="#0F0F0F">05 · ANALYZE</text>
     <text x="1270" y="485" font-size="29" font-weight="700" fill="#0F0F0F">模型 API</text>
     <text x="1270" y="517" font-size="21" font-weight="700" fill="#0F0F0F">基于完整证据终审</text>
     <line x1="1270" y1="548" x2="1506" y2="548" stroke="#0F0F0F" stroke-opacity=".22" stroke-width="2"/>
     <text x="1270" y="583" class="body" fill="#0F0F0F">使用设置页所选模型</text>
-    <text x="1270" y="614" class="body" fill="#0F0F0F">不回退、不跳过证据</text>
-    <text x="1270" y="645" class="body" fill="#0F0F0F">生成最终分析报告</text>
+    <text x="1270" y="614" class="body" fill="#0F0F0F">只接收命名证据文本</text>
+    <text x="1270" y="645" class="body" fill="#0F0F0F">引用不足即拦截报告</text>
 
     <path d="M328 540 H356" class="line"/>
     <path d="M626 540 H654" class="line"/>
@@ -118,7 +118,7 @@
     <rect x="1338" y="742" width="192" height="62" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
     <text x="867" y="780" class="small" fill="#0F0F0F">最终报告</text>
     <text x="1035" y="780" class="small" fill="#0F0F0F">复刻脚本</text>
-    <text x="1203" y="780" class="small" fill="#0F0F0F">LibTV 画布</text>
+    <text x="1185" y="780" class="small" fill="#0F0F0F">可选 LibTV 画布</text>
     <text x="1369" y="780" class="small" fill="#0F0F0F">Obsidian / MD</text>
 
     <text x="834" y="838" font-size="17" font-weight="600" fill="#656565">网页负责输入、状态与结果；完整分析由已配对的本机 Connector 执行。</text>

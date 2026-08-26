@@ -29,7 +29,7 @@
         <nav class="desktop-nav" aria-label="主导航">
           <a href="#runtime">运行模式</a>
           <a href="#tk-note">TK Note</a>
-          <a href="#libtv">LibTV</a>
+          <a href="#shots">镜头证据</a>
           <a href="#models">模型 API</a>
         </nav>
       </div>
@@ -45,7 +45,7 @@
     <header class="settings-hero" data-motion="reveal">
       <p class="section-label">系统配置 · VIRALX</p>
       <h1>把分析链，<br>配置清楚。</h1>
-      <p>一条固定分析链：先采集 TikTok 证据，再由 LibTV 拉片，最后把两部分证据交给你选择的模型完成判断。</p>
+      <p>一条可验证的分析链：先锁定并下载真实原片，再生成带镜头 ID 的视觉证据，最后才允许模型做综合判断。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
@@ -54,7 +54,7 @@
       <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
         <a href="#runtime">固定链路</a>
         <a href="#tk-note">TK Note</a>
-        <a href="#libtv">LibTV</a>
+        <a href="#shots">镜头证据</a>
         <a href="#models">模型 API</a>
         <a href="#topics">搜索主题</a>
       </nav>
@@ -80,7 +80,7 @@
           <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
             <div><span>01</span><strong>Scraper7</strong><small>发现候选视频</small></div>
             <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
-            <div><span>03</span><strong>LibTV</strong><small>逐镜拉片</small></div>
+            <div><span>03</span><strong>镜头引擎</strong><small>逐镜事实证据</small></div>
             <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
             <div><span>05</span><strong>模型 API</strong><small>最终分析与脚本</small></div>
           </div>
@@ -153,13 +153,73 @@
           </div>
         </section>
 
-        <section class="settings-section" id="libtv" data-motion="reveal">
+        <section class="settings-section" id="shots" data-motion="reveal">
           <div class="settings-section__head">
             <span>03</span>
-            <div><h2>连接 LibTV</h2><p>接收 TK Note 下载的原视频，创建多模态拉片节点并返回镜头、钩子、节奏和转场证据。</p></div>
+            <div><h2>镜头证据引擎</h2><p>直接读取 TK Note 已下载的同一份原片，输出带时间线、镜头 ID 和文件哈希的视觉事实。LibTV 现在是备用，不再是强制前置。</p></div>
           </div>
-          <details class="section-disclosure" open>
-            <summary><span><strong>网页登录连接 · 流水线必需</strong><small id="libtv-summary-state">正在检查</small></span></summary>
+          <fieldset class="provider-picker" aria-describedby="shot-engine-help">
+            <legend>选择运行策略</legend>
+            <p class="field-note" id="shot-engine-help">推荐自动模式：优先在本机运行 ShotLoom Core；不可用或证据不完整时才回退到 LibTV。</p>
+            <div class="provider-grid">
+              <label class="provider-option">
+                <input type="radio" name="shot_engine" value="auto">
+                <span><strong>自动 · 推荐</strong><small>ShotLoom 优先，LibTV 备用</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="shot_engine" value="shotloom">
+                <span><strong>仅 ShotLoom</strong><small>本地检测，不静默回退</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="shot_engine" value="libtv">
+                <span><strong>仅 LibTV</strong><small>使用官方 CLI 与网页授权</small></span>
+              </label>
+              <label class="provider-option">
+                <input type="radio" name="shot_engine" value="skip">
+                <span><strong>只采集</strong><small>保存 TK Note 证据，不生成报告</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <details class="section-disclosure" id="shot-model-disclosure" open>
+            <summary><span><strong>ShotLoom Core 视觉模型</strong><small id="shotloom-summary-state">正在检查</small></span></summary>
+            <div class="section-disclosure__body">
+              <div class="settings-grid">
+                <div class="settings-field">
+                  <label for="shot_model_source">模型来源</label>
+                  <select id="shot_model_source" name="shot_model_source">
+                    <option value="inherit">复用最终视觉模型</option>
+                    <option value="qwen">Qwen VL</option>
+                    <option value="custom">自定义 OpenAI-compatible</option>
+                  </select>
+                  <small class="field-note">DeepSeek 等纯文本模型不能被复用；镜头模型与最终模型职责分离。</small>
+                </div>
+                <div class="settings-field">
+                  <label for="shot_scene_threshold">切镜灵敏度</label>
+                  <input type="number" id="shot_scene_threshold" name="shot_scene_threshold" min="5" max="80" step="1" placeholder="27">
+                  <small class="field-note">数值越低越敏感；默认 27。少于 80ms 的检测噪声才会合并。</small>
+                </div>
+                <div class="settings-field settings-field--wide" data-shot-model-field="credential">
+                  <label for="shot_model_api_key">镜头模型 API Key</label>
+                  <input type="password" id="shot_model_api_key" name="shot_model_api_key" autocomplete="off" placeholder="仅 Qwen / 自定义模型需要">
+                  <small class="field-note">只用于关键帧事实识别；不会发送平台评论或要求营销判断。</small>
+                </div>
+                <div class="settings-field" data-shot-model-field="base">
+                  <label for="shot_model_base_url">镜头模型 Base URL</label>
+                  <input type="url" id="shot_model_base_url" name="shot_model_base_url" data-mono="true" placeholder="https://api.example.com/v1">
+                  <small class="field-note">填写 API 根地址，不含 <code>/chat/completions</code>。</small>
+                </div>
+                <div class="settings-field" data-shot-model-field="model">
+                  <label for="shot_model_name">镜头模型名称</label>
+                  <input type="text" id="shot_model_name" name="shot_model_name" data-mono="true" placeholder="qwen-vl-max">
+                  <small class="field-note">必须支持 OpenAI Chat Completions 图片输入。</small>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details class="section-disclosure" id="libtv-fallback-disclosure">
+            <summary><span><strong>LibTV 备用连接 · 可选</strong><small id="libtv-summary-state">正在检查</small></span></summary>
             <div class="section-disclosure__body">
               <div class="libtv-connect-panel" id="libtv-connection" data-connection-state="starting" aria-live="polite">
                 <div class="libtv-connect-panel__status">
@@ -176,7 +236,7 @@
                   <a class="refresh-link" id="connector-guide-link" href="https://github.com/chongchonghaoman/ViralX#在网页使用本机-libtv" target="_blank" rel="noopener noreferrer" hidden>启动 Connector</a>
                   <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
                 </div>
-                <p class="libtv-privacy">Connector 只监听 127.0.0.1，并只接受 viralx.metrolabs.mobi。配对密钥保存在本机内存与当前标签页；LibTV token 仍只由官方 CLI 保存。每条任务会在 LibTV 生成拉片证据，而不是只上传视频。</p>
+                <p class="libtv-privacy">自动模式只在 ShotLoom Core 不可用或证据质量不达标时调用 LibTV。Connector 只监听 127.0.0.1；LibTV token 仍只由官方 CLI 保存。</p>
               </div>
             </div>
           </details>
@@ -185,7 +245,7 @@
         <section class="settings-section" id="models" data-motion="reveal">
           <div class="settings-section__head">
             <span>04</span>
-            <div><h2>模型 API</h2><p>读取合并后的 TK Note 与 LibTV 证据，完成最终洞察、爆款结构与可执行复刻脚本。</p></div>
+            <div><h2>最终模型 API</h2><p>只读取已经合并的平台、TK Note 与镜头证据；不会收到原视频文件，也不能绕过镜头引用进行猜测。</p></div>
           </div>
           <details class="section-disclosure" open>
             <summary><span><strong>模型服务商与凭据 · 流水线必需</strong><small>最终综合分析</small></span></summary>
@@ -252,7 +312,7 @@
                 <small class="field-note" id="model-url-note">填 API 根地址，不要包含 /chat/completions 或查询参数。</small>
               </div>
             </div>
-            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。EdgeOne 不代理分析请求；本机 Connector 完成 TK Note、LibTV、证据合并，再直连你选择的模型服务。</p>
+            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。EdgeOne 不代理分析请求；本机 Connector 完成 TK Note、镜头证据与合并后，再把证据文本发给最终模型。</p>
           </div>
             </div>
           </details>
@@ -282,7 +342,7 @@
       <p>配置留在本地；证据留在你的工作区。</p>
     </div>
     <div class="footer-index" aria-label="设置页索引">
-      <div><span>运行</span><a href="#runtime">固定链路</a><a href="#tk-note">TK Note</a><a href="#libtv">LibTV</a></div>
+      <div><span>运行</span><a href="#runtime">固定链路</a><a href="#tk-note">TK Note</a><a href="#shots">镜头证据</a></div>
       <div><span>模型</span><a href="#models">常用服务商</a><a href="#models">自定义 API</a><a href="#models">会话密钥</a></div>
       <div><span>返回</span><a href="/">分析首页</a><p>本地 Flask</p><p>静态 EdgeOne 展示</p></div>
     </div>

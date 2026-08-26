@@ -6,7 +6,7 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 
 1. 打开 [viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。
 2. 在[网页设置](https://viralx.metrolabs.mobi/settings.html)中配置本次会话需要的凭据。
-3. 启动本机 Connector，在设置页完成 LibTV 网页登录并配置一个最终分析模型；关键词搜索时再填写 TikTok Scraper7 Key。
+3. 启动本机 Connector，选择镜头证据策略并配置最终模型；默认优先使用 ShotLoom Core，只有需要备用时才连接 LibTV。关键词搜索再填写 TikTok Scraper7 Key。
 4. 粘贴 TikTok / 抖音视频链接，或输入一个 TikTok 搜索主题，然后启动固定串联分析。
 5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
 
@@ -16,12 +16,13 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 
 | 输入方式 | 调用链 | 必要凭据 |
 | --- | --- | --- |
-| 网页 TikTok / 抖音视频链接 | Connector → TK Note → LibTV 拉片 → 证据合并 → 模型 API | Connector + LibTV 网页登录 + `MODEL_API_KEY` |
-| 网页 TikTok 搜索主题 | TikTok Scraper7 → Connector → TK Note → LibTV 拉片 → 证据合并 → 模型 API | 上述配置 + `RAPIDAPI_KEY` |
+| 网页 TikTok / 抖音视频链接 | Connector → TK Note → ShotLoom / LibTV → 证据合并 → 最终模型 | Connector + 镜头引擎 + `MODEL_API_KEY` |
+| 网页 TikTok 搜索主题 | TikTok Scraper7 → Connector → TK Note → ShotLoom / LibTV → 证据合并 → 最终模型 | 上述配置 + `RAPIDAPI_KEY` |
+| 只采集 | Connector → TK Note → 保存部分证据 | Connector；不需要镜头或最终模型 API |
 
-RapidAPI 只承载 TikTok Scraper7 关键词发现，不解析已知视频链接。TK Note 负责原片与平台证据，LibTV 负责新增的逐镜视听证据，模型 API 只在证据合并完成后做最终分析。LibTV 不使用 Access Key；EdgeOne 云函数不能读取电脑上的 CLI 登录态，但生产网页可以在用户授权后直连 `127.0.0.1` Connector。MiniMax 不属于默认链路。
+RapidAPI 只承载 TikTok Scraper7 关键词发现，不解析已知视频链接。TK Note 负责真实原片与平台证据，ShotLoom Core 默认负责带镜头 ID 的视觉事实，LibTV 是自动回退或显式选择项。最终模型只在证据质量检查通过后运行，并且不会收到原视频文件。LibTV 不使用 Access Key；EdgeOne 云函数不能读取电脑上的文件或 CLI 登录态，但生产网页可以在用户授权后直连 `127.0.0.1` Connector。
 
-## 从生产网页连接本机 LibTV
+## 从生产网页连接本机分析运行时
 
 在仓库目录安装依赖后，双击 `start-connector.cmd` 或执行：
 
@@ -29,7 +30,7 @@ RapidAPI 只承载 TikTok Scraper7 关键词发现，不解析已知视频链接
 python connector.py
 ```
 
-Connector 会打开 `https://viralx.metrolabs.mobi/settings.html` 并用 URL fragment 完成一次性配对。浏览器询问本地网络权限时选择允许，然后在设置页点击“连接 LibTV”。Connector 只开放受限的 `/connector/v1/*` 能力，不开放设置读取、清缓存或本地文件导出。模型 Key 只从当前标签页发送到已配对的 Connector，再直连所选服务商，不经过 EdgeOne。
+Connector 会打开 `https://viralx.metrolabs.mobi/settings.html` 并用 URL fragment 完成一次性配对。浏览器询问本地网络权限时选择允许，然后保留默认自动策略或选择其他镜头引擎。只有自动回退或 LibTV 模式需要点击“连接 LibTV”。Connector 只开放受限的 `/connector/v1/*` 能力，不开放设置读取、清缓存或本地文件导出。模型 Key 只从当前标签页发送到已配对的 Connector，再直连所选服务商，不经过 EdgeOne。
 
 ## 本地 Web 运行
 
@@ -47,13 +48,15 @@ Copy-Item config.json.example config.json
 python web_app.py
 ```
 
-浏览器打开 `http://localhost:5001`。使用 LibTV 前先安装[官方 CLI](https://www.liblib.tv/cli)，再进入 `/settings` 点击“连接 LibTV”。ViralX 会启动 `libtv login web`，并等待你在官方网页完成授权。
+浏览器打开 `http://localhost:5001`。`requirements.txt` 已包含 ShotLoom Core 所需的 PySceneDetect 与 OpenCV。使用 LibTV 备用时再安装[官方 CLI](https://www.liblib.tv/cli)，进入 `/settings` 完成网页授权。
 
 最小配置：
 
 ```json
 {
   "analysis_mode": "pipeline",
+  "shot_engine": "auto",
+  "shot_model_source": "inherit",
   "model_provider": "openai",
   "model_api_key": "YOUR_MODEL_API_KEY",
   "model_name": "gpt-4.1-mini",
@@ -61,11 +64,11 @@ python web_app.py
 }
 ```
 
-如果只分析视频直链，可以不配置 `rapidapi_key`。LibTV token 由官方 CLI 保存，ViralX 不读取或写入凭据文件。
+如果只分析视频直链，可以不配置 `rapidapi_key`。选择 `skip` 可以只保存 TK Note 证据，不会生成最终报告。LibTV token 由官方 CLI 保存，ViralX 不读取或写入凭据文件。
 
 ## 配置最终分析模型
 
-ViralX 不再提供“模型模式”。模型是固定流水线的最后一步：它接收 TK Note 与 LibTV 的合并证据。设置页可选择 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 或自定义 API；常用服务商会自动带入接口地址和建议模型名，模型名始终可以修改。
+ViralX 不再提供“模型模式”。最终模型是固定流水线的最后一步：它只接收平台、TK Note 与镜头证据的合并文本。设置页可选择 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 或自定义 API；镜头视觉模型单独配置，可复用兼容的最终视觉模型，也可使用 Qwen VL 或自定义 OpenAI-compatible 接口。
 
 本地配置示例：
 
