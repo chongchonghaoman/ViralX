@@ -59,7 +59,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-26-serial-evidence-pipeline-v1"
+VIRALX_RELEASE = "2026-08-26-api23-three-route-v2"
 
 
 def _number(name, fallback, cast):
@@ -195,7 +195,7 @@ def health():
         "release": VIRALX_RELEASE,
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
-        "keyword_search_strategy": "search-video+discover-status4-fallback",
+        "keyword_search_strategy": "search-video+search-general+discover-fallback",
         "keyword_search_source": TIKTOK_ANALYZER_SOURCE_SHA,
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),

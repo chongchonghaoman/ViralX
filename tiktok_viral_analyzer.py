@@ -37,8 +37,14 @@ class TikTokViralAnalyzer:
     SEARCH_PROVIDER = "api23"
     SEARCH_HOST = "tiktok-api23.p.rapidapi.com"
     SEARCH_URL = f"https://{SEARCH_HOST}/api/search/video"
+    GENERAL_SEARCH_URL = f"https://{SEARCH_HOST}/api/search/general"
     DISCOVER_URL = f"https://{SEARCH_HOST}/api/post/discover"
     SEARCH_TIMEOUT_SECONDS = 15
+    ROUTE_LABELS = {
+        "/api/search/video": "Search Video",
+        "/api/search/general": "Search General",
+        "/api/post/discover": "Discover",
+    }
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
@@ -67,17 +73,35 @@ class TikTokViralAnalyzer:
                 value = container.get(key)
                 if isinstance(value, list):
                     return [item for item in value if isinstance(item, dict)]
+
+        # Search General returns a mixed top-results list on some API23
+        # revisions. Keep only entries that contain a TikTok video item.
+        data = root.get("data")
+        if isinstance(data, list):
+            videos = []
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                item = cls._mapping(entry.get("item"))
+                candidate = item or entry
+                if candidate.get("id") and any(
+                    key in candidate for key in ("video", "stats", "desc", "create_time", "createTime")
+                ):
+                    videos.append(entry)
+            return videos
         return []
 
     @classmethod
     def _api23_has_item_list(cls, payload: Any) -> bool:
         root = cls._mapping(payload)
         candidates = [root, cls._mapping(root.get("data"))]
-        return any(
+        if any(
             isinstance(container.get(key), list)
             for container in candidates
             for key in ("item_list", "itemList", "items", "videoList", "videos")
-        )
+        ):
+            return True
+        return isinstance(root.get("data"), list)
 
     @classmethod
     def _api23_business_error(cls, payload: Any) -> tuple[str, bool]:
@@ -146,7 +170,7 @@ class TikTokViralAnalyzer:
         }
 
     def search_viral_videos(self, keyword: str, min_likes: int = 10000, count: int = 50) -> List[Dict]:
-        """Search API23, with its Discover endpoint as a same-provider fallback."""
+        """Search API23 through its three official keyword-discovery routes."""
         clean_keyword = str(keyword or "").strip()
         threshold = max(0, self._integer(min_likes))
         self.last_search_diagnostics = {
@@ -160,6 +184,7 @@ class TikTokViralAnalyzer:
             "responses": 0,
             "recognized_lists": 0,
             "route_errors": {},
+            "route_diagnostics": {},
         }
         if not clean_keyword:
             return []
@@ -179,7 +204,24 @@ class TikTokViralAnalyzer:
         seen_video_ids = set()
         viral_videos: List[Dict] = []
 
-        def request_page(url: str, params: Dict[str, Any]) -> Mapping[str, Any]:
+        def route_diagnostics(route: str) -> Dict[str, Any]:
+            return self.last_search_diagnostics["route_diagnostics"].setdefault(
+                route,
+                {
+                    "requests": 0,
+                    "responses": 0,
+                    "recognized_lists": 0,
+                    "raw_items": 0,
+                    "normalized_items": 0,
+                    "matched_items": 0,
+                    "max_likes": 0,
+                    "error": "",
+                },
+            )
+
+        def request_page(url: str, params: Dict[str, Any], route: str) -> Mapping[str, Any]:
+            route_stats = route_diagnostics(route)
+            route_stats["requests"] += 1
             try:
                 response = requests.get(
                     url,
@@ -217,13 +259,17 @@ class TikTokViralAnalyzer:
                 )
             mapped_payload = self._mapping(payload)
             self.last_search_diagnostics["responses"] += 1
+            route_stats["responses"] += 1
             if self._api23_has_item_list(mapped_payload):
                 self.last_search_diagnostics["recognized_lists"] += 1
+                route_stats["recognized_lists"] += 1
             return mapped_payload
 
         def collect_items(items: List[Dict], route: str) -> None:
             diagnostics = self.last_search_diagnostics
+            route_stats = route_diagnostics(route)
             diagnostics["raw_items"] += len(items)
+            route_stats["raw_items"] += len(items)
             if route not in diagnostics["routes"]:
                 diagnostics["routes"].append(route)
             for item in items:
@@ -232,7 +278,9 @@ class TikTokViralAnalyzer:
                 if not video_id:
                     continue
                 diagnostics["normalized_items"] += 1
+                route_stats["normalized_items"] += 1
                 diagnostics["max_likes"] = max(diagnostics["max_likes"], video["digg_count"])
+                route_stats["max_likes"] = max(route_stats["max_likes"], video["digg_count"])
                 if video["digg_count"] < threshold:
                     diagnostics["filtered_by_likes"] += 1
                     continue
@@ -240,14 +288,20 @@ class TikTokViralAnalyzer:
                     continue
                 seen_video_ids.add(video_id)
                 viral_videos.append(video)
+                route_stats["matched_items"] += 1
 
-        cursor: Any = 0
-        search_id = "0"
-        seen_pages = set()
+        def record_route_error(route: str, exc: API23SearchError) -> None:
+            detail = str(exc)
+            self.last_search_diagnostics["route_errors"][route] = detail
+            route_diagnostics(route)["error"] = detail
 
-        # API23 uses cursor + log_pb.impr_id for subsequent pages. Five pages
-        # keeps a single ViralX search bounded while still honoring count=30.
-        try:
+        def search_cursor_route(url: str, route: str) -> None:
+            cursor: Any = 0
+            search_id = "0"
+            seen_pages = set()
+
+            # API23 uses cursor + log_pb.impr_id for subsequent pages. Five
+            # pages keeps a search bounded while still honoring count=30.
             for _ in range(5):
                 page_signature = (str(cursor), str(search_id))
                 if page_signature in seen_pages:
@@ -255,11 +309,12 @@ class TikTokViralAnalyzer:
                 seen_pages.add(page_signature)
 
                 payload = request_page(
-                    self.SEARCH_URL,
+                    url,
                     {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id},
+                    route,
                 )
                 items = self._api23_items(payload)
-                collect_items(items, "/api/search/video")
+                collect_items(items, route)
                 if len(viral_videos) >= limit:
                     break
 
@@ -282,20 +337,30 @@ class TikTokViralAnalyzer:
                 )
                 log_pb = self._mapping(container.get("log_pb") or root.get("log_pb"))
                 search_id = str(log_pb.get("impr_id") or log_pb.get("imprId") or search_id)
-        except API23SearchError as exc:
-            if not exc.recoverable:
-                raise
-            self.last_search_diagnostics["route_errors"]["/api/search/video"] = str(exc)
 
-        # API23 exposes a second official keyword-discovery route. It is useful
-        # when TikTok's search route returns an empty first result set, and keeps
-        # ViralX on the user's selected API23 provider.
+        cursor_routes = (
+            (self.SEARCH_URL, "/api/search/video"),
+            (self.GENERAL_SEARCH_URL, "/api/search/general"),
+        )
+        for url, route in cursor_routes:
+            if viral_videos:
+                break
+            try:
+                search_cursor_route(url, route)
+            except API23SearchError as exc:
+                if not exc.recoverable:
+                    raise
+                record_route_error(route, exc)
+
+        # Discover is the final same-provider fallback. A recoverable failure
+        # here must not erase valid empty/filtered responses from earlier routes.
         if not viral_videos:
             try:
                 for page in range(1, 4):
                     payload = request_page(
                         self.DISCOVER_URL,
                         {"keyword": clean_keyword, "page": page},
+                        "/api/post/discover",
                     )
                     items = self._api23_items(payload)
                     collect_items(items, "/api/post/discover")
@@ -308,13 +373,21 @@ class TikTokViralAnalyzer:
                     if has_more not in (True, 1, "1") or not items:
                         break
             except API23SearchError as exc:
-                primary_error = self.last_search_diagnostics["route_errors"].get("/api/search/video")
-                if primary_error:
-                    raise RuntimeError(f"{primary_error}；备用入口也失败：{exc}") from exc
-                raise
+                if not exc.recoverable:
+                    raise
+                record_route_error("/api/post/discover", exc)
+
+        diagnostics = self.last_search_diagnostics
+        route_stats = diagnostics["route_diagnostics"]
+        attempted_routes = [route for _, route in cursor_routes] + ["/api/post/discover"]
+        all_routes_failed = all(route_stats.get(route, {}).get("error") for route in attempted_routes)
+        if not viral_videos and all_routes_failed:
+            failures = "；".join(
+                f"{self.ROUTE_LABELS[route]}：{route_stats[route]['error']}" for route in attempted_routes
+            )
+            raise RuntimeError(f"API23 三个关键词入口均失败：{failures}")
 
         viral_videos = viral_videos[:limit]
-        diagnostics = self.last_search_diagnostics
         print(
             "[API23] "
             f"候选 {diagnostics['raw_items']}，可识别 {diagnostics['normalized_items']}，"
@@ -333,12 +406,28 @@ class TikTokViralAnalyzer:
         route_errors = diagnostics.get("route_errors") or {}
         responses = self._integer(diagnostics.get("responses"))
         recognized_lists = self._integer(diagnostics.get("recognized_lists"))
+        route_diagnostics = diagnostics.get("route_diagnostics") or {}
         route_label = "、".join(routes) or "API23 搜索接口"
         if raw_items == 0:
             if responses and recognized_lists == 0:
                 return "API23 返回了响应，但没有可识别的视频列表；接口响应结构可能已经更新。"
-            if route_errors.get("/api/search/video"):
-                return "API23 主搜索暂时不可用，备用 Discover 入口也没有返回视频候选；请稍后重试。"
+            successful_routes = [
+                self.ROUTE_LABELS.get(route, route)
+                for route, stats in route_diagnostics.items()
+                if self._integer(stats.get("responses")) > 0
+            ]
+            failed_routes = [
+                self.ROUTE_LABELS.get(route, route)
+                for route, stats in route_diagnostics.items()
+                if stats.get("error")
+            ]
+            if successful_routes:
+                message = f"API23 的 {'、'.join(successful_routes)} 已正常响应，但没有返回视频候选"
+                if failed_routes:
+                    message += f"；{'、'.join(failed_routes)} 暂时不可用"
+                return message + "。这与最低点赞数无关，请稍后重试或在 Playground 核对该关键词。"
+            if route_errors:
+                return "API23 的关键词搜索入口当前均不可用；这与最低点赞数无关，请稍后重试。"
             return f"API23 的 {route_label} 均未返回视频候选；请在 RapidAPI Playground 检查当前订阅和实际响应。"
         if normalized_items == 0:
             return f"API23 返回了 {raw_items} 条候选，但响应中没有可识别的视频 ID；接口结构可能已经更新。"

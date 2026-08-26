@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dph56qmexoz9`
+- Production deployment ID: `dp20pstz73xx`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dph56qmexoz9`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dp20pstz73xx`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -31,13 +31,13 @@ Verified on the public custom domain:
 - `GET /static/connector.js` -> `200`, fixed loopback origin and `targetAddressSpace: "loopback"` present
 - `GET /api/health` -> `200 application/json`
 - `GET /api/health` -> `keyword_search_provider: api23`
-- `GET /api/health` -> `release: 2026-08-26-serial-evidence-pipeline-v1`
+- `GET /api/health` -> `release: 2026-08-26-api23-three-route-v2`
 - `/` and `/settings.html` include the production CSP (including the fixed loopback Connector origin), pinned CDN assets with SRI, and the `edgeone` deployment marker
 - The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
 - Responsive WebP hero assets return `200 image/webp` with immutable caching
 - Direct `POST /api/analyze` on EdgeOne -> actionable Connector recovery message; the browser does not pretend the cloud function can access local TK Note or LibTV
-- API23 keyword discovery uses `/api/search/video` with `/api/post/discover` as an empty-result fallback; `min_likes=0` is preserved instead of reverting to `5000`
-- API23 business status `4` on the primary Search route now triggers the Discover fallback; an error is returned only when both official routes fail
+- API23 keyword discovery uses `/api/search/video`, `/api/search/general`, then `/api/post/discover`; `min_likes=0` is preserved instead of reverting to `5000`
+- API23 business status `4` triggers the next official route. A fallback failure no longer masks a valid empty or like-filtered response, and a hard error is returned only when all three keyword routes fail
 - A production smoke request with invalid placeholder credentials returned an actionable API23 `403` without echoing either placeholder credential
 - `/api/health` continues to report the Cloud Function's own LibTV state as `local_only`; the browser separately probes the local Connector
 - Browser pipeline mode routes `/api/analyze` to authenticated `http://127.0.0.1:57231/connector/v1/analyze`
