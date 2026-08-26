@@ -36,7 +36,26 @@ if tk_note_script.is_file():
 
 from ai_analyzer import AIAnalyzer  # noqa: E402
 from model_providers import model_is_ready, normalize_model_config  # noqa: E402
-from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message  # noqa: E402
+
+
+def _load_tiktok_analyzer_source():
+    """Load the deployed source directly so EdgeOne cannot reuse stale bytecode."""
+    module_path = FUNCTIONS_DIR / "tiktok_viral_analyzer.py"
+    if not module_path.is_file():
+        module_path = PROJECT_ROOT / "tiktok_viral_analyzer.py"
+    source_bytes = module_path.read_bytes()
+    namespace = {
+        "__name__": "viralx_tiktok_analyzer_status4_fallback_v2",
+        "__file__": str(module_path),
+        "__package__": "",
+    }
+    exec(compile(source_bytes, str(module_path), "exec"), namespace, namespace)
+    return namespace, hashlib.sha256(source_bytes).hexdigest()[:12]
+
+
+_tiktok_namespace, TIKTOK_ANALYZER_SOURCE_SHA = _load_tiktok_analyzer_source()
+TikTokViralAnalyzer = _tiktok_namespace["TikTokViralAnalyzer"]
+safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
@@ -176,6 +195,7 @@ def health():
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
         "keyword_search_strategy": "search-video+discover-status4-fallback",
+        "keyword_search_source": TIKTOK_ANALYZER_SOURCE_SHA,
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
         "configured": {
