@@ -158,30 +158,25 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 ## 工作逻辑
 
-```mermaid
-flowchart LR
-    A[浏览器输入关键词] --> B[API23 搜索候选视频]
-    U[浏览器粘贴视频 URL] --> C{视频采集路由}
-    B --> C
-    C -->|TikTok| D[TK Note]
-    C -->|兼容视频链接| E[yt-dlp]
-    D --> F[原片 + 元数据 + 字幕/ASR + 资产清单]
-    E --> F
-    F --> Q[本机 Connector 编排]
-    Q --> L[LibTV 创建画布 + 上传原片 + 多模态拉片]
-    L --> G[合并 TK Note 与 LibTV 证据]
-    G --> M[已选模型 API 最终分析]
-    M --> H[NDJSON 五阶段进度与最终报告]
-    H --> I[网页结果与报告弹层]
-    I --> J[复刻脚本]
-    I --> K[Obsidian URI / Markdown]
-```
+![ViralX 固定串联分析流程：API23、TK Note、LibTV、证据合并与模型 API](docs/assets/viralx-workflow.svg)
 
-这里有一个重要边界：**API23 是搜索引擎，不是视频解析器。**
+流程图的可维护源码见 [`docs/assets/viralx-workflow.mmd`](docs/assets/viralx-workflow.mmd)。
 
-- 输入关键词：API23 负责找到候选 TikTok 视频。
-- 粘贴链接：不需要 API23，由 TK Note / yt-dlp 采集视频资产。
-- 开始分析：Connector 配对、LibTV 登录和模型 API 三项都就绪才会运行；没有“绕过 LibTV 的模型模式”，也不会把“网页在线”伪装成“完整链路就绪”。
+ViralX 不是“任选一个工具来分析”，而是一条**固定串联的证据链**：
+
+| 阶段 | 负责什么 | 交给下一阶段的内容 |
+| --- | --- | --- |
+| 01 · API23 | 仅在输入关键词时搜索候选 TikTok 视频 | 视频 URL、热度与基础平台数据 |
+| 02 · TK Note / yt-dlp | 下载原片并采集平台侧证据 | 原片、元数据、评论、字幕 / ASR、资产清单 |
+| 03 · LibTV | 创建画布、上传原片并运行多模态拉片节点 | 镜头、画面、声音和时间线证据，以及画布入口 |
+| 04 · Evidence Merge | 合并平台、TK Note 与 LibTV 证据 | 统一的 `viralx.evidence.v1` 证据合同 |
+| 05 · Model API | 使用设置页选定的模型，基于完整证据终审 | 最终报告、复刻脚本和可导出结果 |
+
+这里有三个重要边界：
+
+- **API23 是搜索引擎，不是视频解析器。** 输入关键词时调用 API23；粘贴视频直链时直接从 TK Note / yt-dlp 开始。
+- **LibTV 不是搜索或下载工具。** 它接收 TK Note 已保存的原片，专门完成多模态拉片，并把新增证据送入合并阶段。
+- **EdgeOne 是浏览器界面，不是本机分析运行时。** 页面负责输入、设置、状态和结果；完整链路由已配对的本机 Connector 串联执行。Connector、LibTV 登录和模型 API 都就绪后才会运行，不会把“网页在线”伪装成“完整链路就绪”。
 
 ## Web 架构
 

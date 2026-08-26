@@ -1,0 +1,31 @@
+flowchart LR
+    K[搜索主题] --> A[01 API23<br/>发现候选视频]
+    U[视频直链] -->|跳过 API23| T
+    A --> T[02 TK Note / yt-dlp<br/>原片与平台证据]
+    T --> L[03 LibTV<br/>上传原片与多模态拉片]
+    L --> E[04 证据合并<br/>viralx.evidence.v1]
+    E --> M[05 已选模型 API<br/>最终分析]
+    M --> R[最终报告]
+    M --> S[复刻脚本]
+    M --> O[Obsidian / Markdown]
+    L --> C[LibTV 画布]
+
+    subgraph Browser[EdgeOne 浏览器界面]
+        K
+        U
+        R
+        S
+        O
+        C
+    end
+
+    subgraph Connector[本机 Connector 串联编排]
+        T
+        L
+        E
+    end
+
+    subgraph Services[外部服务]
+        A
+        M
+    end
