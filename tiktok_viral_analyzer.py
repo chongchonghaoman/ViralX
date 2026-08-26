@@ -45,6 +45,7 @@ class TikTokViralAnalyzer:
         "/api/search/general": "Search General",
         "/api/post/discover": "Discover",
     }
+    API23_VIDEO_LIST_KEYS = ("item_list", "itemList", "items", "videoList", "videos")
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
@@ -69,7 +70,7 @@ class TikTokViralAnalyzer:
         root = cls._mapping(payload)
         candidates = [root, cls._mapping(root.get("data"))]
         for container in candidates:
-            for key in ("item_list", "itemList", "items", "videoList", "videos"):
+            for key in cls.API23_VIDEO_LIST_KEYS:
                 value = container.get(key)
                 if isinstance(value, list):
                     return [item for item in value if isinstance(item, dict)]
@@ -98,10 +99,28 @@ class TikTokViralAnalyzer:
         if any(
             isinstance(container.get(key), list)
             for container in candidates
-            for key in ("item_list", "itemList", "items", "videoList", "videos")
+            for key in cls.API23_VIDEO_LIST_KEYS
         ):
             return True
         return isinstance(root.get("data"), list)
+
+    @classmethod
+    def _api23_response_shape(cls, payload: Any) -> Dict[str, Any]:
+        """Summarize response structure without retaining videos, text, URLs, or credentials."""
+        root = cls._mapping(payload)
+        nested = cls._mapping(root.get("data"))
+        lists: List[str] = []
+        for prefix, container in (("", root), ("data.", nested)):
+            for key in cls.API23_VIDEO_LIST_KEYS:
+                value = container.get(key)
+                if isinstance(value, list):
+                    lists.append(f"{prefix}{key}={len(value)}")
+        if isinstance(root.get("data"), list):
+            lists.append(f"data={len(root['data'])}")
+        return {
+            "keys": sorted(str(key) for key in root.keys())[:12],
+            "lists": lists,
+        }
 
     @classmethod
     def _api23_business_error(cls, payload: Any) -> tuple[str, bool]:
@@ -216,6 +235,7 @@ class TikTokViralAnalyzer:
                     "matched_items": 0,
                     "max_likes": 0,
                     "error": "",
+                    "response_shapes": [],
                 },
             )
 
@@ -260,6 +280,9 @@ class TikTokViralAnalyzer:
             mapped_payload = self._mapping(payload)
             self.last_search_diagnostics["responses"] += 1
             route_stats["responses"] += 1
+            shape = self._api23_response_shape(mapped_payload)
+            if shape not in route_stats["response_shapes"]:
+                route_stats["response_shapes"].append(shape)
             if self._api23_has_item_list(mapped_payload):
                 self.last_search_diagnostics["recognized_lists"] += 1
                 route_stats["recognized_lists"] += 1
@@ -308,11 +331,13 @@ class TikTokViralAnalyzer:
                     break
                 seen_pages.add(page_signature)
 
-                payload = request_page(
-                    url,
-                    {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id},
-                    route,
-                )
+                # API23 documents cursor and search_id as optional defaults on
+                # the first page, and requires both only for pagination. Mirror
+                # that contract exactly instead of sending pagination state early.
+                params: Dict[str, Any] = {"keyword": clean_keyword}
+                if cursor not in (0, "0") or search_id != "0":
+                    params.update({"cursor": cursor, "search_id": search_id})
+                payload = request_page(url, params, route)
                 items = self._api23_items(payload)
                 collect_items(items, route)
                 if len(viral_videos) >= limit:
@@ -322,7 +347,7 @@ class TikTokViralAnalyzer:
                 nested = self._mapping(root.get("data"))
                 container = nested if any(
                     isinstance(nested.get(key), list)
-                    for key in ("item_list", "itemList", "items", "videoList", "videos")
+                    for key in self.API23_VIDEO_LIST_KEYS
                 ) else root
                 has_more = container.get(
                     "has_more",
@@ -422,10 +447,23 @@ class TikTokViralAnalyzer:
                 if stats.get("error")
             ]
             if successful_routes:
-                message = f"API23 的 {'、'.join(successful_routes)} 已正常响应，但没有返回视频候选"
+                empty_details = []
+                for route, stats in route_diagnostics.items():
+                    if self._integer(stats.get("responses")) <= 0:
+                        continue
+                    list_shapes = []
+                    for shape in stats.get("response_shapes") or []:
+                        list_shapes.extend(shape.get("lists") or [])
+                    if list_shapes:
+                        empty_details.append(
+                            f"{self.ROUTE_LABELS.get(route, route)} 返回 {', '.join(dict.fromkeys(list_shapes))}"
+                        )
+                message = "API23 已正常响应，但服务端没有返回视频候选"
+                if empty_details:
+                    message += "：" + "；".join(empty_details)
                 if failed_routes:
                     message += f"；{'、'.join(failed_routes)} 暂时不可用"
-                return message + "。这与最低点赞数无关，请稍后重试或在 Playground 核对该关键词。"
+                return message + "。没有候选可供点赞筛选，这与最低点赞数无关；请稍后重试或在 Playground 核对同一关键词。"
             if route_errors:
                 return "API23 的关键词搜索入口当前均不可用；这与最低点赞数无关，请稍后重试。"
             return f"API23 的 {route_label} 均未返回视频候选；请在 RapidAPI Playground 检查当前订阅和实际响应。"

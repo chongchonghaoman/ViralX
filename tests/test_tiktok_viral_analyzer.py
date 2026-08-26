@@ -63,7 +63,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
                 "x-rapidapi-key": "test-api23-secret",
                 "x-rapidapi-host": "tiktok-api23.p.rapidapi.com",
             },
-            params={"keyword": "camping light", "cursor": 0, "search_id": "0"},
+            params={"keyword": "camping light"},
             timeout=15,
         )
 
@@ -140,6 +140,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
 
         self.assertEqual([video["video_id"] for video in videos], ["first", "second"])
         self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_args_list[0].kwargs["params"], {"keyword": "camping light"})
         self.assertEqual(
             mock_get.call_args_list[1].kwargs["params"],
             {"keyword": "camping light", "cursor": 10, "search_id": "search-session-1"},
@@ -247,7 +248,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(videos, [])
         message = self.analyzer.empty_result_message()
-        self.assertIn("Search Video 已正常响应", message)
+        self.assertIn("Search Video 返回 item_list=0", message)
         self.assertIn("与最低点赞数无关", message)
         self.assertIn("Search General、Discover 暂时不可用", message)
 
