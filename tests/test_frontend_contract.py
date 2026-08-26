@@ -14,6 +14,7 @@ class FrontendContractTests(unittest.TestCase):
         cls.home_js = (ROOT / "static" / "viralx.js").read_text(encoding="utf-8")
         cls.settings_js = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
         cls.connector_js = (ROOT / "static" / "connector.js").read_text(encoding="utf-8")
+        cls.cloud_config_js = (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8")
         cls.build_js = (ROOT / "scripts" / "build-edgeone.mjs").read_text(encoding="utf-8")
 
     def assert_named_control(self, html, control_id, name):
@@ -80,7 +81,13 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("window.sessionStorage.setItem(TOKEN_KEY", self.connector_js)
         self.assertIn("window.history.replaceState", self.connector_js)
         self.assertNotIn("console.log", self.connector_js)
-        self.assertIn('(read().analysis_mode || "libtv") === "libtv"', (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8"))
+        self.assertIn('(read().analysis_mode || "libtv") === "libtv"', self.cloud_config_js)
+        self.assertIn("CONNECTOR_REQUEST_HEADERS", self.cloud_config_js)
+        self.assertIn("headers: connectorHeaders", self.cloud_config_js)
+        connector_header_block = self.cloud_config_js.split(
+            "const CONNECTOR_REQUEST_HEADERS", 1
+        )[1].split("])", 1)[0]
+        self.assertNotIn("x-viralx-model-key", connector_header_block.lower())
         self.assertIn("connector_missing:", self.settings_js)
         self.assertIn("pairing_required:", self.settings_js)
         self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)

@@ -49,6 +49,7 @@ ViralX 是一个完整的网页应用。它从真实的 TikTok / 抖音视频出
 - **线上功能不再是假演示**：EdgeOne Pages 搭配 Python Cloud Functions，支持同源健康检查、API23 搜索、单视频分析、流式进度和浏览器安全导出。
 - **搜索链路切换为 API23**：主搜索使用官方 `/api/search/video`，空结果或临时不可用（含业务状态 4）时自动回退同属 API23 的 `/api/post/discover`；支持分页、热度过滤、HTTP 200 业务错误识别、响应结构诊断和凭据脱敏。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **网页版可连接本机 LibTV**：新增 loopback-only Connector；EdgeOne 设置页与它完成一次性配对后，可以启动官方 `libtv login web`、读取无凭据状态、创建画布并上传 TK Note 采集的原片。
+- **修复 Connector 分析预检**：LibTV 模式只向本机 Connector 发送证据采集所需请求头，不再把模型服务商配置头带入 loopback 请求；避免“状态显示就绪、开始拉片却 Failed to fetch”的 CORS 预检失败，同时防止模型 Key 被发送到本机 Connector。
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
 - **重画云端与本地边界**：EdgeOne 云函数仍不能读取本机登录态；浏览器只在用户授权后连接 `127.0.0.1:57231`。Connector 不暴露本地设置、清缓存或文件系统导出，模型分析继续留在 EdgeOne。

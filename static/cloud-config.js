@@ -45,6 +45,19 @@
     minimax_model: "X-ViralX-MiniMax-Model",
   };
 
+  // The loopback Connector only needs evidence-collection settings. Never send
+  // model-provider credentials to localhost, and keep its strict CORS allowlist
+  // aligned with the headers used by the LibTV pipeline.
+  const CONNECTOR_REQUEST_HEADERS = new Set([
+    "content-type",
+    "x-viralx-analysis-mode",
+    "x-viralx-min-likes",
+    "x-viralx-rapidapi-key",
+    "x-viralx-tk-asr",
+    "x-viralx-tk-language",
+    "x-viralx-tk-timeout",
+  ]);
+
   function clean(input) {
     const result = {};
     ALLOWED_FIELDS.forEach((field) => {
@@ -100,9 +113,15 @@
       && new URL(url, window.location.origin).pathname === "/api/analyze"
       && window.ViralXConnector;
     if (useConnector) {
+      const connectorHeaders = new Headers();
+      requestHeaders.forEach((value, name) => {
+        if (CONNECTOR_REQUEST_HEADERS.has(name.toLowerCase())) {
+          connectorHeaders.set(name, value);
+        }
+      });
       return window.ViralXConnector.request("/connector/v1/analyze", {
         ...options,
-        headers: requestHeaders,
+        headers: connectorHeaders,
       });
     }
     return window.fetch(url, { ...options, headers: requestHeaders });
