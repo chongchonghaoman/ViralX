@@ -7,6 +7,8 @@ description: "TK Note: extract TikTok videos and raw evidence into reusable loca
 
 TK Note is the international-TikTok counterpart to DyNote. Preserve DyNote's reliable experience: raw assets first, notes later; inspect existing work before rerunning; use stable output names; make expensive steps resumable; and label partial evidence instead of inventing missing content.
 
+TK Note reuses `%USERPROFILE%\.cache\rimagination-notes` for local ASR. OpenAI Whisper may share the existing `qwen3-asr-venv`; scripts discover it automatically even when TK Note is launched by another Python. Set `RIMAGINATION_WHISPER_PYTHON` only when an explicit interpreter override is needed.
+
 The default single-video contract is:
 
 ```text

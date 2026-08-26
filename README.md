@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://viralx.metrolabs.mobi"><img alt="Live website" src="https://img.shields.io/badge/Live-viralx.metrolabs.mobi-4DC5E5?style=flat-square"></a>
-  <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=master&style=flat-square&label=web%20%2B%20api"></a>
+  <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=main&style=flat-square&label=web%20%2B%20api"></a>
   <a href=".agents/skills/viralx"><img alt="Codex Skill" src="https://img.shields.io/badge/Codex-Skill-4DC5E5?style=flat-square"></a>
   <img alt="Web" src="https://img.shields.io/badge/Product-Web-111111?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10--3.12-3776AB?style=flat-square">
@@ -49,6 +49,7 @@ ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固�
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上页面不伪装云端能力**：EdgeOne Pages 提供同源健康检查、会话设置和浏览器安全导出；完整分析明确路由到本机 Connector，不把无法读取本机 CLI 登录态的云函数冒充为可运行流水线。
 - **搜索链路切换为 API23**：主搜索使用官方 `/api/search/video`，空结果或临时不可用（含业务状态 4）时自动回退同属 API23 的 `/api/post/discover`；支持分页、热度过滤、HTTP 200 业务错误识别、响应结构诊断和凭据脱敏。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
+- **TK Note 共享本地 ASR**：自动复用 `%USERPROFILE%\.cache\rimagination-notes` 中已有的 Whisper 或 Qwen3-ASR Python 环境；也可通过环境变量明确指定解释器。Connector 使用哪个 Python 启动都不会因此丢失已有 ASR 能力。
 - **LibTV 从“上传交接”升级为真实拉片**：Connector 会创建画布、上传 TK Note 原片，再创建绑定 `GVLM 3.1 Flash` 的多模态文本节点并运行；镜头、钩子、节奏、声音、转场和转化节点会作为结构化证据返回。
 - **Connector 承担完整编排**：浏览器与 `127.0.0.1` 完成一次性配对后，把 API23、TK Note 与模型会话配置交给 Connector。模型 Key 只到本机 Connector，再由它直连所选服务商；不经过、不落盘到 EdgeOne，也不会写入日志。
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
@@ -79,7 +80,7 @@ ViralX 现在只有一条主链：**TK Note + LibTV + 模型 API**。它们不�
 ViralX 同时作为一个可安装的 Codex Skill 发布。另一台电脑不需要安装桌面客户端，也不需要复制整个项目；把下面的 Skill 链接发给 Codex，让它安装即可：
 
 ```text
-https://github.com/chongchonghaoman/ViralX/tree/master/.agents/skills/viralx
+https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx
 ```
 
 可以直接对 Codex 说：
@@ -132,7 +133,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 | --- | --- |
 | API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频；支持 Search + Discover 双入口、分页、热度过滤、响应归一化和可操作的空结果诊断 |
 | 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 API23，直接进入视频采集与拉片链路 |
-| TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据 |
+| TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据；自动发现共享 Whisper / Qwen3-ASR 环境 |
 | LibTV 网页连接 | EdgeOne 页面与本机 Connector 一次性配对，再调用官方 `libtv login web`；连接后创建画布、上传原视频、运行多模态拉片节点并返回证据与画布入口 |
 | 证据合并与模型终审 | 将平台数据、评论、字幕/ASR、TK Note 资产状态和 LibTV 拉片证据统一交给所选模型生成最终报告 |
 | 网页流式结果 | `/api/analyze` 使用 NDJSON 持续返回进度、结果、错误与恢复提示 |
@@ -276,6 +277,9 @@ python web_app.py
 | --- | --- | --- |
 | `RAPIDAPI_KEY` / `rapidapi_key` | API23 关键词搜索 | 仅搜索关键词时需要 |
 | `LIBTV_CLI_BINARY` | 官方 `libtv` 可执行文件路径；通常可自动发现 | 仅自动发现失败时填写 |
+| `RIMAGINATION_NOTE_CACHE` | TK Note 共享下载与 ASR 缓存目录；默认 `%USERPROFILE%\.cache\rimagination-notes` | 可选 |
+| `RIMAGINATION_QWEN_PYTHON` | 明确指定已安装 Qwen3-ASR 的 Python 解释器 | 仅自动发现失败时填写 |
+| `RIMAGINATION_WHISPER_PYTHON` | 明确指定已安装 OpenAI Whisper 的 Python 解释器 | 仅自动发现失败时填写 |
 | `MODEL_PROVIDER` / `model_provider` | `openai`、`anthropic`、`gemini`、`deepseek`、`openrouter`、`custom` | 完整分析必需 |
 | `MODEL_API_KEY` / `model_api_key` | 当前服务商的 API Key | 完整分析必需 |
 | `MODEL_NAME` / `model_name` | 当前账户可调用的完整模型 ID | 完整分析必需 |
@@ -353,7 +357,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集覆盖 ViralX Skill 调用脚本、API23 Search/Discover 双入口、业务状态 4 自动回退与错误脱敏、TK Note → LibTV → 模型串联证据合同、LibTV 多模态节点、本地 Flask、EdgeOne 运行边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、模型会话头与前端五阶段合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集覆盖 ViralX Skill 调用脚本、API23 Search/Discover 双入口、业务状态 4 自动回退与错误脱敏、TK Note 共享 Whisper 环境发现与执行、TK Note → LibTV → 模型串联证据合同、LibTV 多模态节点、本地 Flask、EdgeOne 运行边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、模型会话头与前端五阶段合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 

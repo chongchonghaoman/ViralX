@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -436,12 +437,49 @@ def build_asset_manifest(out_dir: Path) -> dict[str, Any]:
     return manifest
 
 
+def shared_note_cache() -> Path:
+    override = os.environ.get("RIMAGINATION_NOTE_CACHE")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "rimagination-notes"
+
+
 def find_shared_qwen_python() -> Path | None:
     override = os.environ.get("RIMAGINATION_QWEN_PYTHON")
     candidates = [Path(override)] if override else []
-    base = Path(os.environ.get("RIMAGINATION_NOTE_CACHE", Path.home() / ".cache" / "rimagination-notes"))
+    base = shared_note_cache()
     candidates.extend((base / "qwen3-asr-venv" / "Scripts" / "python.exe", base / "qwen3-asr-venv" / "bin" / "python"))
     return next((path for path in candidates if path and path.is_file()), None)
+
+
+def _python_imports(python: Path, module: str) -> bool:
+    try:
+        completed = subprocess.run(
+            [str(python), "-c", f"import {module}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def find_shared_whisper_python() -> Path | None:
+    override = os.environ.get("RIMAGINATION_WHISPER_PYTHON")
+    candidates = [Path(override).expanduser()] if override else []
+    base = shared_note_cache()
+    candidates.extend(
+        (
+            base / "whisper-venv" / "Scripts" / "python.exe",
+            base / "whisper-venv" / "bin" / "python",
+            base / "qwen3-asr-venv" / "Scripts" / "python.exe",
+            base / "qwen3-asr-venv" / "bin" / "python",
+            Path(sys.executable),
+        )
+    )
+    return next((path for path in candidates if path.is_file() and _python_imports(path, "whisper")), None)
 
 
 def command_exists(name: str) -> bool:

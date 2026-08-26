@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import shutil
@@ -20,6 +19,7 @@ from _common import (
     compute_note_budget,
     emit_progress,
     find_shared_qwen_python,
+    find_shared_whisper_python,
     media_files,
     normalize_metadata,
     parse_subtitle,
@@ -245,10 +245,11 @@ def run_qwen(audio: Path, out_dir: Path, language: str, chunk_seconds: float) ->
 
 
 def run_whisper(audio: Path, out_dir: Path, language: str, model: str) -> tuple[list[dict[str, Any]], str]:
-    if importlib.util.find_spec("whisper") is None:
-        raise TKNoteError("当前 Python 环境未安装 Whisper")
+    whisper_python = find_shared_whisper_python()
+    if not whisper_python:
+        raise TKNoteError("共享 Whisper 环境不可用；请安装 openai-whisper 或设置 RIMAGINATION_WHISPER_PYTHON")
     command = [
-        sys.executable, "-m", "whisper", str(audio), "--model", model, "--output_dir", str(out_dir),
+        str(whisper_python), "-m", "whisper", str(audio), "--model", model, "--output_dir", str(out_dir),
         "--output_format", "json", "--verbose", "False",
     ]
     if language != "auto":

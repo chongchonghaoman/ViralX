@@ -10,7 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from _common import find_shared_qwen_python
+from _common import find_shared_qwen_python, find_shared_whisper_python
 
 
 def main() -> int:
@@ -24,6 +24,7 @@ def main() -> int:
     media_ready = bool(yt_dlp_version or yt_dlp_cli)
     media_status = "OK" if yt_dlp_version else "AVAILABLE_CLI_FALLBACK" if yt_dlp_cli else "BLOCKED"
     qwen_python = find_shared_qwen_python()
+    whisper_python = find_shared_whisper_python()
     ms_token_present = bool(os.environ.get("TIKTOK_MS_TOKEN"))
     payload = {
         "skill": "tk-note",
@@ -33,7 +34,7 @@ def main() -> int:
             "subtitle_tracks": media_status,
             "ffmpeg_audio": "OK" if shutil.which("ffmpeg") else "BLOCKED",
             "qwen3_asr": "OK" if qwen_python else "UNAVAILABLE",
-            "whisper_asr": "OK" if importlib.util.find_spec("whisper") else "UNAVAILABLE",
+            "whisper_asr": "OK" if whisper_python else "UNAVAILABLE",
             "tiktok_comments": "OK" if importlib.util.find_spec("TikTokApi") else "OPTIONAL_DEPENDENCY_MISSING",
         },
         "details": {
@@ -41,6 +42,7 @@ def main() -> int:
             "yt_dlp_cli": yt_dlp_cli,
             "ffmpeg": shutil.which("ffmpeg"),
             "shared_qwen_python": str(qwen_python) if qwen_python else None,
+            "shared_whisper_python": str(whisper_python) if whisper_python else None,
             "shared_cache": str(Path(os.environ.get("RIMAGINATION_NOTE_CACHE", Path.home() / ".cache" / "rimagination-notes"))),
             "tiktok_ms_token_present": ms_token_present,
         },
