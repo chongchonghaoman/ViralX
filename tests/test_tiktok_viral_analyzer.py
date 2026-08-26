@@ -179,6 +179,67 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         )
 
     @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_falls_back_to_trending_keyword_and_resolves_post_detail(self, mock_get):
+        search = Mock(status_code=200)
+        search.json.return_value = {"status_code": 0, "item_list": []}
+        general = Mock(status_code=200)
+        general.json.return_value = {"status_code": 0, "item_list": []}
+        unavailable = Mock(status_code=200)
+        unavailable.json.return_value = {
+            "status_code": 4,
+            "status_msg": "Server is currently unavailable. Please try again later.",
+        }
+        trending = Mock(status_code=200)
+        trending.json.return_value = {"data": {"video_list": ["7588556037062479135"]}}
+        detail = Mock(status_code=200)
+        detail.json.return_value = {
+            "itemInfo": {
+                "itemStruct": {
+                    "id": "7588556037062479135",
+                    "desc": "Picture light styling idea",
+                    "author": {"uniqueId": "gallerylighting"},
+                    "stats": {"diggCount": 8400, "playCount": 210000},
+                    "video": {"duration": 19, "cover": "https://example.com/detail.jpg"},
+                }
+            }
+        }
+        mock_get.side_effect = [search, general, unavailable, trending, detail]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=100, count=30)
+
+        self.assertEqual([video["video_id"] for video in videos], ["7588556037062479135"])
+        self.assertEqual(videos[0]["digg_count"], 8400)
+        self.assertEqual(
+            mock_get.call_args_list[3].kwargs["params"],
+            {"keyword": "picture light", "country": "US", "limit": 10, "period": 120},
+        )
+        self.assertEqual(
+            mock_get.call_args_list[4].kwargs["params"],
+            {"videoId": "7588556037062479135"},
+        )
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_explains_when_trending_ids_cannot_be_resolved(self, mock_get):
+        empty = Mock(status_code=200)
+        empty.json.return_value = {"status_code": 0, "item_list": []}
+        unavailable = Mock(status_code=200)
+        unavailable.json.return_value = {
+            "status_code": 4,
+            "status_msg": "Server is currently unavailable. Please try again later.",
+        }
+        trending = Mock(status_code=200)
+        trending.json.return_value = {"data": {"video_list": ["7588556037062479135"]}}
+        mock_get.side_effect = [empty, empty, unavailable, trending, unavailable]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=100)
+
+        self.assertEqual(videos, [])
+        message = self.analyzer.empty_result_message()
+        self.assertIn("返回了 1 个视频 ID", message)
+        self.assertIn("Post Detail 暂时不可用", message)
+        self.assertIn("尚不能执行热度筛选", message)
+
+    @patch("tiktok_viral_analyzer.requests.get")
     def test_api23_http_200_business_error_is_actionable(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -226,12 +287,12 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "status_code": 4,
             "status_msg": "Server is currently unavailable. Please try again later.",
         }
-        mock_get.side_effect = [unavailable, unavailable, unavailable]
+        mock_get.side_effect = [unavailable, unavailable, unavailable, unavailable]
 
-        with self.assertRaisesRegex(RuntimeError, "三个关键词入口均失败.*Search General.*Discover"):
+        with self.assertRaisesRegex(RuntimeError, "关键词入口均失败.*Search General.*Discover.*Trending"):
             self.analyzer.search_viral_videos("picture light", min_likes=0)
 
-        self.assertEqual(mock_get.call_count, 3)
+        self.assertEqual(mock_get.call_count, 4)
 
     @patch("tiktok_viral_analyzer.requests.get")
     def test_fallback_status_four_does_not_mask_a_valid_empty_search(self, mock_get):
@@ -242,7 +303,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "status_code": 4,
             "status_msg": "Server is currently unavailable. Please try again later.",
         }
-        mock_get.side_effect = [search, unavailable, unavailable]
+        mock_get.side_effect = [search, unavailable, unavailable, unavailable]
 
         videos = self.analyzer.search_viral_videos("picture light", min_likes=500)
 
@@ -250,7 +311,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         message = self.analyzer.empty_result_message()
         self.assertIn("Search Video 返回 item_list=0", message)
         self.assertIn("与最低点赞数无关", message)
-        self.assertIn("Search General、Discover 暂时不可用", message)
+        self.assertIn("Search General、Discover、Trending Video by Keyword 暂时不可用", message)
 
     def test_error_messages_redact_exact_and_token_shaped_secrets(self):
         message = safe_error_message(
@@ -269,7 +330,9 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         second.json.return_value = {"anotherUnexpectedShape": True}
         third = Mock(status_code=200)
         third.json.return_value = {"thirdUnexpectedShape": True}
-        mock_get.side_effect = [first, second, third]
+        fourth = Mock(status_code=200)
+        fourth.json.return_value = {"fourthUnexpectedShape": True}
+        mock_get.side_effect = [first, second, third, fourth]
 
         videos = self.analyzer.search_viral_videos("picture light", min_likes=0)
 
@@ -301,7 +364,9 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "hasMore": False,
             "videoList": [{"id": "low-discover", "stats": {"diggCount": 1200}}],
         }
-        mock_get.side_effect = [search, general, discover]
+        trending = Mock(status_code=200)
+        trending.json.return_value = {"data": {"video_list": []}}
+        mock_get.side_effect = [search, general, discover, trending]
 
         videos = self.analyzer.search_viral_videos("picture light", min_likes=5000)
 

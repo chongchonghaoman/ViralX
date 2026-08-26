@@ -48,7 +48,7 @@ ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固�
 - **分析逻辑改为固定串联**：移除“LibTV 或模型 API”的二选一。TK Note 证据和 LibTV 拉片证据现在会先合并，再交给模型 API 做最终综合判断。
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上页面不伪装云端能力**：EdgeOne Pages 提供同源健康检查、会话设置和浏览器安全导出；完整分析明确路由到本机 Connector，不把无法读取本机 CLI 登录态的云函数冒充为可运行流水线。
-- **搜索链路切换为 API23**：按官方 `/api/search/video` → `/api/search/general` → `/api/post/discover` 串行发现候选，前一入口空结果或临时不可用（含 HTTP 200 内的业务状态 4）才进入下一入口；支持分页、热度过滤、混合 Top 响应归一化、逐入口诊断和凭据脱敏。备用入口失败不再覆盖主入口已经正常返回的空结果或点赞过滤信息。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
+- **搜索链路切换为 API23**：按官方 `/api/search/video` → `/api/search/general` → `/api/post/discover` 串行发现候选；如果三个常规入口没有候选，再调用 `/api/trending/keyword/posts`，并用 `/api/post/detail` 把趋势视频 ID 补全为热度与视频元数据。前一入口空结果或临时不可用（含 HTTP 200 内的业务状态 4）才进入下一入口；支持分页、热度过滤、混合 Top 响应归一化、逐入口诊断和凭据脱敏。备用入口失败不再覆盖主入口已经正常返回的空结果或点赞过滤信息。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **TK Note 共享本地 ASR**：自动复用 `%USERPROFILE%\.cache\rimagination-notes` 中已有的 Whisper 或 Qwen3-ASR Python 环境；也可通过环境变量明确指定解释器。Connector 使用哪个 Python 启动都不会因此丢失已有 ASR 能力。
 - **LibTV 从“上传交接”升级为真实拉片**：Connector 会创建画布、上传 TK Note 原片，再创建绑定 `GVLM 3.1 Flash` 的多模态文本节点并运行；镜头、钩子、节奏、声音、转场和转化节点会作为结构化证据返回。
 - **Connector 承担完整编排**：浏览器与 `127.0.0.1` 完成一次性配对后，把 API23、TK Note 与模型会话配置交给 Connector。模型 Key 只到本机 Connector，再由它直连所选服务商；不经过、不落盘到 EdgeOne，也不会写入日志。
@@ -131,7 +131,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 | 能力 | 网页中的实际行为 |
 | --- | --- |
-| API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频；支持 Search Video、Search General、Discover 三个官方入口、分页、热度过滤、响应归一化和逐入口空结果诊断 |
+| API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频；支持 Search Video、Search General、Discover，以及 Trending Video by Keyword → Post Detail 自动降级、分页、热度过滤、响应归一化和逐入口空结果诊断 |
 | 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 API23，直接进入视频采集与拉片链路 |
 | TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据；自动发现共享 Whisper / Qwen3-ASR 环境 |
 | LibTV 网页连接 | EdgeOne 页面与本机 Connector 一次性配对，再调用官方 `libtv login web`；连接后创建画布、上传原视频、运行多模态拉片节点并返回证据与画布入口 |

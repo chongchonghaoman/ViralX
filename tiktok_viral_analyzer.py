@@ -39,13 +39,17 @@ class TikTokViralAnalyzer:
     SEARCH_URL = f"https://{SEARCH_HOST}/api/search/video"
     GENERAL_SEARCH_URL = f"https://{SEARCH_HOST}/api/search/general"
     DISCOVER_URL = f"https://{SEARCH_HOST}/api/post/discover"
+    TRENDING_KEYWORD_URL = f"https://{SEARCH_HOST}/api/trending/keyword/posts"
+    POST_DETAIL_URL = f"https://{SEARCH_HOST}/api/post/detail"
     SEARCH_TIMEOUT_SECONDS = 15
     ROUTE_LABELS = {
         "/api/search/video": "Search Video",
         "/api/search/general": "Search General",
         "/api/post/discover": "Discover",
+        "/api/trending/keyword/posts": "Trending Video by Keyword",
+        "/api/post/detail": "Post Detail",
     }
-    API23_VIDEO_LIST_KEYS = ("item_list", "itemList", "items", "videoList", "videos")
+    API23_VIDEO_LIST_KEYS = ("item_list", "itemList", "items", "video_list", "videoList", "videos")
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
@@ -121,6 +125,33 @@ class TikTokViralAnalyzer:
             "keys": sorted(str(key) for key in root.keys())[:12],
             "lists": lists,
         }
+
+    @classmethod
+    def _api23_trending_video_ids(cls, payload: Any) -> List[str]:
+        """Read video IDs returned by API23's Trending Video by Keyword endpoint."""
+        root = cls._mapping(payload)
+        candidates = [root, cls._mapping(root.get("data"))]
+        for container in candidates:
+            value = container.get("video_list", container.get("videoList"))
+            if not isinstance(value, list):
+                continue
+            video_ids = []
+            for entry in value:
+                if isinstance(entry, Mapping):
+                    entry = entry.get("id") or entry.get("video_id") or entry.get("videoId")
+                video_id = str(entry or "").strip()
+                if video_id.isdigit() and video_id not in video_ids:
+                    video_ids.append(video_id)
+            return video_ids
+        return []
+
+    @classmethod
+    def _api23_post_detail_item(cls, payload: Any) -> Dict[str, Any]:
+        """Unwrap /api/post/detail into the same item shape used by search results."""
+        root = cls._mapping(payload)
+        data = cls._mapping(root.get("data"))
+        item_info = cls._mapping(root.get("itemInfo") or data.get("itemInfo"))
+        return dict(cls._mapping(item_info.get("itemStruct") or item_info.get("item_struct")))
 
     @classmethod
     def _api23_business_error(cls, payload: Any) -> tuple[str, bool]:
@@ -234,6 +265,7 @@ class TikTokViralAnalyzer:
                     "normalized_items": 0,
                     "matched_items": 0,
                     "max_likes": 0,
+                    "id_candidates": 0,
                     "error": "",
                     "response_shapes": [],
                 },
@@ -402,15 +434,60 @@ class TikTokViralAnalyzer:
                     raise
                 record_route_error("/api/post/discover", exc)
 
+        # Search Video and Search General currently sometimes return a valid
+        # status with an empty item_list even for broad terms. API23 also
+        # exposes a keyword-trending index; resolve its IDs through Post Detail
+        # so ViralX still receives complete stats and video metadata.
+        if not viral_videos:
+            trending_route = "/api/trending/keyword/posts"
+            try:
+                payload = request_page(
+                    self.TRENDING_KEYWORD_URL,
+                    {
+                        "keyword": clean_keyword,
+                        "country": "US",
+                        "limit": min(limit, 10),
+                        "period": 120,
+                    },
+                    trending_route,
+                )
+                video_ids = self._api23_trending_video_ids(payload)
+                route_diagnostics(trending_route)["id_candidates"] += len(video_ids)
+                for video_id in video_ids:
+                    try:
+                        detail_payload = request_page(
+                            self.POST_DETAIL_URL,
+                            {"videoId": video_id},
+                            "/api/post/detail",
+                        )
+                    except API23SearchError as exc:
+                        if not exc.recoverable:
+                            raise
+                        record_route_error("/api/post/detail", exc)
+                        continue
+                    item = self._api23_post_detail_item(detail_payload)
+                    if item:
+                        collect_items([item], trending_route)
+                    if len(viral_videos) >= limit:
+                        break
+            except API23SearchError as exc:
+                if not exc.recoverable:
+                    raise
+                record_route_error(trending_route, exc)
+
         diagnostics = self.last_search_diagnostics
         route_stats = diagnostics["route_diagnostics"]
-        attempted_routes = [route for _, route in cursor_routes] + ["/api/post/discover"]
+        attempted_routes = [
+            *[route for _, route in cursor_routes],
+            "/api/post/discover",
+            "/api/trending/keyword/posts",
+        ]
         all_routes_failed = all(route_stats.get(route, {}).get("error") for route in attempted_routes)
         if not viral_videos and all_routes_failed:
             failures = "；".join(
                 f"{self.ROUTE_LABELS[route]}：{route_stats[route]['error']}" for route in attempted_routes
             )
-            raise RuntimeError(f"API23 三个关键词入口均失败：{failures}")
+            raise RuntimeError(f"API23 关键词入口均失败：{failures}")
 
         viral_videos = viral_videos[:limit]
         print(
@@ -434,6 +511,20 @@ class TikTokViralAnalyzer:
         route_diagnostics = diagnostics.get("route_diagnostics") or {}
         route_label = "、".join(routes) or "API23 搜索接口"
         if raw_items == 0:
+            trending_ids = sum(
+                self._integer(stats.get("id_candidates"))
+                for stats in route_diagnostics.values()
+                if isinstance(stats, Mapping)
+            )
+            if trending_ids:
+                detail_stats = route_diagnostics.get("/api/post/detail") or {}
+                detail_error = detail_stats.get("error")
+                message = f"API23 Trending Video by Keyword 返回了 {trending_ids} 个视频 ID"
+                if detail_error:
+                    message += f"，但 Post Detail 暂时不可用：{detail_error}"
+                else:
+                    message += "，但 Post Detail 没有返回可识别的视频详情"
+                return message + "。ViralX 无法取得点赞数与视频元数据，因此尚不能执行热度筛选。"
             if responses and recognized_lists == 0:
                 return "API23 返回了响应，但没有可识别的视频列表；接口响应结构可能已经更新。"
             successful_routes = [
