@@ -25,6 +25,14 @@ def safe_error_message(value: Any, secrets: Iterable[Any] = ()) -> str:
     )
     return text[:600]
 
+
+class API23SearchError(RuntimeError):
+    """An API23 failure that may or may not be safe to retry on another route."""
+
+    def __init__(self, message: str, *, recoverable: bool = False):
+        super().__init__(message)
+        self.recoverable = recoverable
+
 class TikTokViralAnalyzer:
     SEARCH_PROVIDER = "api23"
     SEARCH_HOST = "tiktok-api23.p.rapidapi.com"
@@ -72,8 +80,8 @@ class TikTokViralAnalyzer:
         )
 
     @classmethod
-    def _api23_business_error(cls, payload: Any) -> str:
-        """Return a safe API23 business error carried inside an HTTP 200 body."""
+    def _api23_business_error(cls, payload: Any) -> tuple[str, bool]:
+        """Return a safe HTTP-200 business error and whether fallback is useful."""
         root = cls._mapping(payload)
         containers = [root, cls._mapping(root.get("data"))]
         for container in containers:
@@ -92,8 +100,13 @@ class TikTokViralAnalyzer:
                 or "API23 返回了业务错误"
             )
             safe_message = safe_error_message(message)[:240]
-            return f"{safe_message}（业务状态 {code}）" if code not in (None, "") else safe_message
-        return ""
+            recoverable = code in (4, "4") or any(
+                marker in safe_message.lower()
+                for marker in ("temporarily unavailable", "currently unavailable", "try again later")
+            )
+            detail = f"{safe_message}（业务状态 {code}）" if code not in (None, "") else safe_message
+            return detail, recoverable
+        return "", False
 
     @classmethod
     def _normalize_api23_video(cls, item: Dict) -> Dict:
@@ -146,6 +159,7 @@ class TikTokViralAnalyzer:
             "routes": [],
             "responses": 0,
             "recognized_lists": 0,
+            "route_errors": {},
         }
         if not clean_keyword:
             return []
@@ -175,20 +189,32 @@ class TikTokViralAnalyzer:
                 )
             except requests.RequestException as exc:
                 detail = safe_error_message(exc, (self.api_key,))
-                raise RuntimeError(f"API23 关键词搜索请求失败：{detail}") from exc
+                raise API23SearchError(
+                    f"API23 关键词搜索请求失败：{detail}",
+                    recoverable=True,
+                ) from exc
 
             if response.status_code != 200:
                 message = error_messages.get(response.status_code, "API23 关键词搜索暂时不可用")
-                raise RuntimeError(f"{message}（HTTP {response.status_code}）")
+                raise API23SearchError(
+                    f"{message}（HTTP {response.status_code}）",
+                    recoverable=response.status_code >= 500,
+                )
 
             try:
                 payload = response.json()
             except ValueError as exc:
-                raise RuntimeError("API23 返回了无法解析的响应") from exc
-            business_error = self._api23_business_error(payload)
+                raise API23SearchError(
+                    "API23 返回了无法解析的响应",
+                    recoverable=True,
+                ) from exc
+            business_error, recoverable = self._api23_business_error(payload)
             if business_error:
                 detail = safe_error_message(business_error, (self.api_key,))
-                raise RuntimeError(f"API23 搜索失败：{detail}")
+                raise API23SearchError(
+                    f"API23 搜索失败：{detail}",
+                    recoverable=recoverable,
+                )
             mapped_payload = self._mapping(payload)
             self.last_search_diagnostics["responses"] += 1
             if self._api23_has_item_list(mapped_payload):
@@ -221,60 +247,71 @@ class TikTokViralAnalyzer:
 
         # API23 uses cursor + log_pb.impr_id for subsequent pages. Five pages
         # keeps a single ViralX search bounded while still honoring count=30.
-        for _ in range(5):
-            page_signature = (str(cursor), str(search_id))
-            if page_signature in seen_pages:
-                break
-            seen_pages.add(page_signature)
+        try:
+            for _ in range(5):
+                page_signature = (str(cursor), str(search_id))
+                if page_signature in seen_pages:
+                    break
+                seen_pages.add(page_signature)
 
-            payload = request_page(
-                self.SEARCH_URL,
-                {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id},
-            )
-            items = self._api23_items(payload)
-            collect_items(items, "/api/search/video")
-            if len(viral_videos) >= limit:
-                break
+                payload = request_page(
+                    self.SEARCH_URL,
+                    {"keyword": clean_keyword, "cursor": cursor, "search_id": search_id},
+                )
+                items = self._api23_items(payload)
+                collect_items(items, "/api/search/video")
+                if len(viral_videos) >= limit:
+                    break
 
-            root = self._mapping(payload)
-            nested = self._mapping(root.get("data"))
-            container = nested if any(
-                isinstance(nested.get(key), list)
-                for key in ("item_list", "itemList", "items", "videoList", "videos")
-            ) else root
-            has_more = container.get(
-                "has_more",
-                container.get("hasMore", root.get("has_more", root.get("hasMore", False))),
-            )
-            if has_more not in (True, 1, "1") or not items:
-                break
+                root = self._mapping(payload)
+                nested = self._mapping(root.get("data"))
+                container = nested if any(
+                    isinstance(nested.get(key), list)
+                    for key in ("item_list", "itemList", "items", "videoList", "videos")
+                ) else root
+                has_more = container.get(
+                    "has_more",
+                    container.get("hasMore", root.get("has_more", root.get("hasMore", False))),
+                )
+                if has_more not in (True, 1, "1") or not items:
+                    break
 
-            cursor = container.get(
-                "cursor",
-                container.get("next_cursor", container.get("nextCursor", root.get("cursor", cursor))),
-            )
-            log_pb = self._mapping(container.get("log_pb") or root.get("log_pb"))
-            search_id = str(log_pb.get("impr_id") or log_pb.get("imprId") or search_id)
+                cursor = container.get(
+                    "cursor",
+                    container.get("next_cursor", container.get("nextCursor", root.get("cursor", cursor))),
+                )
+                log_pb = self._mapping(container.get("log_pb") or root.get("log_pb"))
+                search_id = str(log_pb.get("impr_id") or log_pb.get("imprId") or search_id)
+        except API23SearchError as exc:
+            if not exc.recoverable:
+                raise
+            self.last_search_diagnostics["route_errors"]["/api/search/video"] = str(exc)
 
         # API23 exposes a second official keyword-discovery route. It is useful
         # when TikTok's search route returns an empty first result set, and keeps
         # ViralX on the user's selected API23 provider.
         if not viral_videos:
-            for page in range(1, 4):
-                payload = request_page(
-                    self.DISCOVER_URL,
-                    {"keyword": clean_keyword, "page": page},
-                )
-                items = self._api23_items(payload)
-                collect_items(items, "/api/post/discover")
-                if len(viral_videos) >= limit:
-                    break
-                root = self._mapping(payload)
-                nested = self._mapping(root.get("data"))
-                container = nested if nested else root
-                has_more = container.get("hasMore", container.get("has_more", False))
-                if has_more not in (True, 1, "1") or not items:
-                    break
+            try:
+                for page in range(1, 4):
+                    payload = request_page(
+                        self.DISCOVER_URL,
+                        {"keyword": clean_keyword, "page": page},
+                    )
+                    items = self._api23_items(payload)
+                    collect_items(items, "/api/post/discover")
+                    if len(viral_videos) >= limit:
+                        break
+                    root = self._mapping(payload)
+                    nested = self._mapping(root.get("data"))
+                    container = nested if nested else root
+                    has_more = container.get("hasMore", container.get("has_more", False))
+                    if has_more not in (True, 1, "1") or not items:
+                        break
+            except API23SearchError as exc:
+                primary_error = self.last_search_diagnostics["route_errors"].get("/api/search/video")
+                if primary_error:
+                    raise RuntimeError(f"{primary_error}；备用入口也失败：{exc}") from exc
+                raise
 
         viral_videos = viral_videos[:limit]
         diagnostics = self.last_search_diagnostics
@@ -293,12 +330,15 @@ class TikTokViralAnalyzer:
         threshold = self._integer(diagnostics.get("threshold"))
         max_likes = self._integer(diagnostics.get("max_likes"))
         routes = diagnostics.get("routes") or []
+        route_errors = diagnostics.get("route_errors") or {}
         responses = self._integer(diagnostics.get("responses"))
         recognized_lists = self._integer(diagnostics.get("recognized_lists"))
         route_label = "、".join(routes) or "API23 搜索接口"
         if raw_items == 0:
             if responses and recognized_lists == 0:
                 return "API23 返回了响应，但没有可识别的视频列表；接口响应结构可能已经更新。"
+            if route_errors.get("/api/search/video"):
+                return "API23 主搜索暂时不可用，备用 Discover 入口也没有返回视频候选；请稍后重试。"
             return f"API23 的 {route_label} 均未返回视频候选；请在 RapidAPI Playground 检查当前订阅和实际响应。"
         if normalized_items == 0:
             return f"API23 返回了 {raw_items} 条候选，但响应中没有可识别的视频 ID；接口结构可能已经更新。"

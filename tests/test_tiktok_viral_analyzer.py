@@ -185,6 +185,39 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "API23.*Search upstream.*10222"):
             self.analyzer.search_viral_videos("picture light")
 
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_status_four_uses_discover_fallback(self, mock_get):
+        unavailable = Mock(status_code=200)
+        unavailable.json.return_value = {
+            "status_code": 4,
+            "status_msg": "Server is currently unavailable. Please try again later.",
+        }
+        discover = Mock(status_code=200)
+        discover.json.return_value = {
+            "hasMore": False,
+            "videoList": [
+                {"id": "discover-after-status-four", "stats": {"diggCount": 9000}},
+            ],
+        }
+        mock_get.side_effect = [unavailable, discover]
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=5000)
+
+        self.assertEqual([video["video_id"] for video in videos], ["discover-after-status-four"])
+        self.assertEqual(mock_get.call_args_list[1].args[0], self.analyzer.DISCOVER_URL)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_reports_when_both_routes_are_unavailable(self, mock_get):
+        unavailable = Mock(status_code=200)
+        unavailable.json.return_value = {
+            "status_code": 4,
+            "status_msg": "Server is currently unavailable. Please try again later.",
+        }
+        mock_get.side_effect = [unavailable, unavailable]
+
+        with self.assertRaisesRegex(RuntimeError, "备用入口也失败.*业务状态 4"):
+            self.analyzer.search_viral_videos("picture light", min_likes=0)
+
     def test_error_messages_redact_exact_and_token_shaped_secrets(self):
         message = safe_error_message(
             "x-rapidapi-key=test-api23-secret Authorization: Bearer another-secret",
