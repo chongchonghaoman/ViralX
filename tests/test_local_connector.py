@@ -160,7 +160,7 @@ class LocalConnectorTests(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(captured["max_videos"], 1)
+        self.assertEqual(captured["max_videos"], local_connector.web_app.MAX_ANALYZE_VIDEOS)
         self.assertEqual(captured["config_override"]["analysis_mode"], "pipeline")
         self.assertEqual(captured["config_override"]["rapidapi_key"], "session-search-key")
         self.assertEqual(captured["config_override"]["tk_note_timeout"], 180)

@@ -325,6 +325,9 @@ def create_connector_app(
             }), 400
         if len(str(body.get("product_name", ""))) > 200 or len(str(body.get("product_info", ""))) > 8000:
             return jsonify({"status": "error", "message": "产品信息超过 Connector 限制。"}), 400
-        return web_app.build_analyze_response(config_override=_request_config(), max_videos=1)
+        return web_app.build_analyze_response(
+            config_override=_request_config(),
+            max_videos=web_app.MAX_ANALYZE_VIDEOS,
+        )
 
     return app, broker

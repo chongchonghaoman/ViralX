@@ -3,6 +3,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 import json
 import os
+import re
 import time
 import hashlib
 import base64
@@ -50,6 +51,112 @@ def _evidence_bundle_text(video_data: dict, limit: int = 80000) -> str:
         return json.dumps(bundle, ensure_ascii=False, default=str, indent=2)[:limit]
     except (TypeError, ValueError):
         return str(bundle)[:limit]
+
+
+def _grounded_sources_text(video_data: dict, limit: int = 80000) -> str:
+    """Render the merged bundle as named sources the final model must cite."""
+    bundle = video_data.get('evidence_bundle') or {}
+    platform = bundle.get('platform_evidence') or {}
+    tk_note = bundle.get('tk_note_evidence') or {}
+    libtv = bundle.get('libtv_evidence') or {}
+    comments = platform.get('comments_data') or []
+    hashtags = platform.get('hashtags') or []
+    transcript = str(tk_note.get('transcript') or '').strip()
+    shot_analysis = str(libtv.get('shot_analysis') or '').strip()
+
+    sources = f"""[META:title]
+标题：{platform.get('title') or '未采集'}
+作者：{platform.get('author') or '未采集'}
+时长：{platform.get('duration') if platform.get('duration') is not None else '未采集'} 秒
+
+[META:metrics]
+点赞：{platform.get('likes', 0)}；评论数：{platform.get('comments', 0)}；分享数：{platform.get('shares', 0)}；播放量：{platform.get('views', 0)}
+
+[META:comments]
+评论正文：{json.dumps(comments, ensure_ascii=False, default=str) if comments else '未采集；不得推断真实用户反馈'}
+
+[META:hashtags]
+标签：{json.dumps(hashtags, ensure_ascii=False, default=str) if hashtags else '未采集；不得虚构标签策略'}
+
+[TK:metadata]
+{json.dumps(tk_note.get('metadata') or {}, ensure_ascii=False, default=str, indent=2)}
+
+[TK:transcript]
+{transcript or '未获得有效转写；不得据此补写台词'}
+转写来源：{tk_note.get('transcript_source') or '未知'}
+警告：{json.dumps(tk_note.get('warnings') or [], ensure_ascii=False, default=str)}
+
+[LIBTV:shot]
+{shot_analysis or '未获得 LibTV 镜头证据；必须停止分析'}
+
+[LIBTV:project]
+画布：{libtv.get('project_url') or '未返回'}
+"""
+    return sources[:limit]
+
+
+def _libtv_evidence_error(details: dict) -> str:
+    """Reject nominally completed LibTV runs that contain no auditable shot evidence."""
+    evidence = (details or {}).get('evidence') or {}
+    shot_analysis = str(evidence.get('shot_analysis') or (details or {}).get('analysis') or '').strip()
+    status = str((details or {}).get('status') or '').lower()
+    if status != 'completed':
+        return f"LibTV 返回状态 {status or 'unknown'}，未形成可用拉片证据"
+    if len(shot_analysis) < 80:
+        return "LibTV 拉片文本过短，无法作为最终模型的视觉事实来源"
+    if not re.search(r"\b(?:\d{1,2}:)?\d{1,2}:\d{2}\b", shot_analysis):
+        return "LibTV 拉片缺少时间码，无法核验镜头事实"
+    return ''
+
+
+def _grounding_error(report: str, video_data: dict | None = None) -> str:
+    """Require traceable citations before a model report can be shown as completed."""
+    text = str(report or '').strip()
+    if not text:
+        return "模型没有返回报告"
+    citations = re.findall(r"\[(?:META|TK|LIBTV|FRAME):[^\]]+\]", text)
+    unique = set(citations)
+    if not any(item.startswith('[META:') for item in unique):
+        return "报告没有引用平台元数据"
+    if not any(item.startswith('[LIBTV:') for item in unique):
+        return "报告没有引用 LibTV 镜头证据"
+    if len(unique) < 3 or len(citations) < 4:
+        return "报告的证据引用不足，无法区分事实与推断"
+    platform = ((video_data or {}).get('evidence_bundle') or {}).get('platform_evidence') or {}
+    if not (platform.get('comments_data') or []):
+        if re.search(r"评论(?:显示|反映|指出|认为)|用户(?:表示|认为|反馈)", text):
+            return "未采集评论正文，但报告仍声称存在真实用户反馈"
+        if not re.search(r"评论.{0,16}未采集|未采集.{0,16}评论", text):
+            return "报告没有披露评论正文未采集"
+    if not (platform.get('hashtags') or []):
+        if re.search(r"#[A-Za-z0-9_\-]+", text):
+            return "未采集标签，但报告生成了具体标签"
+    return ''
+
+
+def _persist_evidence_audit(video_file_path: str, evidence_bundle: dict, libtv_text: str, report: str = '') -> dict:
+    """Keep a local, secret-free audit copy beside the downloaded evidence package."""
+    try:
+        audit_dir = Path(video_file_path).resolve().parent / 'viralx-evidence'
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        bundle_path = audit_dir / 'evidence-bundle.json'
+        libtv_path = audit_dir / 'libtv-shot-analysis.md'
+        report_path = audit_dir / 'final-model-report.raw.md'
+        bundle_path.write_text(
+            json.dumps(evidence_bundle, ensure_ascii=False, default=str, indent=2),
+            encoding='utf-8',
+        )
+        libtv_path.write_text(str(libtv_text or '').strip(), encoding='utf-8')
+        if report:
+            report_path.write_text(str(report).strip(), encoding='utf-8')
+        return {
+            'evidence_bundle_path': str(bundle_path),
+            'libtv_evidence_path': str(libtv_path),
+            'raw_model_report_path': str(report_path) if report else '',
+        }
+    except OSError as exc:
+        print(f"[证据审计文件写入失败] {exc}")
+        return {}
 
 
 class AICache:
@@ -172,7 +279,7 @@ class OpenAICompatibleAnalyzer:
                     "model": self.model_name,
                     "messages": [{"role": "user", "content": content_parts}],
                     "max_tokens": 8192,
-                    "temperature": 0.7
+                    "temperature": 0.1
                 }
 
                 resp = requests.post(
@@ -196,6 +303,19 @@ class OpenAICompatibleAnalyzer:
 
     def _build_analysis_prompt(self, video_data: dict, metadata_text: str, frame_count: int) -> str:
         return f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+
+=== 证据协议（最高优先级） ===
+你正在做证据综合，不是在补全一篇营销文章。每条关于原视频的具体事实必须在句末标注来源：
+- 平台标题、作者和互动数据用 [META:title] 或 [META:metrics]
+- 评论正文和标签只能分别来自 [META:comments]、[META:hashtags]；标为“未采集”时禁止推断
+- 字幕或 ASR 只能引用 [TK:transcript]；歌词不得冒充商品台词
+- 画面、动作、镜头、字幕和声音只允许引用 [LIBTV:shot] 或本次直接看到的 [FRAME:sample]
+- 营销解释必须明确写“推断”，并同时引用支撑它的事实来源
+- 翻拍脚本必须标为“创意提案”，不得伪装成原视频复原
+- 证据不足的栏目必须写“未采集/无法判断”，禁止用常识填空
+
+=== 可引用证据源 ===
+{_grounded_sources_text(video_data)}
 
 === 视频数据 ===
 {metadata_text}
@@ -244,7 +364,7 @@ class OpenAICompatibleAnalyzer:
 | 内容类型 | X个 | #XXX #XXX | XXX用户 |
 | 价格敏感 | X个 | #XXX | XXX用户 |
 
-**标签特点**：精准垂直，覆盖"搜索-种草-购买"全链路
+**标签特点**：只根据实际标签判断；没有标签证据时写“未采集” [META:hashtags]
 
 ---
 
@@ -258,9 +378,9 @@ class OpenAICompatibleAnalyzer:
 | 评论 | X | X% | 低/中/高，说明什么 |
 | 分享 | X | X% | 超高/正常/低分享率 |
 
-### 用户行为推断
+### 用户行为证据
 
-**① 评论反映的真实需求**
+**① 评论反映的真实需求（仅在有评论正文时填写）**
 ```
 ✓ 需求1
 ✓ 需求2
@@ -271,14 +391,14 @@ class OpenAICompatibleAnalyzer:
 📌 驱动1
 ```
 
-### 用户潜在关注点
+### 用户潜在关注点（无评论正文时只能标为待验证假设）
 
 | 关注维度 | 推测热点问题 | 优先级 |
 |---------|-------------| ------ |
 
 ---
 
-## 📝 翻拍脚本
+## 📝 创意提案：翻拍脚本
 
 ### 版本一：产品展示型（{video_data.get('duration', 'X')}秒）
 
@@ -349,27 +469,42 @@ class OpenAICompatibleAnalyzer:
 {_evidence_bundle_text(video_data)}"""
 
     def _analyze_text_prompt(self, video_data: dict) -> str:
-        return f"""你是一位资深 TikTok 电商短视频拆解专家。
+        return f"""你是 ViralX 的最终证据综合模型。你不能直接观看视频，只能使用下列命名证据源。
 
-{self._build_metadata_text(video_data)}
+=== 可引用证据源 ===
+{_grounded_sources_text(video_data)}
 
-只根据上面的标题、互动数据和评论证据分析，不得编造画面、台词或商品信息。
-请用 Markdown 输出以下五部分：
+=== 不可违反的规则 ===
+1. 每条关于原视频的具体事实必须在句末引用至少一个来源标签，标签只能是：
+   [META:title] [META:metrics] [META:comments] [META:hashtags]
+   [TK:metadata] [TK:transcript] [LIBTV:shot] [LIBTV:project]
+2. 画面、动作、镜头、屏幕文字和声音只允许来自 [LIBTV:shot]；ASR 只代表听到的文本，不代表画面。
+3. 没有评论正文时，不得声称“用户认为/评论反映”；没有标签时，不得生成标签策略；没有价格、购买按钮或 CTA 证据时，不得补写。
+4. 所有营销或受众解释必须明确标为“推断”，并引用支撑推断的事实。
+5. 翻拍内容必须明确标为“创意提案”，不能写成原视频真实发生的内容。
+6. 证据不足就写“未采集”或“无法判断”。不要为了完整而填空。
 
-## 核心卖点
-用表格说明痛点、核心优势、价值感知、购买便利与信任建立；证据不足时明确写“数据不足”。
+=== 输出格式 ===
+## 证据覆盖
+用表格列出平台元数据、评论正文、TK Note 转写、LibTV 拉片各自是否可用及局限，每行附来源标签。
 
-## 用户反馈洞察
-解读点赞、评论、分享与高赞评论中能被证据支持的需求和顾虑。
+## 原视频事实
+按时间码整理可核验事实。每条必须引用 [LIBTV:shot]，平台数字另加 [META:metrics]。
 
-## 爆款逻辑
-区分“已观察事实”和“基于数据的推断”，说明标题、互动和受众之间的关系。
+## 爆款机制
+分成“观察事实”和“推断”两栏；每项都必须有来源标签。
+
+## 用户反馈与受众
+没有评论正文就明确写“评论正文未采集，无法判断真实用户诉求” [META:comments]。
 
 ## 可复用结构
-给出开场模式、信任路径、转化节奏与适用边界。
+只抽象已有证据支持的结构，说明适用边界并附来源标签。
 
-## 翻拍框架
-提供一个不虚构原视频画面的执行框架。"""
+## 创意提案：翻拍框架
+这是新创作，不是原片复原。逐段注明借用了哪条已引用结构；缺少产品资料时只给结构，不虚构卖点。"""
+
+    def grounding_error(self, report: str, video_data: dict | None = None) -> str:
+        return _grounding_error(report, video_data)
 
     def _analyze_text_only(self, video_data: dict) -> str:
         """纯文本分析（无视频文件时）"""
@@ -386,7 +521,7 @@ class OpenAICompatibleAnalyzer:
                 "model": self.model_name,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 8192,
-                "temperature": 0.7
+                "temperature": 0.1
             }
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -1254,6 +1389,19 @@ class AIAnalyzer:
                 **acquisition_details,
             }
 
+        libtv_evidence_error = _libtv_evidence_error(libtv_details)
+        if libtv_evidence_error:
+            emit('shot-analysis', 'error', 'LibTV 证据未通过完整性检查', 68)
+            return {
+                'analysis': f'LibTV 拉片证据不可用：{libtv_evidence_error}。最终模型未调用，避免无证据猜测。',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'shot-analysis',
+                'pipeline_status': 'error',
+                'libtv_status': 'error',
+                'model_status': 'blocked',
+                **acquisition_details,
+            }
+
         emit('shot-analysis', 'complete', 'LibTV 拉片证据已生成', 68)
         emit('evidence-merge', 'running', '正在合并 TK Note 与 LibTV 证据', 72)
 
@@ -1279,7 +1427,10 @@ class AIAnalyzer:
             'schema': 'viralx.evidence.v1',
             'platform_evidence': {
                 key: video_data.get(key)
-                for key in ('title', 'author', 'duration', 'likes', 'comments', 'shares', 'views', 'comments_data')
+                for key in (
+                    'title', 'author', 'duration', 'likes', 'comments', 'shares', 'views',
+                    'hashtags', 'comments_data',
+                )
             },
             'tk_note_evidence': tk_note_evidence,
             'libtv_evidence': libtv_details.get('evidence') or {
@@ -1288,19 +1439,40 @@ class AIAnalyzer:
             },
         }
         video_data['evidence_bundle'] = evidence_bundle
+        shot_analysis = str((evidence_bundle.get('libtv_evidence') or {}).get('shot_analysis') or '')
+        audit_details = _persist_evidence_audit(
+            video_file_path,
+            evidence_bundle,
+            shot_analysis,
+        )
         emit('evidence-merge', 'complete', '统一证据包已就绪', 82)
 
         emit('final-analysis', 'running', f'{self.model_provider} 正在进行最终综合分析', 86)
         final_analysis = self.model_analyzer.analyze(video_data, video_file_path)
-        model_failed = '失败' in final_analysis or not final_analysis.strip()
+        audit_details.update(_persist_evidence_audit(
+            video_file_path,
+            evidence_bundle,
+            shot_analysis,
+            final_analysis,
+        ))
+        validator = getattr(self.model_analyzer, 'grounding_error', None)
+        grounding_error = validator(final_analysis, video_data) if callable(validator) else ''
+        model_failed = '失败' in final_analysis or not final_analysis.strip() or bool(grounding_error)
+        visible_analysis = final_analysis
+        if grounding_error:
+            visible_analysis = (
+                f'最终模型报告已拦截：{grounding_error}。'
+                '原始输出已保存到本机审计目录，但不会作为可信分析展示；请重试。'
+            )
         emit(
             'final-analysis',
             'error' if model_failed else 'complete',
-            '最终模型分析失败' if model_failed else '最终报告已生成',
+            ('最终报告缺少证据引用，已拦截' if grounding_error else '最终模型分析失败')
+            if model_failed else '最终报告已生成',
             100,
         )
         return {
-            'analysis': final_analysis or '模型 API 没有返回最终分析',
+            'analysis': visible_analysis or '模型 API 没有返回最终分析',
             'analysis_provider': self.model_provider,
             'pipeline_stage': 'final-analysis',
             'pipeline_status': 'error' if model_failed else 'completed',
@@ -1312,6 +1484,8 @@ class AIAnalyzer:
             'libtv_project_url': libtv_details.get('project_url', ''),
             'libtv_result_urls': libtv_details.get('result_urls', []),
             'model_status': 'error' if model_failed else 'completed',
+            'model_grounding_error': grounding_error,
+            **audit_details,
             **acquisition_details,
         }
 
