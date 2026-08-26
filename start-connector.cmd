@@ -18,7 +18,8 @@ python connector.py
 :end
 if not %errorlevel%==0 (
   echo.
-  echo ViralX Connector failed to start. Install dependencies with:
+  echo ViralX Connector failed to start. Review the error shown above.
+  echo If Python reports a missing module, install dependencies with:
   echo   python -m pip install -r requirements.txt
   pause
 )

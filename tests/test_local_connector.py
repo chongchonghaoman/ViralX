@@ -1,6 +1,7 @@
 import json
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from flask import jsonify
 
@@ -65,6 +66,34 @@ class LocalConnectorTests(unittest.TestCase):
                 "Origin": TRUSTED_ORIGIN,
                 "Access-Control-Request-Headers": "x-not-allowed",
             },
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_local_launcher_can_request_a_fresh_pairing_link(self):
+        response = self.client.post(
+            local_connector.LOCAL_PAIRING_PATH,
+            json={"site": TRUSTED_ORIGIN},
+            environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        pairing_url = response.get_json()["pairing_url"]
+        parsed = urlsplit(pairing_url)
+        self.assertEqual(f"{parsed.scheme}://{parsed.netloc}", TRUSTED_ORIGIN)
+        self.assertEqual(parsed.path, "/settings.html")
+        secret = parse_qs(parsed.fragment)["viralx-connector"][0]
+
+        paired = self.client.post(
+            "/connector/v1/pair",
+            json={"pairing_secret": secret},
+            headers=self.origin_headers,
+        )
+        self.assertEqual(paired.status_code, 200)
+
+    def test_browser_origin_cannot_issue_pairing_links(self):
+        response = self.client.post(
+            local_connector.LOCAL_PAIRING_PATH,
+            json={"site": TRUSTED_ORIGIN},
+            headers=self.origin_headers,
         )
         self.assertEqual(response.status_code, 403)
 

@@ -15,6 +15,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 from flask import Flask, jsonify, make_response, request
 
@@ -26,6 +27,7 @@ CONNECTOR_HOST = "127.0.0.1"
 CONNECTOR_PORT = 57231
 CONNECTOR_ORIGIN = f"http://{CONNECTOR_HOST}:{CONNECTOR_PORT}"
 PRODUCTION_ORIGIN = "https://viralx.metrolabs.mobi"
+LOCAL_PAIRING_PATH = "/connector/v1/pairing/new"
 PAIRING_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
 MAX_REQUEST_BYTES = 512 * 1024
@@ -184,6 +186,11 @@ def create_connector_app(
     @app.before_request
     def enforce_origin_and_preflight():
         origin = request.headers.get("Origin", "").rstrip("/")
+        if request.path == LOCAL_PAIRING_PATH:
+            remote_address = request.remote_addr or ""
+            if request.method == "POST" and not origin and remote_address in {"127.0.0.1", "::1"}:
+                return None
+            return jsonify({"status": "error", "message": "Local pairing control is not allowed"}), 403
         if origin not in origins:
             return jsonify({"status": "error", "message": "Origin is not allowed"}), 403
 
@@ -260,6 +267,19 @@ def create_connector_app(
             "session_token": session,
             "expires_in": expires_in,
         })
+
+    @app.post(LOCAL_PAIRING_PATH)
+    def issue_pairing_link():
+        body = request.get_json(silent=True) or {}
+        site = str(body.get("site", PRODUCTION_ORIGIN)).strip().rstrip("/")
+        if site not in origins:
+            return jsonify({"status": "error", "message": "Pairing site is not allowed"}), 400
+        pairing_secret = broker.issue_pairing_secret()
+        pairing_url = (
+            f"{site}/settings.html"
+            f"#viralx-connector={quote(pairing_secret, safe='')}"
+        )
+        return jsonify({"status": "ok", "pairing_url": pairing_url})
 
     @app.post("/connector/v1/session/logout")
     def unpair_browser():
