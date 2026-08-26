@@ -5,9 +5,12 @@
 from __future__ import annotations
 
 import argparse
+import socket
 import threading
 import webbrowser
 from urllib.parse import quote
+
+from werkzeug.serving import ThreadedWSGIServer
 
 from local_connector import (
     CONNECTOR_HOST,
@@ -15,6 +18,18 @@ from local_connector import (
     PRODUCTION_ORIGIN,
     create_connector_app,
 )
+
+
+class ExclusiveThreadedWSGIServer(ThreadedWSGIServer):
+    """Prevent two Connector processes from sharing the loopback port on Windows."""
+
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        exclusive_address_use = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if exclusive_address_use is not None:
+            self.socket.setsockopt(socket.SOL_SOCKET, exclusive_address_use, 1)
+        super().server_bind()
 
 
 def main() -> None:
@@ -29,6 +44,12 @@ def main() -> None:
     args = parser.parse_args()
 
     app, broker = create_connector_app()
+
+    # Bind before issuing or opening a one-use pairing link. Werkzeug enables
+    # SO_REUSEADDR by default, which can let two Python processes share the
+    # same loopback port on Windows. A link created by the second process would
+    # then be sent to the first process and always fail as "invalid or expired".
+    server = ExclusiveThreadedWSGIServer(CONNECTOR_HOST, CONNECTOR_PORT, app)
     pairing_secret = broker.issue_pairing_secret()
     pairing_url = (
         f"{args.site.rstrip('/')}/settings.html"
@@ -44,13 +65,12 @@ def main() -> None:
     else:
         print("[提示] --no-open 模式不会输出配对密钥；请不带该参数重新启动以完成配对。")
 
-    app.run(
-        host=CONNECTOR_HOST,
-        port=CONNECTOR_PORT,
-        debug=False,
-        threaded=True,
-        use_reloader=False,
-    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[ViralX Connector] 已停止。")
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
