@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940" role="img" aria-labelledby="title desc">
   <title id="title">ViralX 固定串联分析流程</title>
-  <desc id="desc">关键词通过 API23 发现候选视频，视频直链跳过搜索；随后由本机 Connector 串联 TK Note、LibTV、证据合并与模型 API，输出最终报告、复刻脚本、LibTV 画布和 Markdown。</desc>
+  <desc id="desc">关键词通过 TikTok Scraper7 发现候选视频，视频直链跳过搜索；随后由本机 Connector 串联 TK Note、LibTV、证据合并与模型 API，输出最终报告、复刻脚本、LibTV 画布和 Markdown。</desc>
   <defs>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
       <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F0F0F" flood-opacity="0.08"/>
@@ -45,7 +45,7 @@
     <path d="M199 338 V371" class="line"/>
     <path d="M497 338 V355 C497 369 510 377 527 377 H557 V398" class="dash"/>
     <rect x="432" y="350" width="132" height="30" rx="15" fill="#E9D352"/>
-    <text x="449" y="371" font-size="14" font-weight="700" fill="#0F0F0F">跳过 API23</text>
+    <text x="449" y="371" font-size="14" font-weight="700" fill="#0F0F0F">跳过 Scraper7</text>
 
     <rect x="352" y="374" width="874" height="346" rx="28" fill="none" stroke="#A7A7A7" stroke-width="2" stroke-dasharray="8 10"/>
     <rect x="666" y="354" width="198" height="40" rx="20" fill="#0F0F0F"/>
@@ -60,7 +60,7 @@
     </g>
 
     <text x="94" y="438" class="label" fill="#656565">01 · SEARCH</text>
-    <text x="94" y="485" font-size="29" font-weight="700" fill="#0F0F0F">API23</text>
+    <text x="94" y="485" font-size="29" font-weight="700" fill="#0F0F0F">Scraper7</text>
     <text x="94" y="517" font-size="21" font-weight="700" fill="#0F0F0F">发现候选视频</text>
     <line x1="94" y1="548" x2="304" y2="548" stroke="#D8D8D8" stroke-width="2"/>
     <text x="94" y="583" class="body muted">仅关键词入口调用</text>
@@ -105,7 +105,7 @@
     <path d="M1206 540 H1234" class="line"/>
 
     <rect x="70" y="756" width="260" height="54" rx="27" fill="#E9D352"/>
-    <text x="94" y="790" class="small" fill="#0F0F0F">API23 只负责搜索发现</text>
+    <text x="94" y="790" class="small" fill="#0F0F0F">Scraper7 只负责搜索发现</text>
     <text x="366" y="789" class="small muted">全程返回 NDJSON 五阶段真实进度</text>
     <path d="M1388 682 V736" class="line"/>
 

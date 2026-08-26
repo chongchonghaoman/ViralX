@@ -241,13 +241,15 @@
     const configured = health.configured || {};
     const provider = String(settings.model_provider || health.analysis_provider || "openai");
     const providerLabel = PROVIDERS[provider]?.name || provider;
-    const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
+    const searchProvider = String(health.keyword_search_provider || "scraper7").toLowerCase() === "scraper7"
+      ? "TikTok Scraper7"
+      : String(health.keyword_search_provider || "scraper7");
     note.replaceChildren();
     const copy = document.createElement("div");
     const title = document.createElement("strong");
     title.textContent = "当前标签页的安全配置";
     const description = document.createElement("p");
-    description.textContent = "API23 与模型密钥只保存在当前标签页。完整任务发送给仅监听 127.0.0.1 的 Connector，由它串联 TK Note、LibTV 与模型服务；EdgeOne 不代理分析内容。";
+    description.textContent = "TikTok Scraper7 与模型密钥只保存在当前标签页。完整任务发送给仅监听 127.0.0.1 的 Connector，由它串联 TK Note、LibTV 与模型服务；EdgeOne 不代理分析内容。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";

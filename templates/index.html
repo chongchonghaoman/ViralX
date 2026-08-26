@@ -79,7 +79,7 @@
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
             <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
-            <small class="source-help" id="source-help">搜索主题先由 API23 找视频；随后 TK Note 采集证据、LibTV 拉片，最后由模型 API 综合分析。视频直链只跳过第一步。</small>
+            <small class="source-help" id="source-help">搜索主题先由 TikTok Scraper7 找视频；随后 TK Note 采集证据、LibTV 拉片，最后由模型 API 综合分析。视频直链只跳过第一步。</small>
           </div>
           <button class="btn btn-primary" id="analyze-btn" type="button">打开设置</button>
         </div>
@@ -174,7 +174,7 @@
         <h2 id="workflow-title">从来源，<br>一路走到执行。</h2>
       </header>
       <div class="workflow-list">
-        <article><span>01</span><h3>发现视频</h3><p>搜索主题由 API23 找候选；视频直链直接进入采集。</p></article>
+        <article><span>01</span><h3>发现视频</h3><p>搜索主题由 TikTok Scraper7 找候选；视频直链直接进入采集。</p></article>
         <article><span>02</span><h3>TK Note 采集</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
         <article><span>03</span><h3>LibTV 拉片</h3><p>镜头、声音、节奏、转场和转化节点逐段对齐。</p></article>
         <article><span>04</span><h3>合并与终审</h3><p>两份证据进入所选模型，生成洞察和复刻脚本。</p></article>

@@ -78,7 +78,7 @@
           </div>
           <input type="hidden" id="analysis_mode" name="analysis_mode" value="pipeline">
           <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
-            <div><span>01</span><strong>API23</strong><small>发现候选视频</small></div>
+            <div><span>01</span><strong>Scraper7</strong><small>发现候选视频</small></div>
             <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
             <div><span>03</span><strong>LibTV</strong><small>逐镜拉片</small></div>
             <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
@@ -91,9 +91,9 @@
               <small class="field-note">直接视频链接不受这个阈值影响。</small>
             </div>
             <div class="settings-field">
-              <label for="rapidapi_key">API23 RapidAPI Key</label>
-              <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" placeholder="用于 API23 关键词搜索">
-              <small class="field-note">仅关键词搜索需要；粘贴视频链接仍走 TK Note。</small>
+              <label for="rapidapi_key">TikTok Scraper7 RapidAPI Key</label>
+              <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" placeholder="用于 TikTok Scraper7 关键词搜索">
+              <small class="field-note">固定调用 <code>/feed/search</code>；仅关键词搜索需要，视频直链仍从 TK Note 开始。</small>
             </div>
             <div class="settings-field" data-local-only>
               <label for="output_dir">分析输出目录</label>

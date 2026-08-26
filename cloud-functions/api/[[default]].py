@@ -59,7 +59,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-26-api23-three-route-v2"
+VIRALX_RELEASE = "2026-08-26-scraper7-search-v1"
 
 
 def _number(name, fallback, cast):
@@ -195,7 +195,7 @@ def health():
         "release": VIRALX_RELEASE,
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
-        "keyword_search_strategy": "search-video+search-general+discover-fallback",
+        "keyword_search_strategy": "feed-search",
         "keyword_search_source": TIKTOK_ANALYZER_SOURCE_SHA,
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
@@ -259,7 +259,7 @@ def analyze():
                 if not config["rapidapi_key"]:
                     yield json.dumps({
                         "status": "error",
-                        "message": "API23 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接",
+                        "message": "TikTok Scraper7 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接",
                         "done": True,
                     }, ensure_ascii=False) + "\n"
                     return

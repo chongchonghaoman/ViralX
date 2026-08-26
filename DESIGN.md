@@ -168,9 +168,9 @@ change this sequence.
 - Public availability is not analysis readiness. The homepage health check must route an
   unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
   paired Connector with connected LibTV and a ready model provider may expose analysis as the primary CTA.
-- API23 is explained at the source field: video URLs bypass it, while keyword discovery needs
+- TikTok Scraper7 is explained at the source field: video URLs bypass it, while keyword discovery needs
   it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `API23 -> TK Note -> LibTV -> evidence merge ->
+- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> LibTV -> evidence merge ->
   final model`. LibTV and model disclosures are both visible because both are required; changing
   the provider never changes the pipeline.
 - LibTV connection UI exposes `connector_missing`, `pairing_required`, `disconnected`, `starting`,

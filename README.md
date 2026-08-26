@@ -31,7 +31,7 @@
 
 ## ViralX 是什么
 
-ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固定的串联链：**API23 发现候选视频（直链跳过）→ TK Note 下载原片并采集平台证据 → LibTV 对原视频逐镜拉片 → 合并两份证据 → 用户选择的模型 API 完成最终分析与复刻脚本**。EdgeOne 提供网页界面，本机 Connector 承担需要本地 Python、文件缓存和 LibTV CLI 登录态的完整流水线。
+ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固定的串联链：**[TikTok Scraper7](https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7) 发现候选视频（直链跳过）→ TK Note 下载原片并采集平台证据 → LibTV 对原视频逐镜拉片 → 合并两份证据 → 用户选择的模型 API 完成最终分析与复刻脚本**。EdgeOne 提供网页界面，本机 Connector 承担需要本地 Python、文件缓存和 LibTV CLI 登录态的完整流水线。
 
 当前产品只有一种交付形态：**Web**。
 
@@ -48,10 +48,10 @@ ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固�
 - **分析逻辑改为固定串联**：移除“LibTV 或模型 API”的二选一。TK Note 证据和 LibTV 拉片证据现在会先合并，再交给模型 API 做最终综合判断。
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上页面不伪装云端能力**：EdgeOne Pages 提供同源健康检查、会话设置和浏览器安全导出；完整分析明确路由到本机 Connector，不把无法读取本机 CLI 登录态的云函数冒充为可运行流水线。
-- **搜索链路切换为 API23**：按官方 `/api/search/video` → `/api/search/general` → `/api/post/discover` 串行发现候选；如果三个常规入口没有候选，再调用 `/api/trending/keyword/posts`，并用 `/api/post/detail` 把趋势视频 ID 补全为热度与视频元数据。前一入口空结果或临时不可用（含 HTTP 200 内的业务状态 4）才进入下一入口；支持分页、热度过滤、混合 Top 响应归一化、逐入口诊断和凭据脱敏。备用入口失败不再覆盖主入口已经正常返回的空结果或点赞过滤信息。API23 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
+- **搜索引擎切回 TikTok Scraper7**：关键词统一调用官方 `GET /feed/search`，使用 `keywords / region / count / cursor` 参数，并从 `data.videos` 读取候选；ViralX 会归一化 `aweme_id`、作者、点赞、评论、分享、播放、封面与时长，支持游标分页、最低点赞过滤、空列表与接口结构变更诊断，以及错误中的凭据脱敏。Scraper7 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **TK Note 共享本地 ASR**：自动复用 `%USERPROFILE%\.cache\rimagination-notes` 中已有的 Whisper 或 Qwen3-ASR Python 环境；也可通过环境变量明确指定解释器。Connector 使用哪个 Python 启动都不会因此丢失已有 ASR 能力。
 - **LibTV 从“上传交接”升级为真实拉片**：Connector 会创建画布、上传 TK Note 原片，再创建绑定 `GVLM 3.1 Flash` 的多模态文本节点并运行；镜头、钩子、节奏、声音、转场和转化节点会作为结构化证据返回。
-- **Connector 承担完整编排**：浏览器与 `127.0.0.1` 完成一次性配对后，把 API23、TK Note 与模型会话配置交给 Connector。模型 Key 只到本机 Connector，再由它直连所选服务商；不经过、不落盘到 EdgeOne，也不会写入日志。
+- **Connector 承担完整编排**：浏览器与 `127.0.0.1` 完成一次性配对后，把 TikTok Scraper7、TK Note 与模型会话配置交给 Connector。模型 Key 只到本机 Connector，再由它直连所选服务商；不经过、不落盘到 EdgeOne，也不会写入日志。
 - **模型 API 设置重构**：设置页改为 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 五个常用预设和自定义 API；统一填写 Key、模型名、Base URL 与协议，不再维护三套割裂字段。
 - **新增 Codex Agent 调用入口**：仓库自带可安装的 ViralX Skill，另一台电脑上的 Codex 可以通过 GitHub 链接直接安装并调用线上 API。
 - **重画云端与本地边界**：EdgeOne 云函数不能读取本机文件或 LibTV 登录态；浏览器只在用户授权后连接 `127.0.0.1:57231`。Connector 不暴露本地设置、清缓存或任意文件系统能力。
@@ -70,10 +70,12 @@ ViralX 现在只有一条主链：**TK Note + LibTV + 模型 API**。它们不�
 | 你要做的事 | 实际调用 | 需要的凭据 |
 | --- | --- | --- |
 | 网页粘贴视频链接并分析 | 浏览器 → Connector → TK Note → LibTV 拉片 → 证据合并 → 模型 API | Connector + LibTV 网页登录 + `MODEL_API_KEY` |
-| 网页输入关键词并分析 | API23 → Connector → TK Note → LibTV 拉片 → 证据合并 → 模型 API | 上述配置 + `RAPIDAPI_KEY` |
+| 网页输入关键词并分析 | TikTok Scraper7 → Connector → TK Note → LibTV 拉片 → 证据合并 → 模型 API | 上述配置 + `RAPIDAPI_KEY` |
 | 调用旧版脚本变体扩展接口 | MiniMax | 可选的 `MINIMAX_API_KEY` |
 
-因此：**RapidAPI 只用于 API23 关键词搜索，直链分析不需要它。LibTV 不接受 Access Key，只认官方 CLI 的本机网页登录；ViralX 不读取 CLI token。模型 API 是最终分析阶段的必需项。MiniMax 只是兼容保留项。**
+因此：**RapidAPI 只用于 TikTok Scraper7 关键词搜索，直链分析不需要它。LibTV 不接受 Access Key，只认官方 CLI 的本机网页登录；ViralX 不读取 CLI token。模型 API 是最终分析阶段的必需项。MiniMax 只是兼容保留项。**
+
+ViralX 网页和 Connector 直接调用 Scraper7 的 HTTPS API，不要求安装 `mcp-remote`。RapidAPI MCP 配置只适合 Agent 独立调用该供应商，是可选能力；仓库自带的 ViralX Skill 调用的是 ViralX 自己的 Web API 合同，仍会完整执行 TK Note → LibTV → 证据合并 → 模型终审。
 
 ## 在 Codex 中直接调用 ViralX
 
@@ -116,7 +118,7 @@ $viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
 Skill 可以直接安装并读取 ViralX 的 API 合同。完整分析需要目标电脑运行本地 Flask（或由浏览器配对的 Connector）并完成 LibTV 网页登录；EdgeOne 本身不会伪装拥有这台电脑的原片与 CLI 登录态。让 Codex 调用本地 Flask 时，凭据从目标电脑环境或 `config.json` 读取，不要把 Key 发到聊天里：
 
 ```powershell
-$env:RAPIDAPI_KEY = "your-api23-key"  # 只有关键词搜索需要
+$env:RAPIDAPI_KEY = "your-scraper7-key"  # 只有关键词搜索需要
 $env:ANALYSIS_MODE = "pipeline"
 $env:MODEL_PROVIDER = "openai"
 $env:MODEL_API_KEY = "your-model-key"
@@ -131,8 +133,8 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 | 能力 | 网页中的实际行为 |
 | --- | --- |
-| API23 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok API23 发现候选视频；支持 Search Video、Search General、Discover，以及 Trending Video by Keyword → Post Detail 自动降级、分页、热度过滤、响应归一化和逐入口空结果诊断 |
-| 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 API23，直接进入视频采集与拉片链路 |
+| TikTok Scraper7 关键词搜索 | 输入搜索主题后，通过 RapidAPI TikTok Scraper7 的 `/feed/search` 发现候选视频；支持游标分页、热度过滤、`data.videos` 响应归一化和明确的空结果诊断 |
+| 视频链接直达 | 粘贴 TikTok / 抖音链接时跳过 TikTok Scraper7，直接进入视频采集与拉片链路 |
 | TK Note 证据采集 | 保存原片、安全元数据、字幕 / ASR、资产清单和可选评论证据；自动发现共享 Whisper / Qwen3-ASR 环境 |
 | LibTV 网页连接 | EdgeOne 页面与本机 Connector 一次性配对，再调用官方 `libtv login web`；连接后创建画布、上传原视频、运行多模态拉片节点并返回证据与画布入口 |
 | 证据合并与模型终审 | 将平台数据、评论、字幕/ASR、TK Note 资产状态和 LibTV 拉片证据统一交给所选模型生成最终报告 |
@@ -151,7 +153,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 ### 2. 网页设置
 
-设置页按固定链路集中管理 API23、TK Note、LibTV 和最终模型 API，不再提供分析模式选择。EdgeOne 会主动检测本机 Connector，并展示“未启动、等待配对、待登录、等待网页授权、已连接”等真实状态。模型区提供 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 常用预设，也支持自定义 OpenAI Chat Completions / Anthropic Messages 兼容接口。
+设置页按固定链路集中管理 TikTok Scraper7、TK Note、LibTV 和最终模型 API，不再提供分析模式选择。EdgeOne 会主动检测本机 Connector，并展示“未启动、等待配对、待登录、等待网页授权、已连接”等真实状态。模型区提供 OpenAI、Claude、Gemini、DeepSeek、OpenRouter 常用预设，也支持自定义 OpenAI Chat Completions / Anthropic Messages 兼容接口。
 
 ![ViralX 网页设置页](docs/assets/viralx-settings.png)
 
@@ -159,7 +161,7 @@ $env:MODEL_NAME = "gpt-4.1-mini"
 
 ## 工作逻辑
 
-![ViralX 固定串联分析流程：API23、TK Note、LibTV、证据合并与模型 API](docs/assets/viralx-workflow.svg)
+![ViralX 固定串联分析流程：TikTok Scraper7、TK Note、LibTV、证据合并与模型 API](docs/assets/viralx-workflow.svg)
 
 流程图的可维护源码见 [`docs/assets/viralx-workflow.mmd`](docs/assets/viralx-workflow.mmd)。
 
@@ -167,7 +169,7 @@ ViralX 不是“任选一个工具来分析”，而是一条**固定串联的�
 
 | 阶段 | 负责什么 | 交给下一阶段的内容 |
 | --- | --- | --- |
-| 01 · API23 | 仅在输入关键词时搜索候选 TikTok 视频 | 视频 URL、热度与基础平台数据 |
+| 01 · TikTok Scraper7 | 仅在输入关键词时搜索候选 TikTok 视频 | 视频 URL、热度与基础平台数据 |
 | 02 · TK Note / yt-dlp | 下载原片并采集平台侧证据 | 原片、元数据、评论、字幕 / ASR、资产清单 |
 | 03 · LibTV | 创建画布、上传原片并运行多模态拉片节点 | 镜头、画面、声音和时间线证据，以及画布入口 |
 | 04 · Evidence Merge | 合并平台、TK Note 与 LibTV 证据 | 统一的 `viralx.evidence.v1` 证据合同 |
@@ -175,7 +177,7 @@ ViralX 不是“任选一个工具来分析”，而是一条**固定串联的�
 
 这里有三个重要边界：
 
-- **API23 是搜索引擎，不是视频解析器。** 输入关键词时调用 API23；粘贴视频直链时直接从 TK Note / yt-dlp 开始。
+- **TikTok Scraper7 是搜索引擎，不是视频解析器。** 输入关键词时调用 TikTok Scraper7；粘贴视频直链时直接从 TK Note / yt-dlp 开始。
 - **LibTV 不是搜索或下载工具。** 它接收 TK Note 已保存的原片，专门完成多模态拉片，并把新增证据送入合并阶段。
 - **EdgeOne 是浏览器界面，不是本机分析运行时。** 页面负责输入、设置、状态和结果；完整链路由已配对的本机 Connector 串联执行。Connector、LibTV 登录和模型 API 都就绪后才会运行，不会把“网页在线”伪装成“完整链路就绪”。
 
@@ -208,7 +210,7 @@ Browser
 ## 在线使用
 
 1. 打开 [ViralX](https://viralx.metrolabs.mobi)。
-2. 启动本机 Connector，前往[网页设置](https://viralx.metrolabs.mobi/settings.html)完成 LibTV 网页登录并选择最终模型；关键词搜索时再填写 API23。
+2. 启动本机 Connector，前往[网页设置](https://viralx.metrolabs.mobi/settings.html)完成 LibTV 网页登录并选择最终模型；关键词搜索时再填写 TikTok Scraper7。
 3. 返回首页，输入关键词或粘贴单条视频链接。
 4. 点击“开始拉片”，在页面中查看真实进度与结果。
 
@@ -259,7 +261,7 @@ Copy-Item config.json.example config.json
   "model_provider": "openai",
   "model_api_key": "YOUR_MODEL_API_KEY",
   "model_name": "gpt-4.1-mini",
-  "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY_FOR_SEARCH"
+  "rapidapi_key": "YOUR_SCRAPER7_RAPIDAPI_KEY_FOR_SEARCH"
 }
 ```
 
@@ -275,7 +277,7 @@ python web_app.py
 
 | 环境变量 / 设置项 | 用途 | 是否必需 |
 | --- | --- | --- |
-| `RAPIDAPI_KEY` / `rapidapi_key` | API23 关键词搜索 | 仅搜索关键词时需要 |
+| `RAPIDAPI_KEY` / `rapidapi_key` | TikTok Scraper7 关键词搜索 | 仅搜索关键词时需要 |
 | `LIBTV_CLI_BINARY` | 官方 `libtv` 可执行文件路径；通常可自动发现 | 仅自动发现失败时填写 |
 | `RIMAGINATION_NOTE_CACHE` | TK Note 共享下载与 ASR 缓存目录；默认 `%USERPROFILE%\.cache\rimagination-notes` | 可选 |
 | `RIMAGINATION_QWEN_PYTHON` | 明确指定已安装 Qwen3-ASR 的 Python 解释器 | 仅自动发现失败时填写 |
@@ -289,7 +291,7 @@ python web_app.py
 
 旧版 `GEMINI_*`、`OPENROUTER_*`、`MINIMAX_*` 分析配置会在读取时迁移到统一模型合同，避免已有本地配置突然失效。MiniMax 的旧版脚本变体接口仍独立保留。
 
-直接粘贴 TikTok 视频链接时不会调用 API23。完整字段、超时、ASR、代理和本地缓存配置见 [`config.json.example`](config.json.example)。
+直接粘贴 TikTok 视频链接时不会调用 TikTok Scraper7。完整字段、超时、ASR、代理和本地缓存配置见 [`config.json.example`](config.json.example)。
 
 ## Web API
 
@@ -337,7 +339,7 @@ ViralX/
 ├── cloud-functions/
 │   └── api/[[default]].py         EdgeOne 公网 API
 ├── scripts/build-edgeone.mjs      网页与云函数构建
-├── tiktok_viral_analyzer.py       API23 搜索与响应归一化
+├── tiktok_viral_analyzer.py       TikTok Scraper7 搜索与响应归一化
 ├── video_ingest.py                TK Note / yt-dlp 采集路由
 ├── libtv_analyzer.py              官方 CLI 网页登录、画布、视频上传与多模态拉片
 ├── local_connector.py             loopback-only 安全 API 与配对会话
@@ -357,7 +359,7 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-当前测试集覆盖 ViralX Skill 调用脚本、API23 Search Video / Search General / Discover 三入口、业务状态 4 自动回退、空结果不被备用错误覆盖与凭据脱敏、TK Note 共享 Whisper 环境发现与执行、TK Note → LibTV → 模型串联证据合同、LibTV 多模态节点、本地 Flask、EdgeOne 运行边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、模型会话头与前端五阶段合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
+当前测试集覆盖 ViralX Skill 调用脚本、TikTok Scraper7 `/feed/search` 请求合同、`data.videos` 与兼容结构归一化、游标分页、业务错误、空候选与点赞过滤诊断、凭据脱敏、TK Note 共享 Whisper 环境发现与执行、TK Note → LibTV → 模型串联证据合同、LibTV 多模态节点、本地 Flask、EdgeOne 运行边界、浏览器版 Obsidian 导出，以及 Connector 的 Origin/PNA 预检、一次性配对、防重放、鉴权、模型会话头与前端五阶段合同。GitHub Actions 使用 Python 3.10、3.11、3.12 运行后端测试，并验证 EdgeOne 网页构建。
 
 ## EdgeOne 部署
 

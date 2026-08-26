@@ -9,9 +9,9 @@ Use ViralX through its web API contract. The installed skill can probe the publi
 
 ## Route the request
 
-- For a TikTok or Douyin URL, call `analyze` directly. API23 is not involved.
-- For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for API23 discovery.
-- Every analysis follows one contract: API23 discovery when needed, TK Note collection, LibTV shot analysis, evidence merge, then the selected model API. There is no LibTV/model switch and no silent fallback.
+- For a TikTok or Douyin URL, call `analyze` directly. TikTok Scraper7 is not involved.
+- For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for TikTok Scraper7 discovery.
+- Every analysis follows one contract: TikTok Scraper7 discovery when needed, TK Note collection, LibTV shot analysis, evidence merge, then the selected model API. There is no LibTV/model switch and no silent fallback.
 - Before `analyze`, run ViralX locally, connect LibTV from `http://127.0.0.1:5001/settings`, set `VIRALX_BASE_URL=http://127.0.0.1:5001`, choose `MODEL_PROVIDER`, and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
 - The hosted website's Connector is a browser-only session bridge and is not an Agent credential. Never send a LibTV token or Connector session to EdgeOne.
 - Use `health` before analysis when credential or service readiness is unknown.
@@ -36,7 +36,7 @@ Use `--output <path>` only when the user asks to save the NDJSON stream. Set `VI
 
 - Read credentials from environment variables only. Never request that a user paste a key into chat when they can set it locally.
 - Never pass secrets as CLI arguments, print request headers, or write credentials to output files.
-- A direct URL skips API23 but still needs TK Note, a completed LibTV CLI browser login, and the selected model API key.
+- A direct URL skips TikTok Scraper7 but still needs TK Note, a completed LibTV CLI browser login, and the selected model API key.
 - A keyword request needs those same dependencies plus `RAPIDAPI_KEY`.
 - The EdgeOne endpoint deliberately refuses full analysis because it cannot access local evidence or CLI state. Do not claim the public interface alone completed an analysis.
 

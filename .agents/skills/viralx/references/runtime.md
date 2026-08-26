@@ -27,13 +27,13 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | Environment variable | Purpose |
 | --- | --- |
 | `VIRALX_BASE_URL` | Override the default `https://viralx.metrolabs.mobi` server |
-| `RAPIDAPI_KEY` | API23 keyword discovery; not used for direct URLs |
+| `RAPIDAPI_KEY` | TikTok Scraper7 keyword discovery; not used for direct URLs |
 | `ANALYSIS_MODE` | Fixed value `pipeline`; legacy mode values are migrated |
 | `MODEL_PROVIDER` | `openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom` |
 | `MODEL_API_KEY`, `MODEL_NAME` | Key and model ID for the selected provider |
 | `MODEL_BASE_URL`, `MODEL_PROTOCOL` | Custom endpoint root and `openai` / `anthropic` protocol |
 | `GEMINI_*`, `OPENROUTER_*`, `MINIMAX_*` | Legacy compatibility; MiniMax remains available to script generation |
-| `MIN_LIKES` | Default API23 popularity threshold |
+| `MIN_LIKES` | Default TikTok Scraper7 popularity threshold |
 | `TK_NOTE_ASR_BACKEND`, `TK_NOTE_LANGUAGE`, `TK_NOTE_TIMEOUT` | TK Note collection controls |
 
 The client never prints these values.

@@ -1,5 +1,5 @@
 {
-  "rapidapi_key": "YOUR_API23_RAPIDAPI_KEY_HERE",
+  "rapidapi_key": "YOUR_SCRAPER7_RAPIDAPI_KEY_HERE",
   "analysis_mode": "pipeline",
   "libtv_concurrency": 2,
   "tk_note_asr_backend": "auto",
