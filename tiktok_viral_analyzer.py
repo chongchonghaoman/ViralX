@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
+from urllib.parse import quote
 
 import requests
 
@@ -37,6 +38,9 @@ class TikTokViralAnalyzer:
     SEARCH_URL = f"https://{SEARCH_HOST}/feed/search"
     SEARCH_TIMEOUT_SECONDS = 20
     VIDEO_LIST_KEYS = ("videos", "items", "video_list", "videoList")
+    POST_ID_PATTERN = re.compile(r"^\d{15,25}$")
+    POST_URL_PATTERN = re.compile(r"/video/(\d{15,25})(?:[/?#]|$)", re.IGNORECASE)
+    SOURCE_URL_KEYS = ("share_url", "shareUrl", "web_url", "webUrl", "source_url", "sourceUrl", "url")
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
@@ -54,6 +58,53 @@ class TikTokViralAnalyzer:
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    @classmethod
+    def _post_id_from_value(cls, value: Any) -> str:
+        """Return only a real TikTok post ID, never a CDN/media resource ID."""
+        candidate = str(value or "").strip()
+        return candidate if cls.POST_ID_PATTERN.fullmatch(candidate) else ""
+
+    @classmethod
+    def _post_identity(cls, item: Mapping[str, Any]) -> tuple[str, str]:
+        """Resolve the canonical numeric post ID and a usable TikTok page URL."""
+        video = cls._mapping(item.get("video"))
+
+        # Some Scraper7 responses expose a canonical page URL. It is the most
+        # reliable source because it binds the post ID to the original author.
+        for container in (item, video):
+            for key in cls.SOURCE_URL_KEYS:
+                source_url = str(container.get(key) or "").strip()
+                if "tiktok.com/" not in source_url.lower():
+                    continue
+                match = cls.POST_URL_PATTERN.search(source_url)
+                if match:
+                    return match.group(1), source_url
+
+        # Scraper7 may put an opaque `v260...` media resource ID in aweme_id or
+        # video_id. TikTok page IDs are decimal int64 values, so reject opaque
+        # identifiers instead of fabricating a URL that can never open.
+        for value in (
+            item.get("id"),
+            item.get("aweme_id"),
+            item.get("item_id"),
+            item.get("itemId"),
+            item.get("video_id"),
+            video.get("id"),
+        ):
+            post_id = cls._post_id_from_value(value)
+            if post_id:
+                author = cls._mapping(item.get("author"))
+                unique_id = str(
+                    author.get("unique_id")
+                    or author.get("uniqueId")
+                    or author.get("sec_uid")
+                    or "tiktok"
+                ).strip().lstrip("@")
+                safe_author = quote(unique_id or "tiktok", safe="._-")
+                return post_id, f"https://www.tiktok.com/@{safe_author}/video/{post_id}"
+
+        return "", ""
 
     @classmethod
     def _scraper7_items(cls, payload: Any) -> List[Dict]:
@@ -119,7 +170,7 @@ class TikTokViralAnalyzer:
         author = cls._mapping(item.get("author"))
         stats = cls._mapping(item.get("stats"))
         video = cls._mapping(item.get("video"))
-        video_id = item.get("aweme_id") or item.get("video_id") or item.get("id") or video.get("id")
+        video_id, source_url = cls._post_identity(item)
         title = str(item.get("title") or item.get("desc") or "")
 
         challenges = item.get("challenges") if isinstance(item.get("challenges"), list) else []
@@ -133,6 +184,7 @@ class TikTokViralAnalyzer:
 
         return {
             "video_id": str(video_id or ""),
+            "source_url": source_url,
             "title": title,
             "author": {
                 "unique_id": str(
@@ -177,6 +229,7 @@ class TikTokViralAnalyzer:
             "raw_items": 0,
             "normalized_items": 0,
             "filtered_by_likes": 0,
+            "invalid_post_ids": 0,
             "max_likes": 0,
             "responses": 0,
             "recognized_lists": 0,
@@ -260,6 +313,7 @@ class TikTokViralAnalyzer:
                 video = self._normalize_scraper7_video(item)
                 video_id = video["video_id"]
                 if not video_id:
+                    diagnostics["invalid_post_ids"] += 1
                     continue
                 diagnostics["normalized_items"] += 1
                 diagnostics["max_likes"] = max(diagnostics["max_likes"], video["digg_count"])
@@ -291,7 +345,7 @@ class TikTokViralAnalyzer:
         print(
             "[SCRAPER7] "
             f"候选 {diagnostics['raw_items']}，可识别 {diagnostics['normalized_items']}，"
-            f"符合阈值 {len(viral_videos)}"
+            f"无效帖子 ID {diagnostics['invalid_post_ids']}，符合阈值 {len(viral_videos)}"
         )
         return viral_videos[:limit]
 
@@ -315,7 +369,10 @@ class TikTokViralAnalyzer:
                 )
             return "TikTok Scraper7 没有完成搜索请求；请检查网络、订阅和 RapidAPI Key。"
         if normalized_items == 0:
-            return f"TikTok Scraper7 返回了 {raw_items} 条候选，但没有可识别的视频 ID；接口结构可能已经更新。"
+            return (
+                f"TikTok Scraper7 返回了 {raw_items} 条候选，但没有可识别的数字帖子 ID。"
+                "接口返回的 v… 标识是媒体资源 ID，不能拼成 TikTok 页面链接；ViralX 已停止生成假链接。"
+            )
         if threshold > 0 and max_likes < threshold:
             return (
                 f"TikTok Scraper7 返回了 {normalized_items} 条视频，但最高点赞为 {max_likes:,}，"
@@ -373,6 +430,7 @@ class TikTokViralAnalyzer:
             "duration": duration_s,
             "hashtags": list(video.get("hashtags") or []),
             "search_provider": video.get("search_provider", self.SEARCH_PROVIDER),
+            "source_url": str(video.get("source_url") or ""),
         }
 
     def analyze_selling_points(self, videos: List[Dict]) -> Dict:

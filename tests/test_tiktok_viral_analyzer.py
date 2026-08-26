@@ -39,7 +39,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
                         "is_ad": False,
                     },
                     {
-                        "aweme_id": "low-like-video",
+                        "aweme_id": "7480000000000000099",
                         "author": {"unique_id": "smallcreator"},
                         "digg_count": 4999,
                     },
@@ -113,6 +113,30 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(video["create_time"], 1725000001)
         self.assertTrue(video["is_ad"])
 
+    def test_scraper7_prefers_numeric_post_id_over_opaque_media_ids(self):
+        video = self.analyzer._normalize_scraper7_video({
+            "id": "7591234567890123456",
+            "aweme_id": "v26044gc0000d9h8fffog65n0rasvjtg",
+            "video_id": "v26044gc0000d9h8fffog65n0rasvjtg",
+            "author": {"unique_id": "bibikstore"},
+        })
+
+        self.assertEqual(video["video_id"], "7591234567890123456")
+        self.assertEqual(
+            video["source_url"],
+            "https://www.tiktok.com/@bibikstore/video/7591234567890123456",
+        )
+
+    def test_scraper7_extracts_post_id_from_canonical_share_url(self):
+        video = self.analyzer._normalize_scraper7_video({
+            "aweme_id": "v26044gc0000d9h8fffog65n0rasvjtg",
+            "share_url": "https://www.tiktok.com/@creator/video/7591234567890123457?lang=en",
+            "author": {"unique_id": "creator"},
+        })
+
+        self.assertEqual(video["video_id"], "7591234567890123457")
+        self.assertIn("/video/7591234567890123457", video["source_url"])
+
     @patch("tiktok_viral_analyzer.requests.get")
     def test_missing_key_stops_before_network_request(self, mock_get):
         self.analyzer.api_key = ""
@@ -145,7 +169,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "data": {
                 "has_more": 1,
                 "cursor": 12,
-                "videos": [{"aweme_id": "first", "digg_count": 100}],
+                "videos": [{"aweme_id": "7480000000000000001", "digg_count": 100}],
             },
         }
         second = Mock(status_code=200)
@@ -154,14 +178,17 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "data": {
                 "has_more": 0,
                 "cursor": 24,
-                "videos": [{"aweme_id": "second", "digg_count": 200}],
+                "videos": [{"aweme_id": "7480000000000000002", "digg_count": 200}],
             },
         }
         mock_get.side_effect = [first, second]
 
         videos = self.analyzer.search_viral_videos("camping light", min_likes=0, count=2)
 
-        self.assertEqual([video["video_id"] for video in videos], ["first", "second"])
+        self.assertEqual(
+            [video["video_id"] for video in videos],
+            ["7480000000000000001", "7480000000000000002"],
+        )
         self.assertEqual(mock_get.call_count, 2)
         self.assertEqual(mock_get.call_args_list[0].kwargs["params"]["cursor"], 0)
         self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["cursor"], 12)
@@ -195,8 +222,8 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "code": 0,
             "data": {
                 "videos": [
-                    {"aweme_id": "low-one", "digg_count": 900},
-                    {"aweme_id": "low-two", "digg_count": 1200},
+                    {"aweme_id": "7480000000000000003", "digg_count": 900},
+                    {"aweme_id": "7480000000000000004", "digg_count": 1200},
                 ]
             },
         }
@@ -208,6 +235,27 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertIn("2 条视频", message)
         self.assertIn("最高点赞为 1,200", message)
         self.assertIn("阈值 5,000", message)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_opaque_media_ids_are_rejected_instead_of_becoming_fake_links(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "code": 0,
+            "data": {
+                "videos": [{
+                    "aweme_id": "v26044gc0000d9h8fffog65n0rasvjtg",
+                    "video_id": "v26044gc0000d9h8fffog65n0rasvjtg",
+                    "author": {"unique_id": "bibikstore"},
+                    "digg_count": 12000,
+                }]
+            },
+        }
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=100)
+
+        self.assertEqual(videos, [])
+        self.assertEqual(self.analyzer.last_search_diagnostics["invalid_post_ids"], 1)
+        self.assertIn("ViralX 已停止生成假链接", self.analyzer.empty_result_message())
 
     def test_error_messages_redact_exact_and_token_shaped_secrets(self):
         message = safe_error_message(

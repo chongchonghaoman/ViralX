@@ -48,7 +48,7 @@ ViralX 是一个证据优先的短视频拆解网页应用。它执行一条固�
 - **分析逻辑改为固定串联**：移除“LibTV 或模型 API”的二选一。TK Note 证据和 LibTV 拉片证据现在会先合并，再交给模型 API 做最终综合判断。
 - **重新建立视觉系统**：采用 Butter 式的中性画布、双悬浮导航、单一主视觉和深色分析台；首页标题使用用户选定的 DNP 秀英明朝轮廓作品，并保留语义 H1，不在仓库中分发字体文件。
 - **线上页面不伪装云端能力**：EdgeOne Pages 提供同源健康检查、会话设置和浏览器安全导出；完整分析明确路由到本机 Connector，不把无法读取本机 CLI 登录态的云函数冒充为可运行流水线。
-- **搜索引擎切回 TikTok Scraper7**：关键词统一调用官方 `GET /feed/search`，使用 `keywords / region / count / cursor` 参数，并从 `data.videos` 读取候选；ViralX 会归一化 `aweme_id`、作者、点赞、评论、分享、播放、封面与时长，支持游标分页、最低点赞过滤、空列表与接口结构变更诊断，以及错误中的凭据脱敏。Scraper7 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
+- **搜索引擎切回 TikTok Scraper7**：关键词统一调用官方 `GET /feed/search`，使用 `keywords / region / count / cursor` 参数，并从 `data.videos` 读取候选；ViralX 会归一化数字帖子 ID、真实分享链接、作者、点赞、评论、分享、播放、封面与时长，支持游标分页、最低点赞过滤、空列表与接口结构变更诊断，以及错误中的凭据脱敏。Scraper7 有时会把 `v…` 媒体资源 ID 放进 `aweme_id / video_id`，ViralX 会拒绝这类值，只把数字 TikTok 帖子 ID 或 API 返回的真实页面链接交给 TK Note，不再拼接无法打开的假链接。Scraper7 只负责关键词发现，粘贴视频链接时会直接跳过搜索。
 - **TK Note 共享本地 ASR**：自动复用 `%USERPROFILE%\.cache\rimagination-notes` 中已有的 Whisper 或 Qwen3-ASR Python 环境；也可通过环境变量明确指定解释器。Connector 使用哪个 Python 启动都不会因此丢失已有 ASR 能力。
 - **LibTV 从“上传交接”升级为真实拉片**：Connector 会创建画布、上传 TK Note 原片，再创建绑定 `GVLM 3.1 Flash` 的多模态文本节点并运行；镜头、钩子、节奏、声音、转场和转化节点会作为结构化证据返回。
 - **Connector 承担完整编排**：浏览器与 `127.0.0.1` 完成一次性配对后，把 TikTok Scraper7、TK Note 与模型会话配置交给 Connector。模型 Key 只到本机 Connector，再由它直连所选服务商；不经过、不落盘到 EdgeOne，也不会写入日志。

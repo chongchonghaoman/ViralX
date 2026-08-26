@@ -314,8 +314,9 @@ def build_analyze_response(config_override=None, max_videos=None):
                 videos = tiktok.search_viral_videos(keyword, current_config['min_likes'], count=30)
                 video_data = [tiktok.extract_video_info(v) for v in videos]
                 video_urls = {
-                    v['video_id']: f"https://www.tiktok.com/@{v['author']}/video/{v['video_id']}"
+                    v['video_id']: v['source_url']
                     for v in video_data
+                    if v.get('source_url')
                 }
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'complete',
