@@ -330,7 +330,12 @@ def build_analyze_response(config_override=None, max_videos=None):
                 return
 
             def hot_score(item):
-                return item.get('likes', 0) + item.get('comments', 0) * 5 + item.get('shares', 0) * 2
+                return (
+                    item.get('search_relevance', 0) * 1_000_000
+                    + item.get('likes', 0)
+                    + item.get('comments', 0) * 5
+                    + item.get('shares', 0) * 2
+                )
 
             video_data = sorted(video_data, key=hot_score, reverse=True)[:video_limit]
             if tiktok:

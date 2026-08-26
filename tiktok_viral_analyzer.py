@@ -41,6 +41,15 @@ class TikTokViralAnalyzer:
     POST_ID_PATTERN = re.compile(r"^\d{15,25}$")
     POST_URL_PATTERN = re.compile(r"/video/(\d{15,25})(?:[/?#]|$)", re.IGNORECASE)
     SOURCE_URL_KEYS = ("share_url", "shareUrl", "web_url", "webUrl", "source_url", "sourceUrl", "url")
+    PICTURE_LIGHT_INTENT = re.compile(
+        r"(?i)\bpicture\s+lights?\b|\bpainting\s+lights?\b|照画灯|壁画灯|画框灯"
+    )
+    PICTURE_LIGHT_QUERY = "picture light wall mounted artwork lamp"
+    PICTURE_LIGHT_NEGATIVE = re.compile(
+        r"(?i)\blight\s+paintings?\b|\blight\s+pictures?\b|\bglowing\s+(?:art|pictures?|paintings?|canvas)\b|"
+        r"\bluminous\s+(?:art|pictures?|paintings?|canvas)\b|\bbacklit\s+(?:art|pictures?|paintings?|canvas)\b|"
+        r"\bled\s+(?:art|pictures?|paintings?|canvas)\b|световая\s+картина|发光画|灯光画|光影画"
+    )
 
     def __init__(self, output_dir="E:/tiktok_analyzer/data"):
         self.output_dir = Path(output_dir)
@@ -105,6 +114,49 @@ class TikTokViralAnalyzer:
                 return post_id, f"https://www.tiktok.com/@{safe_author}/video/{post_id}"
 
         return "", ""
+
+    @classmethod
+    def _search_plan(cls, keyword: str) -> Dict[str, Any]:
+        """Resolve ambiguous product language before sending it to TikTok search."""
+        clean_keyword = str(keyword or "").strip()
+        if cls.PICTURE_LIGHT_INTENT.search(clean_keyword):
+            return {
+                "intent": "picture-light-fixture",
+                "query": cls.PICTURE_LIGHT_QUERY,
+                "label": "照画灯（安装在画作上方的灯具）",
+            }
+        return {"intent": "generic", "query": clean_keyword, "label": clean_keyword}
+
+    @classmethod
+    def _search_relevance(cls, video: Mapping[str, Any], intent: str) -> tuple[int, str]:
+        """Score product relevance before engagement so popularity cannot hide a category mismatch."""
+        if intent != "picture-light-fixture":
+            return 0, ""
+
+        title = str(video.get("title") or video.get("desc") or "")
+        hashtags = " ".join(str(value) for value in (video.get("hashtags") or []))
+        text = f"{title} {hashtags}".lower().strip()
+        if cls.PICTURE_LIGHT_NEGATIVE.search(text):
+            return 0, "opposite-light-art"
+
+        score = 0
+        if re.search(r"(?i)\bpicture\s+lights?\b|照画灯|壁画灯|画框灯", text):
+            score += 6
+        if re.search(r"(?i)\bpainting\s+lights?\b|\bgallery\s+lights?\b", text):
+            score += 4
+
+        art_context = bool(re.search(r"(?i)\bpicture|painting|artwork|portrait|frame|gallery|canvas\b|画作|画框|壁画", text))
+        fixture_context = bool(re.search(
+            r"(?i)\blamp|sconce|fixture|rechargeable|battery|wireless|mounted|lighting\b|灯具|壁灯|照明",
+            text,
+        ))
+        placement_context = bool(re.search(r"(?i)\bwall|above|over|mount|frame\b|墙面|上方|画框", text))
+        if art_context and fixture_context:
+            score += 3
+        if placement_context:
+            score += 2
+
+        return (score, "") if score >= 4 else (0, "insufficient-fixture-context")
 
     @classmethod
     def _scraper7_items(cls, payload: Any) -> List[Dict]:
@@ -221,15 +273,22 @@ class TikTokViralAnalyzer:
     def search_viral_videos(self, keyword: str, min_likes: int = 10000, count: int = 50) -> List[Dict]:
         """Search Scraper7 /feed/search, paginate, normalize and apply the likes filter."""
         clean_keyword = str(keyword or "").strip()
+        search_plan = self._search_plan(clean_keyword)
+        search_query = search_plan["query"]
         threshold = max(0, self._integer(min_likes))
         self.last_search_diagnostics = {
             "provider": self.SEARCH_PROVIDER,
             "keyword": clean_keyword,
+            "search_query": search_query,
+            "search_intent": search_plan["intent"],
+            "search_intent_label": search_plan["label"],
             "threshold": threshold,
             "raw_items": 0,
+            "valid_post_ids": 0,
             "normalized_items": 0,
             "filtered_by_likes": 0,
             "invalid_post_ids": 0,
+            "rejected_irrelevant": 0,
             "max_likes": 0,
             "responses": 0,
             "recognized_lists": 0,
@@ -265,7 +324,7 @@ class TikTokViralAnalyzer:
                 break
             seen_cursors.add(cursor_key)
             params = {
-                "keywords": clean_keyword,
+                "keywords": search_query,
                 "region": "US",
                 "count": page_size,
                 "cursor": cursor,
@@ -315,6 +374,13 @@ class TikTokViralAnalyzer:
                 if not video_id:
                     diagnostics["invalid_post_ids"] += 1
                     continue
+                diagnostics["valid_post_ids"] += 1
+                relevance, rejection_reason = self._search_relevance(video, search_plan["intent"])
+                if rejection_reason:
+                    diagnostics["rejected_irrelevant"] += 1
+                    continue
+                video["search_relevance"] = relevance
+                video["search_intent"] = search_plan["intent"]
                 diagnostics["normalized_items"] += 1
                 diagnostics["max_likes"] = max(diagnostics["max_likes"], video["digg_count"])
                 if video["digg_count"] < threshold:
@@ -345,7 +411,8 @@ class TikTokViralAnalyzer:
         print(
             "[SCRAPER7] "
             f"候选 {diagnostics['raw_items']}，可识别 {diagnostics['normalized_items']}，"
-            f"无效帖子 ID {diagnostics['invalid_post_ids']}，符合阈值 {len(viral_videos)}"
+            f"语义错配 {diagnostics['rejected_irrelevant']}，无效帖子 ID {diagnostics['invalid_post_ids']}，"
+            f"符合阈值 {len(viral_videos)}"
         )
         return viral_videos[:limit]
 
@@ -358,6 +425,8 @@ class TikTokViralAnalyzer:
         max_likes = self._integer(diagnostics.get("max_likes"))
         responses = self._integer(diagnostics.get("responses"))
         recognized_lists = self._integer(diagnostics.get("recognized_lists"))
+        rejected_irrelevant = self._integer(diagnostics.get("rejected_irrelevant"))
+        intent_label = str(diagnostics.get("search_intent_label") or "")
 
         if raw_items == 0:
             if responses and recognized_lists == 0:
@@ -369,6 +438,11 @@ class TikTokViralAnalyzer:
                 )
             return "TikTok Scraper7 没有完成搜索请求；请检查网络、订阅和 RapidAPI Key。"
         if normalized_items == 0:
+            if rejected_irrelevant:
+                return (
+                    f"TikTok Scraper7 返回了 {raw_items} 条候选，但其中 {rejected_irrelevant} 条与“{intent_label}”"
+                    "不是同一产品品类，已在进入 TK Note 前剔除。请换一个更具体的产品描述后重试。"
+                )
             return (
                 f"TikTok Scraper7 返回了 {raw_items} 条候选，但没有可识别的数字帖子 ID。"
                 "接口返回的 v… 标识是媒体资源 ID，不能拼成 TikTok 页面链接；ViralX 已停止生成假链接。"
@@ -431,6 +505,8 @@ class TikTokViralAnalyzer:
             "hashtags": list(video.get("hashtags") or []),
             "search_provider": video.get("search_provider", self.SEARCH_PROVIDER),
             "source_url": str(video.get("source_url") or ""),
+            "search_relevance": self._integer(video.get("search_relevance")),
+            "search_intent": str(video.get("search_intent") or "generic"),
         }
 
     def analyze_selling_points(self, videos: List[Dict]) -> Dict:

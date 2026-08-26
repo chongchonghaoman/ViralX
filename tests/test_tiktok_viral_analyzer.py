@@ -113,6 +113,47 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(video["create_time"], 1725000001)
         self.assertTrue(video["is_ad"])
 
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_picture_light_intent_rejects_luminous_art_before_like_ranking(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "code": 0,
+            "data": {
+                "videos": [
+                    {
+                        "id": "7591234567890123458",
+                        "title": "Rechargeable picture light for framed wall artwork",
+                        "author": {"unique_id": "gallerylamp"},
+                        "digg_count": 6200,
+                    },
+                    {
+                        "id": "7665839717681761568",
+                        "title": "Световая картина «Полночь» — glowing painting",
+                        "author": {"unique_id": "bibikstore"},
+                        "digg_count": 333800,
+                    },
+                ]
+            },
+        }
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=100, count=10)
+
+        self.assertEqual([video["video_id"] for video in videos], ["7591234567890123458"])
+        self.assertEqual(videos[0]["search_intent"], "picture-light-fixture")
+        self.assertGreaterEqual(videos[0]["search_relevance"], 4)
+        self.assertEqual(self.analyzer.last_search_diagnostics["rejected_irrelevant"], 1)
+        self.assertEqual(
+            mock_get.call_args.kwargs["params"]["keywords"],
+            "picture light wall mounted artwork lamp",
+        )
+
+    def test_chinese_picture_light_terms_share_the_fixture_search_intent(self):
+        for keyword in ("照画灯", "壁画灯", "画框灯", "picture lights"):
+            with self.subTest(keyword=keyword):
+                plan = self.analyzer._search_plan(keyword)
+                self.assertEqual(plan["intent"], "picture-light-fixture")
+                self.assertIn("wall mounted", plan["query"])
+
     def test_scraper7_prefers_numeric_post_id_over_opaque_media_ids(self):
         video = self.analyzer._normalize_scraper7_video({
             "id": "7591234567890123456",
@@ -222,8 +263,16 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "code": 0,
             "data": {
                 "videos": [
-                    {"aweme_id": "7480000000000000003", "digg_count": 900},
-                    {"aweme_id": "7480000000000000004", "digg_count": 1200},
+                    {
+                        "aweme_id": "7480000000000000003",
+                        "title": "Wireless picture light above framed artwork",
+                        "digg_count": 900,
+                    },
+                    {
+                        "aweme_id": "7480000000000000004",
+                        "title": "Rechargeable picture light wall lamp",
+                        "digg_count": 1200,
+                    },
                 ]
             },
         }
@@ -256,6 +305,27 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(videos, [])
         self.assertEqual(self.analyzer.last_search_diagnostics["invalid_post_ids"], 1)
         self.assertIn("ViralX 已停止生成假链接", self.analyzer.empty_result_message())
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_picture_light_empty_message_explains_semantic_rejection(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            "code": 0,
+            "data": {
+                "videos": [{
+                    "id": "7665839717681761568",
+                    "title": "Light painting and glowing canvas wall art",
+                    "digg_count": 333800,
+                }]
+            },
+        }
+
+        videos = self.analyzer.search_viral_videos("照画灯", min_likes=100)
+
+        self.assertEqual(videos, [])
+        message = self.analyzer.empty_result_message()
+        self.assertIn("不是同一产品品类", message)
+        self.assertIn("进入 TK Note 前剔除", message)
 
     def test_error_messages_redact_exact_and_token_shaped_secrets(self):
         message = safe_error_message(
