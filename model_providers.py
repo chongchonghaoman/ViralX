@@ -106,11 +106,13 @@ def validate_custom_base_url(value: str, *, allow_private: bool = False) -> str:
 def normalize_model_config(config: dict, *, allow_private_custom: bool = False) -> dict:
     """Migrate legacy provider fields into one provider-neutral model contract."""
     normalized = dict(config or {})
-    mode = str(normalized.get("analysis_mode") or "libtv").strip().lower()
+    mode = str(normalized.get("analysis_mode") or "pipeline").strip().lower()
     legacy_provider = mode if mode in LEGACY_PROVIDER_FIELDS else ""
     if legacy_provider:
         mode = "model"
-    normalized["analysis_mode"] = mode if mode in {"libtv", "model"} else "libtv"
+    # ViralX now has one serial pipeline. Legacy values remain readable, but
+    # they no longer skip either LibTV shot analysis or the final model pass.
+    normalized["analysis_mode"] = "pipeline"
 
     provider = str(normalized.get("model_provider") or "").strip().lower()
     if not provider and legacy_provider:

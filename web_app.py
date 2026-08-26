@@ -40,7 +40,7 @@ MAX_ANALYZE_VIDEOS = max(
 
 DEFAULT_CONFIG = {
     'rapidapi_key': '',
-    'analysis_mode': 'libtv',
+    'analysis_mode': 'pipeline',
     'libtv_concurrency': 2,
     'tk_note_asr_backend': 'auto',
     'tk_note_language': 'auto',
@@ -224,8 +224,8 @@ def health():
     """返回不含密钥的运行状态，供本地与 EdgeOne 前端探活。"""
     current_config = load_config()
     runtime = 'edgeone' if IS_EDGE_RUNTIME else 'local'
-    mode = str(current_config.get('analysis_mode', 'libtv')).lower()
-    provider = current_config.get('model_provider', 'openai') if mode == 'model' else 'libtv'
+    mode = str(current_config.get('analysis_mode', 'pipeline')).lower()
+    provider = current_config.get('model_provider', 'openai')
     libtv_state = (
         {
             'state': 'local_only',
@@ -240,6 +240,7 @@ def health():
         'libtv': bool(libtv_state.get('connected')),
         'model': model_is_ready(current_config),
     }
+    readiness['pipeline'] = readiness['libtv'] and readiness['model']
     return jsonify({
         'status': 'ok',
         'runtime': runtime,
@@ -290,9 +291,17 @@ def build_analyze_response(config_override=None, max_videos=None):
             # 支持直接粘贴抖音/TikTok 链接；关键词则保留原有榜单搜索。
             tiktok = None
             if is_video_url(keyword):
+                yield json.dumps({
+                    'status': 'progress', 'stage': 'discovery', 'stage_status': 'skipped',
+                    'stage_label': '已提供视频直链，跳过 API23 搜索', 'stage_progress': 12,
+                }, ensure_ascii=False) + '\n'
                 video_data = [direct_video_data(keyword)]
                 video_urls = {video_data[0]['video_id']: keyword}
             else:
+                yield json.dumps({
+                    'status': 'progress', 'stage': 'discovery', 'stage_status': 'running',
+                    'stage_label': 'API23 正在搜索候选视频', 'stage_progress': 6,
+                }, ensure_ascii=False) + '\n'
                 if not current_config.get('rapidapi_key'):
                     yield json.dumps({
                         'status': 'error',
@@ -308,18 +317,38 @@ def build_analyze_response(config_override=None, max_videos=None):
                     v['video_id']: f"https://www.tiktok.com/@{v['author']}/video/{v['video_id']}"
                     for v in video_data
                 }
+                yield json.dumps({
+                    'status': 'progress', 'stage': 'discovery', 'stage_status': 'complete',
+                    'stage_label': f'API23 已找到并筛选 {len(video_data)} 条候选视频',
+                    'stage_progress': 18,
+                }, ensure_ascii=False) + '\n'
 
             if not video_data:
                 message = tiktok.empty_result_message() if tiktok else '未找到相关视频'
                 yield json.dumps({'status': 'error', 'message': message, 'done': True}, ensure_ascii=False) + '\n'
                 return
 
+            def hot_score(item):
+                return item.get('likes', 0) + item.get('comments', 0) * 5 + item.get('shares', 0) * 2
+
+            video_data = sorted(video_data, key=hot_score, reverse=True)[:video_limit]
+            if tiktok:
+                for item in video_data:
+                    try:
+                        item['comments_data'] = tiktok.get_video_comments(item['video_id'])
+                    except Exception as exc:
+                        print(f"[评论抓取失败] {exc}")
+                        item['comments_data'] = []
+            else:
+                for item in video_data:
+                    item['comments_data'] = []
+
             # 创建 AI 分析器
             ai = AIAnalyzer(
                 api_key=current_config.get('minimax_api_key'),
                 base_url=current_config.get('minimax_base_url'),
                 model=current_config.get('minimax_model'),
-                analysis_mode=current_config.get('analysis_mode', 'libtv'),
+                analysis_mode=current_config.get('analysis_mode', 'pipeline'),
                 model_provider=current_config.get('model_provider', 'openai'),
                 model_protocol=current_config.get('model_protocol', 'openai'),
                 model_api_key=current_config.get('model_api_key', ''),
@@ -333,41 +362,59 @@ def build_analyze_response(config_override=None, max_videos=None):
                 tk_note_timeout=current_config.get('tk_note_timeout', 1800),
             )
 
-            # 流式并发分析，结果边完成边推送
+            # Run the local pipeline in a worker so stage callbacks can stream
+            # to the browser while TK Note, LibTV and the model are busy.
+            events = queue.Queue()
+
+            def progress_callback(event):
+                events.put(('stage', event))
+
+            def run_pipeline():
+                try:
+                    for item in ai.batch_analyze_streaming(
+                        video_data,
+                        max_videos=video_limit,
+                        video_urls=video_urls,
+                        product_name=product_name,
+                        product_info=product_info,
+                        force_collect=bool(refresh),
+                        progress_callback=progress_callback,
+                    ):
+                        events.put(('video', item))
+                except Exception as exc:
+                    events.put(('exception', exc))
+                finally:
+                    events.put(('done', None))
+
+            threading.Thread(target=run_pipeline, daemon=True).start()
             results = []
-            for result in ai.batch_analyze_streaming(
-                video_data,
-                max_videos=video_limit,
-                video_urls=video_urls,
-                product_name=product_name,
-                product_info=product_info,
-                force_collect=bool(refresh),
-            ):
-                # 抓取评论（在主线程串行执行，不影响并发分析）
-                if tiktok:
-                    try:
-                        comments = tiktok.get_video_comments(result['video_id'])
-                        result['comments_data'] = comments
-                    except Exception as e:
-                        print(f"[评论抓取失败] {e}")
-                        result['comments_data'] = []
-                else:
-                    result['comments_data'] = []
-
-                results.append(result)
-
-                # 每完成一个就推送一个，前端可以立即显示
-                yield json.dumps({
-                    'status': 'progress',
-                    'done': False,
-                    'current': len(results),
-                    'total': min(len(video_data), video_limit),
-                    'video': result
-                }, ensure_ascii=False) + '\n'
+            while True:
+                event_type, payload = events.get()
+                if event_type == 'stage':
+                    yield json.dumps(payload, ensure_ascii=False) + '\n'
+                elif event_type == 'video':
+                    results.append(payload)
+                    result_stage = payload.get('pipeline_stage') or 'final-analysis'
+                    result_failed = payload.get('pipeline_status') == 'error'
+                    yield json.dumps({
+                        'status': 'progress',
+                        'stage': result_stage,
+                        'stage_status': 'error' if result_failed else 'complete',
+                        'stage_label': '完整证据链已生成最终报告' if not result_failed else f'{result_stage} 阶段没有完成',
+                        'stage_progress': 100 if not result_failed else 0,
+                        'done': False,
+                        'current': len(results),
+                        'total': len(video_data),
+                        'video': payload,
+                    }, ensure_ascii=False) + '\n'
+                elif event_type == 'exception':
+                    raise payload
+                elif event_type == 'done':
+                    break
 
             # 推送完成信号
             failed_videos = sum(
-                1 for item in results if item.get('libtv_status') == 'error'
+                1 for item in results if item.get('pipeline_status') == 'error'
             )
             pending_videos = sum(
                 1 for item in results if item.get('libtv_status') == 'timeout'

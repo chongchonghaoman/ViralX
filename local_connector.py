@@ -47,6 +47,11 @@ ALLOWED_REQUEST_HEADERS = {
     "x-viralx-tk-asr",
     "x-viralx-tk-language",
     "x-viralx-tk-timeout",
+    "x-viralx-model-provider",
+    "x-viralx-model-protocol",
+    "x-viralx-model-key",
+    "x-viralx-model-base-url",
+    "x-viralx-model-name",
 }
 
 
@@ -125,9 +130,9 @@ def _connector_token() -> str:
 
 
 def _request_config() -> dict[str, Any]:
-    """Overlay only the browser fields needed by the local LibTV pipeline."""
+    """Overlay the current tab's settings for the trusted local pipeline."""
     config = dict(web_app.load_config())
-    config["analysis_mode"] = "libtv"
+    config["analysis_mode"] = "pipeline"
 
     rapidapi_key = request.headers.get("X-ViralX-RapidAPI-Key", "").strip()
     if rapidapi_key:
@@ -140,6 +145,18 @@ def _request_config() -> dict[str, Any]:
     language = request.headers.get("X-ViralX-TK-Language", "").strip()
     if language:
         config["tk_note_language"] = language[:40]
+
+    model_fields = {
+        "model_provider": "X-ViralX-Model-Provider",
+        "model_protocol": "X-ViralX-Model-Protocol",
+        "model_api_key": "X-ViralX-Model-Key",
+        "model_base_url": "X-ViralX-Model-Base-URL",
+        "model_name": "X-ViralX-Model-Name",
+    }
+    for field, header in model_fields.items():
+        value = request.headers.get(header, "").strip()
+        if value:
+            config[field] = value
 
     try:
         min_likes = int(request.headers.get("X-ViralX-Min-Likes", ""))

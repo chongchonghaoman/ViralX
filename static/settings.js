@@ -11,7 +11,7 @@
   };
 
   const DEFAULTS = {
-    rapidapi_key: "", analysis_mode: "libtv", libtv_concurrency: 1, tk_note_asr_backend: "auto",
+    rapidapi_key: "", analysis_mode: "pipeline", libtv_concurrency: 1, tk_note_asr_backend: "auto",
     tk_note_language: "auto", tk_note_cookies_from_browser: "", tk_note_proxy: "",
     tk_note_timeout: 90, video_cache_dir: "./video_cache", model_provider: "openai",
     model_protocol: "openai", model_api_key: "", model_base_url: "https://api.openai.com/v1",
@@ -50,18 +50,19 @@
   function migrateLegacySettings(input) {
     const migrated = { ...(input || {}) };
     const legacyMode = String(migrated.analysis_mode || "").toLowerCase();
-    if (!["gemini", "openrouter", "minimax"].includes(legacyMode)) return migrated;
-    const legacy = {
-      gemini: { provider: "gemini", protocol: "gemini", key: migrated.gemini_api_key, baseUrl: PROVIDERS.gemini.baseUrl, model: migrated.gemini_model },
-      openrouter: { provider: "openrouter", protocol: "openai", key: migrated.openrouter_api_key, baseUrl: PROVIDERS.openrouter.baseUrl, model: migrated.openrouter_model },
-      minimax: { provider: "custom", protocol: "anthropic", key: migrated.minimax_api_key, baseUrl: migrated.minimax_base_url, model: migrated.minimax_model },
-    }[legacyMode];
-    migrated.analysis_mode = "model";
-    migrated.model_provider = legacy.provider;
-    migrated.model_protocol = legacy.protocol;
-    migrated.model_api_key ||= legacy.key || "";
-    migrated.model_base_url ||= legacy.baseUrl || "";
-    migrated.model_name ||= legacy.model || "";
+    if (["gemini", "openrouter", "minimax"].includes(legacyMode)) {
+      const legacy = {
+        gemini: { provider: "gemini", protocol: "gemini", key: migrated.gemini_api_key, baseUrl: PROVIDERS.gemini.baseUrl, model: migrated.gemini_model },
+        openrouter: { provider: "openrouter", protocol: "openai", key: migrated.openrouter_api_key, baseUrl: PROVIDERS.openrouter.baseUrl, model: migrated.openrouter_model },
+        minimax: { provider: "custom", protocol: "anthropic", key: migrated.minimax_api_key, baseUrl: migrated.minimax_base_url, model: migrated.minimax_model },
+      }[legacyMode];
+      migrated.model_provider = legacy.provider;
+      migrated.model_protocol = legacy.protocol;
+      migrated.model_api_key ||= legacy.key || "";
+      migrated.model_base_url ||= legacy.baseUrl || "";
+      migrated.model_name ||= legacy.model || "";
+    }
+    migrated.analysis_mode = "pipeline";
     return migrated;
   }
 
@@ -89,11 +90,10 @@
   }
 
   function syncAnalysisMode() {
-    const mode = byId("analysis_mode")?.value || "libtv";
+    setValue("analysis_mode", "pipeline");
     document.querySelectorAll("[data-mode-details]").forEach((details) => {
-      const active = details.dataset.modeDetails === mode;
-      details.open = active;
-      details.closest(".settings-section")?.classList.toggle("is-active", active);
+      details.open = true;
+      details.closest(".settings-section")?.classList.add("is-active");
     });
   }
 
@@ -116,10 +116,7 @@
     setValue("model_base_url", draft.baseUrl || preset.baseUrl);
     setValue("model_protocol", draft.protocol || preset.protocol);
     renderProvider(next);
-    if (userInitiated) {
-      byId("analysis_mode").value = "model";
-      syncAnalysisMode();
-    }
+    if (userInitiated) syncAnalysisMode();
   }
 
   function applySettings() {
@@ -144,7 +141,7 @@
 
   function collectSettings() {
     settings.rapidapi_key = byId("rapidapi_key").value.trim();
-    settings.analysis_mode = byId("analysis_mode").value;
+    settings.analysis_mode = "pipeline";
     settings.tk_note_asr_backend = byId("tk_note_asr_backend").value || DEFAULTS.tk_note_asr_backend;
     settings.tk_note_language = byId("tk_note_language").value.trim() || DEFAULTS.tk_note_language;
     settings.tk_note_cookies_from_browser = byId("tk_note_cookies_from_browser").value;
@@ -161,19 +158,14 @@
     const parsedMinLikes = Number.parseInt(byId("min_likes").value, 10);
     settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
-    if (settings.analysis_mode === "model") {
-      if (!settings.model_api_key) throw new SettingsValidationError("model_api_key", "模型 API 模式需要填写 API Key");
-      if (!settings.model_name) throw new SettingsValidationError("model_name", "模型 API 模式需要填写模型名称");
-      if (selectedProvider === "custom") {
-        let endpoint;
-        try { endpoint = new URL(settings.model_base_url); }
-        catch (_) { throw new SettingsValidationError("model_base_url", "自定义 Base URL 不是有效的完整地址"); }
-        if (!(["http:", "https:"].includes(endpoint.protocol)) || endpoint.search || endpoint.hash) {
-          throw new SettingsValidationError("model_base_url", "自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
-        }
-        if (runtimeMode === "edgeone" && endpoint.protocol !== "https:") {
-          throw new SettingsValidationError("model_base_url", "网页端的自定义 Base URL 必须使用 HTTPS");
-        }
+    if (!settings.model_api_key) throw new SettingsValidationError("model_api_key", "完整分析链需要填写模型 API Key");
+    if (!settings.model_name) throw new SettingsValidationError("model_name", "完整分析链需要填写模型名称");
+    if (selectedProvider === "custom") {
+      let endpoint;
+      try { endpoint = new URL(settings.model_base_url); }
+      catch (_) { throw new SettingsValidationError("model_base_url", "自定义 Base URL 不是有效的完整地址"); }
+      if (!(["http:", "https:"].includes(endpoint.protocol)) || endpoint.search || endpoint.hash) {
+        throw new SettingsValidationError("model_base_url", "自定义 Base URL 需使用 HTTP(S)，且不能包含查询参数或锚点");
       }
     }
     return settings;
@@ -247,19 +239,15 @@
     const note = byId("runtime-note");
     if (runtimeMode !== "edgeone") { note.hidden = true; return; }
     const configured = health.configured || {};
-    const provider = String(
-      settings.analysis_mode === "libtv"
-        ? "libtv"
-        : health.analysis_provider || settings.model_provider || "openai",
-    );
-    const providerLabel = PROVIDERS[provider]?.name || (provider === "libtv" ? "LibTV" : provider);
+    const provider = String(settings.model_provider || health.analysis_provider || "openai");
+    const providerLabel = PROVIDERS[provider]?.name || provider;
     const searchProvider = String(health.keyword_search_provider || "api23").toUpperCase();
     note.replaceChildren();
     const copy = document.createElement("div");
     const title = document.createElement("strong");
     title.textContent = "当前标签页的安全配置";
     const description = document.createElement("p");
-    description.textContent = "模型与 API23 密钥只保存在当前标签页。LibTV 模式通过仅监听 127.0.0.1 的 Connector 调用本机 CLI；登录凭据不会发送给 EdgeOne。";
+    description.textContent = "API23 与模型密钥只保存在当前标签页。完整任务发送给仅监听 127.0.0.1 的 Connector，由它串联 TK Note、LibTV 与模型服务；EdgeOne 不代理分析内容。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
@@ -268,7 +256,9 @@
       : connectorState.paired
         ? "已安全配对"
         : "等待配对";
-    [["分析模式", providerLabel], ["本机 Connector", connectorLabel], ["模型 API", configured.model ? "已配置" : "未配置"], [`${searchProvider} 搜索`, configured.keyword_search ? "已配置" : "未配置"]]
+    const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
+    const libtvConnected = connectorState.libtv?.state === "connected";
+    [["固定链路", "串联"], ["本机 Connector", connectorLabel], ["LibTV", libtvConnected ? "已连接" : "未连接"], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [`${searchProvider} 搜索`, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;
@@ -284,10 +274,7 @@
       field.hidden = true;
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
-    const libtvOption = byId("analysis_mode").querySelector('option[value="libtv"]');
-    libtvOption.disabled = false;
-    libtvOption.textContent = "LibTV 画布拉片 · 连接本机";
-    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 保留网页入口；模型任务走云函数，LibTV 任务通过本机 Connector 调用官方 CLI。密钥与登录态都不会写入公开网页。";
+    document.querySelector(".settings-hero > p:last-child").textContent = "EdgeOne 只提供网页界面；本机 Connector 串联 TK Note、LibTV 与模型 API。密钥只留在当前标签页，登录态只留在官方 LibTV CLI。";
     document.querySelector(".settings-actions > p").textContent = "保存到当前标签页；关闭后自动清除。";
     byId("save-btn").textContent = "保存到当前会话";
     byId("reset-btn").textContent = "恢复会话值";
@@ -530,7 +517,7 @@
         window.ViralXCloudConfig.write(settings);
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
         updateRuntimeNote(healthResponse.ok ? await healthResponse.json() : {});
-        if (settings.analysis_mode === "libtv") await refreshLibTVState();
+        await refreshLibTVState();
         showStatus("已保存到当前浏览器会话。返回分析页后立即生效，关闭标签页会自动清除。", "success");
       } else {
         const response = await window.fetch("/api/settings", {
@@ -594,7 +581,6 @@
       });
     });
     byId("model_base_url").addEventListener("input", () => renderProvider("custom"));
-    byId("analysis_mode").addEventListener("change", syncAnalysisMode);
     document.querySelectorAll(".settings-field input, .settings-field select, .settings-field textarea").forEach((control) => {
       const clear = () => {
         if (control.getAttribute("aria-invalid") === "true") clearFieldError(control.id);

@@ -102,14 +102,14 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
 - Every interactive element has hover, focus-visible, active, and disabled treatment where
   applicable.
 - Local settings preserve secrets and local directories in the Flask runtime. EdgeOne settings
-  expose only cloud-safe fields and keep credentials in the current browser session. LibTV mode
-  may connect to the loopback-only ViralX Connector after an explicit one-time pairing.
+  keep credentials in the current browser session and may connect to the loopback-only ViralX
+  Connector after an explicit one-time pairing. There is one fixed analysis pipeline, not modes.
 - Model configuration is one progressive-disclosure flow: choose OpenAI, Claude, Gemini,
   DeepSeek, OpenRouter, or Custom; then fill one API key and one model ID. Only Custom reveals
   protocol and Base URL. The provider grid is one column on phones and two columns from 40rem.
 - Each provider keeps an in-memory draft while the page is open, so changing providers never
-  places one service's key into another service's field. A provider choice also selects the
-  model-analysis runtime explicitly; failed calls never silently consume a fallback provider.
+  places one service's key into another service's field. The provider is always the final stage
+  after TK Note and LibTV evidence merge; failed calls never consume a fallback provider.
 - Do not invent customer logos, performance metrics, case studies, or model results.
 
 ## Responsive order
@@ -132,22 +132,21 @@ change this sequence.
   `/api/libtv/auth/*`, TK Note, official LibTV CLI browser login, local video/cache files,
   and Obsidian export. ViralX asks the CLI for connection state but never reads its tokens.
 - The EdgeOne build combines the static website with a constrained Python Cloud Function. It
-  may run one-video analysis with temporary `/tmp` assets, but must never claim persistent
-  local files, browser cookies, arbitrary proxies, caches, or direct Obsidian writes exist at
-  the edge.
+  must not claim it can run the full pipeline because it cannot access a visitor's local source
+  files, CLI login, browser cookies, persistent caches, or direct Obsidian filesystem writes.
 - EdgeOne Cloud Functions cannot access a visitor's local LibTV CLI login. The top-level
-  production page may connect directly to `http://127.0.0.1:57231` after the browser grants
-  loopback access and a one-use fragment secret is exchanged for an in-memory session. Model
-  mode remains same-origin EdgeOne; LibTV mode routes only analysis and auth actions to Connector.
+  production page connects directly to `http://127.0.0.1:57231` after the browser grants
+  loopback access and a one-use fragment secret is exchanged for an in-memory session. The
+  Connector runs TK Note, LibTV shot analysis, evidence merge, then the selected model API.
 - Connector binds only to `127.0.0.1`, allows exact trusted Origins, validates CORS/PNA
   preflights, requires a short-lived session for every action, and limits hosted analysis to one
   video. It never exposes local settings, cache clearing, arbitrary file export, or CLI tokens.
 - `/settings.html` is a session-first BYOK surface. API keys stay in `sessionStorage`, travel
-  only with same-origin HTTPS requests, are never echoed by health responses, and disappear
-  when the tab closes. Project-level EdgeOne environment variables remain supported.
-- EdgeOne custom model endpoints must be public HTTPS addresses on a standard port. The cloud
-  function rejects private, loopback and link-local destinations; local Flask deliberately
-  permits HTTP and private endpoints for self-hosted models.
+  only to the authenticated loopback Connector for analysis, are never echoed by health
+  responses, and disappear when the tab closes.
+- Hosted settings require HTTPS for custom model endpoints. The authenticated local Connector
+  performs the final provider call; local Flask may deliberately use HTTP and private endpoints
+  for self-hosted models.
 - Public readiness labels distinguish interface availability, credential presence, and a
   completed external provider analysis; one must never be presented as proof of another.
 
@@ -168,12 +167,12 @@ change this sequence.
 
 - Public availability is not analysis readiness. The homepage health check must route an
   unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne; only a
-  paired Connector with connected LibTV or a ready model provider may expose analysis as the primary CTA.
+  paired Connector with connected LibTV and a ready model provider may expose analysis as the primary CTA.
 - API23 is explained at the source field: video URLs bypass it, while keyword discovery needs
   it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- Model and LibTV settings use native `details` disclosure keyed to `analysis_mode`. Choosing a
-  model provider switches the mode to `model`; inactive settings remain saved and are never
-  deleted merely because their panel is collapsed.
+- The settings page presents the fixed contract `API23 -> TK Note -> LibTV -> evidence merge ->
+  final model`. LibTV and model disclosures are both visible because both are required; changing
+  the provider never changes the pipeline.
 - LibTV connection UI exposes `connector_missing`, `pairing_required`, `disconnected`, `starting`,
   `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
   Starting/awaiting states prevent duplicate actions; errors always expose a recovery action,
@@ -187,3 +186,13 @@ change this sequence.
 - CDN scripts are exact-version resources protected by SRI, and page-level CSP limits scripts,
   styles, fonts, images and connections to the smallest required origins. GSAP enhancement remains optional;
   the page is fully visible and operable when it is blocked or reduced motion is requested.
+
+## Hallmark review record — 2026-08-26
+
+- Removed the false provider choice and made the five-stage dependency chain visible in settings
+  and live progress.
+- Kept one dominant accent, restrained motion, native controls, field-local errors, and explicit
+  recovery states; no decorative metrics, fake testimonials, floating loops, or generated proof.
+- Desktop and mobile preserve the same information order. The five-stage progress grid expands
+  only when space allows and falls back to a readable linear list on narrow screens.
+- Readiness copy names the missing dependency instead of using a generic online/offline state.

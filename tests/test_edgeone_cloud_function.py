@@ -61,15 +61,16 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertNotIn("session-secret-libtv", serialized)
         self.assertNotIn("session-secret-rapid", serialized)
 
-    def test_cloud_libtv_analysis_returns_local_runtime_recovery(self):
+    def test_cloud_pipeline_analysis_returns_local_runtime_recovery(self):
         response = self.client.post(
             "/analyze",
             json={"keyword": "https://www.tiktok.com/@creator/video/123"},
-            headers={"X-ViralX-Analysis-Mode": "libtv"},
+            headers={"X-ViralX-Analysis-Mode": "pipeline"},
         )
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
-        self.assertIn("本机 CLI 网页登录", payload["message"])
+        self.assertIn("本机 Connector", payload["message"])
+        self.assertIn("TK Note", payload["message"])
         self.assertIn("模型 API", payload["message"])
 
     def test_generic_model_headers_select_provider_without_echoing_key(self):
@@ -84,7 +85,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         )
         payload = response.get_json()
         self.assertEqual(payload["analysis_provider"], "openai")
-        self.assertTrue(payload["analysis_ready"])
+        self.assertFalse(payload["analysis_ready"])
         self.assertTrue(payload["configured"]["model"])
         self.assertNotIn("session-secret-model", json.dumps(payload))
 
@@ -111,12 +112,12 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(payload["status"], "error")
         self.assertTrue(payload["done"])
 
-    def test_keyword_search_without_api23_key_returns_actionable_error(self):
+    def test_direct_cloud_pipeline_endpoint_never_claims_local_analysis(self):
         response = self.client.post("/analyze", json={"keyword": "camping light"})
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
-        self.assertIn("API23", payload["message"])
-        self.assertIn("RAPIDAPI_KEY", payload["message"])
+        self.assertIn("Connector", payload["message"])
+        self.assertIn("LibTV", payload["message"])
 
     def test_private_settings_and_cache_routes_are_not_public(self):
         self.assertEqual(self.client.get("/settings").status_code, 404)

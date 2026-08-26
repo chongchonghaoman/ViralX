@@ -28,7 +28,7 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | --- | --- |
 | `VIRALX_BASE_URL` | Override the default `https://viralx.metrolabs.mobi` server |
 | `RAPIDAPI_KEY` | API23 keyword discovery; not used for direct URLs |
-| `ANALYSIS_MODE` | Production uses `model`; local Flask can use `libtv` after browser login |
+| `ANALYSIS_MODE` | Fixed value `pipeline`; legacy mode values are migrated |
 | `MODEL_PROVIDER` | `openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom` |
 | `MODEL_API_KEY`, `MODEL_NAME` | Key and model ID for the selected provider |
 | `MODEL_BASE_URL`, `MODEL_PROTOCOL` | Custom endpoint root and `openai` / `anthropic` protocol |
@@ -67,4 +67,4 @@ The response is NDJSON. Each parsed event is emitted as one JSON line. Exit code
 - `1`: network, HTTP, or invalid-response failure.
 - `2`: ViralX returned an application-level error event.
 
-The production EdgeOne runtime supports one video per request, model API analysis, and temporary `/tmp` assets. It cannot access a user's local LibTV CLI credentials. Local Flask can use the official CLI after the user connects from `/settings`, support persistent files, and use a higher analysis limit.
+The production EdgeOne runtime intentionally refuses full analysis because it cannot access a user's local source files or LibTV CLI credentials. Point `VIRALX_BASE_URL` at local Flask after the user connects LibTV from `/settings`; the local runtime then executes TK Note, LibTV shot analysis, evidence merge, and the selected model API.

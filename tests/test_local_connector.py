@@ -48,7 +48,7 @@ class LocalConnectorTests(unittest.TestCase):
             headers={
                 "Origin": TRUSTED_ORIGIN,
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token",
+                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token, x-viralx-model-key, x-viralx-model-name",
                 "Access-Control-Request-Private-Network": "true",
             },
         )
@@ -101,7 +101,7 @@ class LocalConnectorTests(unittest.TestCase):
                 response = getattr(self.client, method)(path, headers=self.origin_headers)
                 self.assertEqual(response.status_code, 401)
 
-    def test_connector_analysis_forces_libtv_and_one_video_limit(self):
+    def test_connector_analysis_forces_pipeline_and_transfers_session_model_config(self):
         _, token = self.pair()
         captured = {}
 
@@ -122,14 +122,21 @@ class LocalConnectorTests(unittest.TestCase):
                     "X-ViralX-RapidAPI-Key": "session-search-key",
                     "X-ViralX-TK-ASR": "auto",
                     "X-ViralX-TK-Timeout": "180",
+                    "X-ViralX-Model-Provider": "openai",
+                    "X-ViralX-Model-Protocol": "openai",
+                    "X-ViralX-Model-Key": "session-model-key",
+                    "X-ViralX-Model-Base-URL": "https://api.openai.com/v1",
+                    "X-ViralX-Model-Name": "gpt-4.1-mini",
                 },
             )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(captured["max_videos"], 1)
-        self.assertEqual(captured["config_override"]["analysis_mode"], "libtv")
+        self.assertEqual(captured["config_override"]["analysis_mode"], "pipeline")
         self.assertEqual(captured["config_override"]["rapidapi_key"], "session-search-key")
         self.assertEqual(captured["config_override"]["tk_note_timeout"], 180)
+        self.assertEqual(captured["config_override"]["model_api_key"], "session-model-key")
+        self.assertEqual(captured["config_override"]["model_name"], "gpt-4.1-mini")
 
 
 if __name__ == "__main__":

@@ -41,6 +41,17 @@ def load_config():
     return config
 
 
+def _evidence_bundle_text(video_data: dict, limit: int = 80000) -> str:
+    """Serialize the merged TK Note + LibTV evidence for final synthesis."""
+    bundle = video_data.get('evidence_bundle')
+    if not bundle:
+        return '（尚无合并证据包）'
+    try:
+        return json.dumps(bundle, ensure_ascii=False, default=str, indent=2)[:limit]
+    except (TypeError, ValueError):
+        return str(bundle)[:limit]
+
+
 class AICache:
     """AI 分析结果缓存"""
     def __init__(self, cache_dir: str = None):
@@ -332,7 +343,10 @@ class OpenAICompatibleAnalyzer:
 播放量: {video_data.get('views', 0):,}
 
 高赞评论:
-{comments_text or '（无评论数据）'}"""
+{comments_text or '（无评论数据）'}
+
+=== TK Note + LibTV 合并证据包 ===
+{_evidence_bundle_text(video_data)}"""
 
     def _analyze_text_prompt(self, video_data: dict) -> str:
         return f"""你是一位资深 TikTok 电商短视频拆解专家。
@@ -672,7 +686,10 @@ class GeminiAnalyzer:
 播放量: {video_data.get('views', 0):,}
 
 高赞评论:
-{comments_text or '（无评论数据）'}"""
+{comments_text or '（无评论数据）'}
+
+=== TK Note + LibTV 合并证据包 ===
+{_evidence_bundle_text(video_data)}"""
 
     def _analyze_text_only(self, video_data: dict) -> str:
         """纯文本分析（无视频文件时）"""
@@ -871,7 +888,7 @@ class MiniMaxAnalyzer:
 *拆解完毕*"""
 
 class AIAnalyzer:
-    """统一分析器：LibTV 主链 + provider-neutral model API fallback."""
+    """Serial analyzer: TK Note -> LibTV evidence -> final model synthesis."""
 
     _cache = None
     MAX_CONCURRENT = 5
@@ -882,7 +899,7 @@ class AIAnalyzer:
         api_key: str = "",
         base_url: str = None,
         model: str = None,
-        analysis_mode: str = 'libtv',
+        analysis_mode: str = 'pipeline',
         model_provider: str = '',
         model_protocol: str = '',
         model_api_key: str = '',
@@ -905,7 +922,7 @@ class AIAnalyzer:
         self.api_key = api_key or config.get('minimax_api_key', '')
         self.base_url = base_url or config.get('minimax_base_url', 'https://api.minimaxi.com/anthropic')
         self.model = model or config.get('minimax_model', 'MiniMax-M2.7')
-        requested_mode = analysis_mode or config.get('analysis_mode', 'libtv')
+        requested_mode = analysis_mode or config.get('analysis_mode', 'pipeline')
         model_config = {
             **config,
             'analysis_mode': requested_mode,
@@ -950,19 +967,18 @@ class AIAnalyzer:
             ),
         )
 
-        self.use_libtv = self.analysis_mode == 'libtv'
-        self.use_model = self.analysis_mode == 'model'
-
-        if self.use_libtv:
-            self.libtv = LibTVAnalyzer()
-            print("[AIAnalyzer] 模式0: LibTV CLI 网页登录 + 画布交接")
-        else:
-            self.libtv = None
+        self.use_pipeline = self.analysis_mode == 'pipeline'
+        # Compatibility aliases for older callers. The product no longer
+        # treats LibTV and the model API as mutually exclusive destinations.
+        self.use_libtv = self.use_pipeline
+        self.use_model = self.use_pipeline
+        self.libtv = LibTVAnalyzer()
+        print("[AIAnalyzer] 串联链路: TK Note -> LibTV 拉片 -> 模型终审")
 
         self.model_analyzer = None
         self.gemini = None
         self.openrouter = None
-        if self.use_model and self.model_api_key and self.model_name and self.model_base_url and not self.model_config_error:
+        if self.model_api_key and self.model_name and self.model_base_url and not self.model_config_error:
             preset = MODEL_PROVIDER_PRESETS[self.model_provider]
             provider_label = preset['label']
             if self.model_provider == 'gemini':
@@ -1026,7 +1042,7 @@ class AIAnalyzer:
             video_data, video_url=video_url, use_cache=use_cache, force_collect=force_collect
         )['analysis']
 
-    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False) -> dict:
+    def _analyze_legacy_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False) -> dict:
         """分析视频并返回报告、提供方、会话与画布元数据。"""
         video_id = video_data.get('video_id', '')
         video_file_path = None
@@ -1140,6 +1156,165 @@ class AIAnalyzer:
             'model_status': 'error',
         }
 
+    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False, progress_callback=None) -> dict:
+        """Run TK Note, LibTV shot analysis, evidence merge, then the final model."""
+        video_id = video_data.get('video_id', '')
+        acquisition_provider = 'tk-note' if is_tiktok_url(video_url or '') else 'yt-dlp'
+
+        def emit(stage, status, label, progress):
+            if progress_callback:
+                progress_callback({
+                    'status': 'progress',
+                    'stage': stage,
+                    'stage_status': status,
+                    'stage_label': label,
+                    'stage_progress': progress,
+                })
+
+        if not self.libtv.available:
+            return {
+                'analysis': '串联分析失败：未找到官方 LibTV CLI，请先安装并连接',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'shot-analysis',
+                'pipeline_status': 'error',
+                'libtv_status': 'error',
+            }
+        if not self.libtv.is_authenticated():
+            return {
+                'analysis': '串联分析失败：LibTV 尚未登录，请在设置页完成网页授权',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'shot-analysis',
+                'pipeline_status': 'error',
+                'libtv_status': 'error',
+            }
+        if not self.model_api_key:
+            return {
+                'analysis': '串联分析失败：最终模型 API Key 尚未配置',
+                'analysis_provider': self.model_provider,
+                'pipeline_stage': 'final-analysis',
+                'pipeline_status': 'error',
+                'model_status': 'error',
+            }
+        if self.model_config_error:
+            return {
+                'analysis': f'串联分析失败：模型 API 配置无效：{self.model_config_error}',
+                'analysis_provider': self.model_provider,
+                'pipeline_stage': 'final-analysis',
+                'pipeline_status': 'error',
+                'model_status': 'error',
+            }
+        if not self.model_analyzer:
+            return {
+                'analysis': '串联分析失败：最终模型 API 尚未配置或无法初始化',
+                'analysis_provider': self.model_provider,
+                'pipeline_stage': 'final-analysis',
+                'pipeline_status': 'error',
+                'model_status': 'error',
+            }
+        if not video_url:
+            return {
+                'analysis': '串联分析失败：缺少可采集的视频链接',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'collection',
+                'pipeline_status': 'error',
+                'tk_note_status': 'error',
+            }
+
+        emit('collection', 'running', 'TK Note 正在采集原片、字幕与元数据', 24)
+        try:
+            asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+            video_file_path = asset.video_file
+            acquisition_details = asset.analysis_details()
+            video_data.update(asset.video_fields())
+        except VideoIngestError as exc:
+            return {
+                'analysis': f'TK Note 证据采集失败：{exc}',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'collection',
+                'pipeline_status': 'error',
+                'acquisition_provider': acquisition_provider,
+                ('tk_note_status' if acquisition_provider == 'tk-note' else 'video_ingest_status'): 'error',
+            }
+
+        emit('collection', 'complete', 'TK Note 证据包已保存', 40)
+        emit('shot-analysis', 'running', 'LibTV 正在逐镜头分析原视频', 48)
+        try:
+            libtv_result = self.libtv.analyze(
+                video_file_path,
+                user_request='逐镜头拉片并输出结构化证据',
+            )
+            libtv_details = libtv_result.to_dict()
+        except LibTVError as exc:
+            return {
+                'analysis': f'LibTV 拉片失败：{exc}',
+                'analysis_provider': 'pipeline',
+                'pipeline_stage': 'shot-analysis',
+                'pipeline_status': 'error',
+                'libtv_status': 'error',
+                **acquisition_details,
+            }
+
+        emit('shot-analysis', 'complete', 'LibTV 拉片证据已生成', 68)
+        emit('evidence-merge', 'running', '正在合并 TK Note 与 LibTV 证据', 72)
+
+        def read_evidence(path_value, limit=60000):
+            try:
+                path = Path(str(path_value or ''))
+                if path.is_file():
+                    return path.read_text(encoding='utf-8', errors='replace')[:limit]
+            except OSError:
+                pass
+            return ''
+
+        tk_note_evidence = {
+            'provider': acquisition_provider,
+            'status': acquisition_details.get('tk_note_status') or acquisition_details.get('video_ingest_status'),
+            'metadata': getattr(asset, 'metadata', {}) or {},
+            'transcript': read_evidence(getattr(asset, 'transcript_path', '')),
+            'transcript_source': getattr(asset, 'transcript_source', ''),
+            'warnings': list(getattr(asset, 'warnings', []) or []),
+            'blocked_stages': list(getattr(asset, 'blocked_stages', []) or []),
+        }
+        evidence_bundle = {
+            'schema': 'viralx.evidence.v1',
+            'platform_evidence': {
+                key: video_data.get(key)
+                for key in ('title', 'author', 'duration', 'likes', 'comments', 'shares', 'views', 'comments_data')
+            },
+            'tk_note_evidence': tk_note_evidence,
+            'libtv_evidence': libtv_details.get('evidence') or {
+                'shot_analysis': libtv_details.get('analysis', ''),
+                'project_url': libtv_details.get('project_url', ''),
+            },
+        }
+        video_data['evidence_bundle'] = evidence_bundle
+        emit('evidence-merge', 'complete', '统一证据包已就绪', 82)
+
+        emit('final-analysis', 'running', f'{self.model_provider} 正在进行最终综合分析', 86)
+        final_analysis = self.model_analyzer.analyze(video_data, video_file_path)
+        model_failed = '失败' in final_analysis or not final_analysis.strip()
+        emit(
+            'final-analysis',
+            'error' if model_failed else 'complete',
+            '最终模型分析失败' if model_failed else '最终报告已生成',
+            100,
+        )
+        return {
+            'analysis': final_analysis or '模型 API 没有返回最终分析',
+            'analysis_provider': self.model_provider,
+            'pipeline_stage': 'final-analysis',
+            'pipeline_status': 'error' if model_failed else 'completed',
+            'evidence_status': 'merged',
+            'evidence_bundle': evidence_bundle,
+            'libtv_status': libtv_details.get('status', 'completed'),
+            'libtv_session_id': libtv_details.get('session_id', ''),
+            'libtv_project_uuid': libtv_details.get('project_uuid', ''),
+            'libtv_project_url': libtv_details.get('project_url', ''),
+            'libtv_result_urls': libtv_details.get('result_urls', []),
+            'model_status': 'error' if model_failed else 'completed',
+            **acquisition_details,
+        }
+
     def _analyze_minimax(self, video_data: dict) -> str:
         """MiniMax 纯文本分析"""
         if not self.client:
@@ -1160,18 +1335,26 @@ class AIAnalyzer:
         except Exception as e:
             return f"分析失败: {str(e)[:100]}"
 
-    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = '', force_collect: bool = False):
-        """并发分析多个视频，视频分析并发，复刻脚本串行生成"""
+    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = '', force_collect: bool = False, progress_callback=None):
+        """Analyze videos one at a time through the five-stage evidence pipeline."""
         def hot_score(v):
             return v.get('likes', 0) * 1 + v.get('comments', 0) * 5 + v.get('shares', 0) * 2
 
         sorted_videos = sorted(videos, key=hot_score, reverse=True)[:max_videos]
         urls = video_urls or {}
 
-        workers = self.libtv_concurrency if self.use_libtv else self.MAX_CONCURRENT
+        # The five evidence stages are intentionally serial per task. This also
+        # prevents concurrent LibTV canvases from racing the local CLI session.
+        workers = 1
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_video = {
-                executor.submit(self._analyze_video_only, v, urls.get(v['video_id']), force_collect): v
+                executor.submit(
+                    self._analyze_video_only,
+                    v,
+                    urls.get(v['video_id']),
+                    force_collect,
+                    progress_callback,
+                ): v
                 for v in sorted_videos
             }
             for future in as_completed(future_to_video):
@@ -1204,10 +1387,14 @@ class AIAnalyzer:
                 except Exception as e:
                     yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}", 'remake_script': ''}
 
-    def _analyze_video_only(self, video: dict, video_url: str = None, force_collect: bool = False) -> dict:
+    def _analyze_video_only(self, video: dict, video_url: str = None, force_collect: bool = False, progress_callback=None) -> dict:
         """仅分析视频，不生成复刻脚本"""
         return self.analyze_video_script_details(
-            video, video_url=video_url, use_cache=False, force_collect=force_collect
+            video,
+            video_url=video_url,
+            use_cache=False,
+            force_collect=force_collect,
+            progress_callback=progress_callback,
         )
 
     def _generate_remake_with_retry(self, video: dict, analysis: str, product_name: str, product_info: str, max_retries: int = 3) -> str:

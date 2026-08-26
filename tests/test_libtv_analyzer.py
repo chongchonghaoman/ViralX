@@ -23,6 +23,8 @@ class LibTVAnalyzerTests(unittest.TestCase):
                 return {"data": {"uuid": "project-1"}}
             if args[0] == "upload":
                 return {"success": True}
+            if args[0] == "node":
+                return {"data": {"content": "## 镜头证据\n00:00 产品出现"}}
             raise AssertionError(args)
 
         analyzer = LibTVAnalyzer(
@@ -32,15 +34,19 @@ class LibTVAnalyzerTests(unittest.TestCase):
         )
         result = analyzer.analyze(str(self.make_video()))
 
-        self.assertEqual(result.status, "uploaded")
+        self.assertEqual(result.status, "completed")
         self.assertEqual(result.project_uuid, "project-1")
         self.assertEqual(result.project_url, "https://www.liblib.tv/canvas?projectId=project-1")
-        self.assertIn("逐帧拉片", result.analysis)
+        self.assertIn("00:00", result.analysis)
+        self.assertEqual(result.evidence["model"], "GVLM 3.1 Flash")
         self.assertEqual(calls[0][0][:2], ["project", "create"])
         self.assertEqual(calls[1][0][0], "upload")
         self.assertIn("--resource", calls[1][0])
         self.assertIn("--project", calls[1][0])
         self.assertIn("project-1", calls[1][0])
+        self.assertEqual(calls[2][0][0], "node")
+        self.assertIn("--run", calls[2][0])
+        self.assertIn("model=GVLM 3.1 Flash", calls[2][0])
 
     def test_accepts_official_human_readable_project_output(self):
         calls = []
@@ -49,6 +55,8 @@ class LibTVAnalyzerTests(unittest.TestCase):
             calls.append(args)
             if args[:2] == ["project", "create"]:
                 return CompletedProcess(args, 0, "画布创建成功\n项目 UUID: project-human-123\n", "")
+            if args[0] == "node":
+                return CompletedProcess(args, 0, '{"data":{"content":"逐镜证据"}}\n', "")
             return CompletedProcess(args, 0, "上传成功\n", "")
 
         analyzer = LibTVAnalyzer(

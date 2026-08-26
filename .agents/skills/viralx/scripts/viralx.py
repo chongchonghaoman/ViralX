@@ -155,13 +155,13 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--min-likes", type=int, help="Override API23 minimum likes")
     analyze.add_argument(
         "--analysis-mode",
-        choices=("libtv", "model", "gemini", "openrouter", "minimax"),
-        help="Override the configured analysis provider",
+        choices=("pipeline",),
+        help="Fixed ViralX analysis pipeline",
     )
     analyze.add_argument(
         "--model-provider",
         choices=("openai", "anthropic", "gemini", "deepseek", "openrouter", "custom"),
-        help="Select the provider used when analysis mode is model",
+        help="Select the provider used for the final pipeline stage",
     )
     analyze.add_argument("--model-protocol", choices=("openai", "anthropic"), help="Protocol for a custom provider")
     analyze.add_argument("--model-base-url", help="Base URL for a custom provider")
@@ -191,7 +191,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             headers["X-ViralX-Analysis-Mode"] = args.analysis_mode
         if args.model_provider:
             headers["X-ViralX-Model-Provider"] = args.model_provider
-            headers.setdefault("X-ViralX-Analysis-Mode", "model")
+            headers.setdefault("X-ViralX-Analysis-Mode", "pipeline")
         if args.model_protocol:
             headers["X-ViralX-Model-Protocol"] = args.model_protocol
         if args.model_base_url:

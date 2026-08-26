@@ -30,21 +30,33 @@ class WebAppTests(unittest.TestCase):
     def test_health_reports_selected_generic_model_provider(self):
         config = {
             **web_app.DEFAULT_CONFIG,
-            'analysis_mode': 'model',
+            'analysis_mode': 'pipeline',
             'model_provider': 'deepseek',
             'model_api_key': 'local-secret',
             'model_base_url': 'https://api.deepseek.com',
             'model_name': 'deepseek-v4-flash',
         }
-        with patch.object(web_app, 'load_config', return_value=config):
+        with patch.object(web_app, 'load_config', return_value=config), patch.object(
+            web_app.libtv_auth,
+            'status',
+            return_value={'state': 'connected', 'connected': True, 'cli_installed': True},
+        ):
             response = self.client.get('/api/health')
         payload = response.get_json()
         self.assertEqual(payload['analysis_provider'], 'deepseek')
         self.assertTrue(payload['analysis_ready'])
+        self.assertTrue(payload['configured']['model'])
         self.assertNotIn('local-secret', json.dumps(payload))
 
     def test_direct_douyin_url_reports_missing_browser_login(self):
-        config = {**web_app.DEFAULT_CONFIG, 'analysis_mode': 'libtv'}
+        config = {
+            **web_app.DEFAULT_CONFIG,
+            'analysis_mode': 'pipeline',
+            'model_provider': 'openai',
+            'model_api_key': 'model-key',
+            'model_base_url': 'https://api.openai.com/v1',
+            'model_name': 'gpt-4.1-mini',
+        }
         with patch.object(web_app, 'load_config', return_value=config), patch(
             'ai_analyzer.LibTVAnalyzer'
         ) as analyzer_class:
@@ -59,13 +71,15 @@ class WebAppTests(unittest.TestCase):
                 for line in response.get_data(as_text=True).splitlines()
                 if line.strip()
             ]
-        progress = payloads[0]
+        progress = next(payload for payload in payloads if payload.get('video'))
         completed = payloads[-1]
 
         self.assertEqual(response.mimetype, 'application/x-ndjson')
-        self.assertEqual(progress['video']['analysis_provider'], 'libtv')
+        self.assertEqual(payloads[0]['stage'], 'discovery')
+        self.assertEqual(payloads[0]['stage_status'], 'skipped')
+        self.assertEqual(progress['video']['analysis_provider'], 'pipeline')
         self.assertEqual(progress['video']['libtv_status'], 'error')
-        self.assertIn('连接 LibTV', progress['video']['ai_analysis'])
+        self.assertIn('LibTV 尚未登录', progress['video']['ai_analysis'])
         self.assertEqual(completed['failed_videos'], 1)
 
     def test_libtv_auth_start_returns_only_safe_browser_state(self):
@@ -97,7 +111,9 @@ class WebAppTests(unittest.TestCase):
         with patch.object(web_app, 'load_config', return_value=config):
             response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
 
-        payload = json.loads(response.get_data(as_text=True).strip())
+        payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+        self.assertEqual(payloads[0]['stage'], 'discovery')
+        payload = payloads[-1]
         self.assertEqual(payload['status'], 'error')
         self.assertIn('API23', payload['message'])
         self.assertIn('RAPIDAPI_KEY', payload['message'])

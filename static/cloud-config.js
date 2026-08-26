@@ -45,9 +45,9 @@
     minimax_model: "X-ViralX-MiniMax-Model",
   };
 
-  // The loopback Connector only needs evidence-collection settings. Never send
-  // model-provider credentials to localhost, and keep its strict CORS allowlist
-  // aligned with the headers used by the LibTV pipeline.
+  // The trusted loopback Connector owns the complete serial pipeline. The model
+  // credential goes only to 127.0.0.1, then directly to the selected provider;
+  // it is never sent to or persisted by EdgeOne.
   const CONNECTOR_REQUEST_HEADERS = new Set([
     "content-type",
     "x-viralx-analysis-mode",
@@ -56,6 +56,11 @@
     "x-viralx-tk-asr",
     "x-viralx-tk-language",
     "x-viralx-tk-timeout",
+    "x-viralx-model-provider",
+    "x-viralx-model-protocol",
+    "x-viralx-model-key",
+    "x-viralx-model-base-url",
+    "x-viralx-model-name",
   ]);
 
   function clean(input) {
@@ -109,7 +114,7 @@
     Object.entries(headers()).forEach(([name, value]) => requestHeaders.set(name, value));
     const hosted = document.documentElement.dataset.deployment === "edgeone";
     const useConnector = hosted
-      && (read().analysis_mode || "libtv") === "libtv"
+      && (read().analysis_mode || "pipeline") === "pipeline"
       && new URL(url, window.location.origin).pathname === "/api/analyze"
       && window.ViralXConnector;
     if (useConnector) {

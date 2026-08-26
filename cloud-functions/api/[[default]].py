@@ -59,7 +59,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-26-api23-status4-fallback-v2"
+VIRALX_RELEASE = "2026-08-26-serial-evidence-pipeline-v1"
 
 
 def _number(name, fallback, cast):
@@ -73,7 +73,7 @@ def load_config():
     """Build cloud config from server env plus session-only BYOK headers."""
     config = {
         "rapidapi_key": os.environ.get("RAPIDAPI_KEY", ""),
-        "analysis_mode": os.environ.get("ANALYSIS_MODE", "model"),
+        "analysis_mode": os.environ.get("ANALYSIS_MODE", "pipeline"),
         "tk_note_asr_backend": os.environ.get("TK_NOTE_ASR_BACKEND", "auto"),
         "tk_note_language": os.environ.get("TK_NOTE_LANGUAGE", "auto"),
         "tk_note_cookies_from_browser": "",
@@ -176,10 +176,11 @@ app = Flask(__name__)
 
 def _configured_state():
     config = load_config()
-    mode = str(config.get("analysis_mode") or "libtv").lower()
+    mode = str(config.get("analysis_mode") or "pipeline").lower()
     provider_ready = {
         "libtv": False,
         "model": model_is_ready(config),
+        "pipeline": False,
     }
     return config, mode, provider_ready
 
@@ -188,7 +189,7 @@ def _configured_state():
 def health():
     """Readiness without returning any credential values."""
     config, mode, provider_ready = _configured_state()
-    provider = config.get("model_provider", "openai") if mode == "model" else "libtv"
+    provider = config.get("model_provider", "openai")
     return jsonify({
         "status": "ok",
         "release": VIRALX_RELEASE,
@@ -242,10 +243,10 @@ def analyze():
                 }, ensure_ascii=False) + "\n"
                 return
 
-            if str(config.get("analysis_mode") or "libtv").lower() == "libtv":
+            if str(config.get("analysis_mode") or "pipeline").lower() == "pipeline":
                 yield json.dumps({
                     "status": "error",
-                    "message": "LibTV 现在使用本机 CLI 网页登录，EdgeOne 无法访问本地登录态；请选择模型 API，或在本地运行 ViralX。",
+                    "message": "完整链路需要本机 Connector 执行 TK Note 与 LibTV，再调用模型 API；请启动 Connector，或在本地运行 ViralX。",
                     "done": True,
                 }, ensure_ascii=False) + "\n"
                 return

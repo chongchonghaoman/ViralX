@@ -8,10 +8,10 @@
 - Environment: Production
 - Project: `viralx-overseas`
 - Project ID: `makers-9ujwycmolg3g`
-- Production deployment ID: `dpdqanva3z0u`
+- Production deployment ID: `dph56qmexoz9`
 - Public URL: `https://viralx.metrolabs.mobi`
 - Project host: `viralx-overseas-ikryg1n5.edgeone.dev` (preview protection may apply)
-- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dp2lf6tr73ho`
+- Production console: `https://console.cloud.tencent.com/edgeone/pages/project/makers-9ujwycmolg3g/deployment/dph56qmexoz9`
 
 The custom domain is active and serves the production deployment without a preview token. The project uses the overseas area because `metrolabs.mobi` does not have the ICP filing required for a China-mainland Pages custom domain.
 
@@ -31,22 +31,24 @@ Verified on the public custom domain:
 - `GET /static/connector.js` -> `200`, fixed loopback origin and `targetAddressSpace: "loopback"` present
 - `GET /api/health` -> `200 application/json`
 - `GET /api/health` -> `keyword_search_provider: api23`
+- `GET /api/health` -> `release: 2026-08-26-serial-evidence-pipeline-v1`
 - `/` and `/settings.html` include the production CSP (including the fixed loopback Connector origin), pinned CDN assets with SRI, and the `edgeone` deployment marker
 - The unconfigured home CTA routes to `/settings.html` instead of implying analysis is ready
 - Responsive WebP hero assets return `200 image/webp` with immutable caching
-- `POST /api/analyze` with a keyword and no key -> actionable API23 configuration error
+- Direct `POST /api/analyze` on EdgeOne -> actionable Connector recovery message; the browser does not pretend the cloud function can access local TK Note or LibTV
 - API23 keyword discovery uses `/api/search/video` with `/api/post/discover` as an empty-result fallback; `min_likes=0` is preserved instead of reverting to `5000`
 - API23 business status `4` on the primary Search route now triggers the Discover fallback; an error is returned only when both official routes fail
 - A production smoke request with invalid placeholder credentials returned an actionable API23 `403` without echoing either placeholder credential
 - `/api/health` continues to report the Cloud Function's own LibTV state as `local_only`; the browser separately probes the local Connector
-- Browser LibTV mode routes only `/api/analyze` to authenticated `http://127.0.0.1:57231/connector/v1/analyze`
+- Browser pipeline mode routes `/api/analyze` to authenticated `http://127.0.0.1:57231/connector/v1/analyze`
+- Direct cloud `/api/analyze` returns the explicit local Connector recovery message and never claims TK Note, LibTV, or final-model work ran at the edge
 - Production HTTPS page completed a real one-use pairing against the local Connector; the URL fragment was removed before the page reached its steady state
 - Production settings reported `runtime=edgeone`, Connector paired, and LibTV `disconnected`; the homepage independently reported `Connector 已配对 · 待登录 LibTV`
 - Connector returned `403` for an untrusted Origin and `204` for the trusted CORS/private-network preflight
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 
-The home page and settings page were checked from the live HTTPS domain in 1440×1000 desktop and 390×844 mobile Chromium. The live console had no JavaScript, CSP, CORS, mixed-content, or Local Network Access error; Chrome emitted only its non-blocking form-structure heuristic. LibTV readiness is the conjunction of browser loopback permission, a paired Connector session, and official CLI login; the Cloud Function's own `local_only` state is not shown as the final browser state.
+The home page and settings page were checked from the live HTTPS domain in 1440×1000 desktop and 390×844 mobile Chromium. The live console had no JavaScript, CSP, CORS, mixed-content, or Local Network Access error; Chrome emitted only its non-blocking form-structure heuristic. Full pipeline readiness is the conjunction of browser loopback permission, a paired Connector session, official CLI login, and a configured final model; the Cloud Function's own `local_only` state is not shown as the final browser state.
 
 ## Original protected deployment
 
@@ -70,17 +72,17 @@ The deployed site now includes an EdgeOne Python Cloud Function. The browser cal
 - `POST /api/generate_variants`
 - `POST /api/export-obsidian` (Obsidian URI or Markdown download)
 
-The online runtime intentionally does not expose local settings, cache-clear, or LibTV authentication APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage`, are attached to same-origin API requests over HTTPS, and disappear when the tab closes. The cloud function also supports unified `MODEL_*` EdgeOne environment variables. It never returns credential values, writes temporary assets under `/tmp`, limits a request to one video, and stays within EdgeOne's 120-second / 6MB function boundary.
+The online runtime intentionally does not expose local settings, cache-clear, or LibTV authentication APIs. `/settings.html` provides a browser-only BYOK configuration surface: OpenAI, Claude, Gemini, DeepSeek, OpenRouter and custom API choices live in the current tab's `sessionStorage` and disappear when the tab closes. Analysis credentials are sent only to the authenticated loopback Connector, not to EdgeOne. The cloud function remains a constrained public-safe surface for health, keywords, export, and an explicit recovery response when `/api/analyze` is called directly.
 
-The public page may also call the separately installed ViralX Connector at `http://127.0.0.1:57231`. This is not an EdgeOne proxy: the browser connects directly to loopback after its Local Network Access permission flow. Connector uses an exact Origin allowlist, CORS/PNA validation, a one-use fragment bootstrap, in-memory sessions, and one-video analysis. It exposes only status, pairing, LibTV login/status/logout, and analysis. It does not expose local settings, cache clearing, arbitrary filesystem export, or CLI tokens.
+The public page calls the separately installed ViralX Connector at `http://127.0.0.1:57231` for the complete pipeline. This is not an EdgeOne proxy: the browser connects directly to loopback after its Local Network Access permission flow. Connector uses an exact Origin allowlist, CORS/PNA validation, a one-use fragment bootstrap, in-memory sessions, and one-video analysis. It exposes only status, pairing, LibTV login/status/logout, and analysis. It does not expose local settings, cache clearing, arbitrary filesystem export, or CLI tokens. The model credential is accepted only on the authenticated analysis request and is forwarded directly to the selected provider without being persisted or echoed.
 
-The deployed environment currently has no project-level RapidAPI API23 or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23 and continues through TK Note. Model mode requires one provider selected in `/settings.html`. LibTV mode requires a paired local Connector and an official CLI browser login; the edge function still cannot access that login. Common model providers use fixed official endpoints; custom providers expose protocol, Base URL, key and model fields. EdgeOne accepts only public HTTPS custom endpoints and rejects private, loopback and link-local targets, while local Flask may connect to a user's own HTTP or intranet service.
+The deployed environment currently has no project-level RapidAPI API23 or model credential configured. Keyword discovery uses API23, while a directly pasted TikTok URL bypasses API23. Every task then runs TK Note collection, a LibTV multimodal shot-analysis node, evidence merge, and the selected model. This requires a paired local Connector, official CLI browser login, and one configured provider in `/settings.html`; the edge function cannot access that login or local source file. Common model providers use fixed endpoints; custom providers expose protocol, Base URL, key and model fields.
 
 The local Flask version remains the full-control runtime for:
 
 - Python and the Flask API routes;
 - TK Note / `yt-dlp` ingestion;
-- official LibTV CLI browser login, canvas creation, and source-video upload;
+- official LibTV CLI browser login, canvas creation, source-video upload, and multimodal shot-analysis node;
 - local video and analysis caches;
 - direct Obsidian filesystem export;
 - editable settings and destructive cache management;

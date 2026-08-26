@@ -43,10 +43,10 @@ class ViralXSkillClientTests(unittest.TestCase):
         headers = MODULE.credential_headers({
             "RAPIDAPI_KEY": "rapid-secret",
             "LIBTV_ACCESS_KEY": "libtv-secret",
-            "ANALYSIS_MODE": "libtv",
+            "ANALYSIS_MODE": "pipeline",
         })
         self.assertEqual(headers["X-ViralX-RapidAPI-Key"], "rapid-secret")
-        self.assertEqual(headers["X-ViralX-Analysis-Mode"], "libtv")
+        self.assertEqual(headers["X-ViralX-Analysis-Mode"], "pipeline")
         self.assertNotIn("X-ViralX-LibTV-Key", headers)
 
     @patch.object(MODULE, "urlopen")

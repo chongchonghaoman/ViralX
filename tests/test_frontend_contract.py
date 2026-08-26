@@ -51,8 +51,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn('X-ViralX-LibTV-Key', self.settings_js)
 
     def test_settings_progressive_disclosure_and_actions_are_preserved(self):
-        self.assertIn('data-mode-details="libtv"', self.settings)
-        self.assertIn('data-mode-details="model"', self.settings)
+        self.assertIn('value="pipeline"', self.settings)
+        self.assertIn('class="pipeline-contract"', self.settings)
+        self.assertIn('TK Note', self.settings)
+        self.assertIn('LibTV', self.settings)
+        self.assertIn('模型 API', self.settings)
         self.assertIn("function syncAnalysisMode()", self.settings_js)
         self.assertLess(self.settings.index('id="save-btn"'), self.settings.index('id="runtime"'))
         for button_id, button_type in (
@@ -81,16 +84,23 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("window.sessionStorage.setItem(TOKEN_KEY", self.connector_js)
         self.assertIn("window.history.replaceState", self.connector_js)
         self.assertNotIn("console.log", self.connector_js)
-        self.assertIn('(read().analysis_mode || "libtv") === "libtv"', self.cloud_config_js)
+        self.assertIn('(read().analysis_mode || "pipeline") === "pipeline"', self.cloud_config_js)
         self.assertIn("CONNECTOR_REQUEST_HEADERS", self.cloud_config_js)
         self.assertIn("headers: connectorHeaders", self.cloud_config_js)
         connector_header_block = self.cloud_config_js.split(
             "const CONNECTOR_REQUEST_HEADERS", 1
         )[1].split("])", 1)[0]
-        self.assertNotIn("x-viralx-model-key", connector_header_block.lower())
+        self.assertIn("x-viralx-model-key", connector_header_block.lower())
+        self.assertIn("x-viralx-model-base-url", connector_header_block.lower())
         self.assertIn("connector_missing:", self.settings_js)
         self.assertIn("pairing_required:", self.settings_js)
         self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)
+
+    def test_home_uses_explicit_five_stage_pipeline_events(self):
+        for stage in ("discovery", "collection", "shot-analysis", "evidence-merge", "final-analysis"):
+            self.assertIn(f'data-stage="{stage}"', self.home)
+        self.assertIn("function setPipelineStage", self.home_js)
+        self.assertIn("if (data.stage) setPipelineStage", self.home_js)
 
     def test_field_validation_targets_the_relevant_control(self):
         self.assertIn("class SettingsValidationError", self.settings_js)

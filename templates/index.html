@@ -79,7 +79,7 @@
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
             <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
-            <small class="source-help" id="source-help">视频直链不需要 API23；搜索主题需要 API23；网页可通过本机 Connector 连接 LibTV，或直接使用模型 API。</small>
+            <small class="source-help" id="source-help">搜索主题先由 API23 找视频；随后 TK Note 采集证据、LibTV 拉片，最后由模型 API 综合分析。视频直链只跳过第一步。</small>
           </div>
           <button class="btn btn-primary" id="analyze-btn" type="button">打开设置</button>
         </div>
@@ -114,13 +114,15 @@
           <div class="progress-track" role="progressbar" aria-label="分析进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div class="progress-bar" id="progress-bar"></div>
           </div>
-          <div class="pipeline-stages" aria-label="任务阶段">
-            <div class="stage" data-state="idle"><span>01</span><strong>保存证据</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-state="idle"><span>02</span><strong>拆解视听结构</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-state="idle"><span>03</span><strong>生成执行脚本</strong><small class="stage__state">等待</small></div>
+          <div class="pipeline-stages" aria-label="任务阶段" aria-live="polite">
+            <div class="stage" data-stage="discovery" data-state="idle"><span>01</span><strong>发现视频</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="collection" data-state="idle"><span>02</span><strong>TK Note 采集</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="shot-analysis" data-state="idle"><span>03</span><strong>LibTV 拉片</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="evidence-merge" data-state="idle"><span>04</span><strong>合并证据</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="final-analysis" data-state="idle"><span>05</span><strong>模型分析</strong><small class="stage__state">等待</small></div>
           </div>
           <div class="error" id="error" role="alert" tabindex="-1" hidden></div>
-          <div class="loading" id="loading" role="status" hidden>正在建立证据包并提交拉片。视频较长时可能需要几分钟。</div>
+          <div class="loading" id="loading" role="status" hidden>正在串联采集、拉片与模型分析。视频较长时可能需要几分钟。</div>
         </div>
       </section>
     </section>
@@ -172,10 +174,11 @@
         <h2 id="workflow-title">从来源，<br>一路走到执行。</h2>
       </header>
       <div class="workflow-list">
-        <article><span>01</span><h3>保存证据</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
-        <article><span>02</span><h3>拆解结构</h3><p>钩子、镜头、声音、节奏与转化动作逐段对齐。</p></article>
-        <article><span>03</span><h3>生成脚本</h3><p>把有效结构换成你的产品、卖点和拍摄场景。</p></article>
-        <article><span>04</span><h3>导出工作区</h3><p>报告、LibTV 画布与 Obsidian 笔记回到你的工作流。</p></article>
+        <article><span>01</span><h3>发现视频</h3><p>搜索主题由 API23 找候选；视频直链直接进入采集。</p></article>
+        <article><span>02</span><h3>TK Note 采集</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
+        <article><span>03</span><h3>LibTV 拉片</h3><p>镜头、声音、节奏、转场和转化节点逐段对齐。</p></article>
+        <article><span>04</span><h3>合并与终审</h3><p>两份证据进入所选模型，生成洞察和复刻脚本。</p></article>
+        <article><span>05</span><h3>导出工作区</h3><p>最终报告、LibTV 画布与 Obsidian 笔记回到你的工作流。</p></article>
       </div>
     </section>
 
@@ -196,7 +199,7 @@
           </div>
           <div class="empty-proof" aria-label="空状态下的输出说明">
             <span>INPUT</span><strong>视频链接 / 搜索主题</strong>
-            <span>PROCESS</span><strong>TK Note → LibTV</strong>
+            <span>PROCESS</span><strong>TK Note → LibTV → 模型</strong>
             <span>OUTPUT</span><strong>报告 / 脚本 / Obsidian</strong>
           </div>
         </section>
@@ -211,7 +214,7 @@
     </div>
     <div class="footer-index" aria-label="页脚索引">
       <div><span>产品</span><a href="#method">分析方法</a><a href="#evidence">证据时间线</a><a href="#results-title">拉片记录</a></div>
-      <div><span>工作流</span><a href="#analysis-studio">视频来源</a><a href="/settings">TK Note / LibTV</a><a href="/settings">本地设置</a></div>
+      <div><span>工作流</span><a href="#analysis-studio">视频来源</a><a href="/settings">完整分析链</a><a href="/settings">网页设置</a></div>
       <div><span>输出</span><p>拉片报告</p><p>复刻脚本</p><p>Obsidian 笔记</p></div>
     </div>
     <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>

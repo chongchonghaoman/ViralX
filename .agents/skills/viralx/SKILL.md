@@ -5,14 +5,15 @@ description: Call the ViralX web API from Codex to search TikTok topics, collect
 
 # ViralX
 
-Use ViralX as a remote web capability. The installed skill does not need the full ViralX repository and defaults to `https://viralx.metrolabs.mobi`.
+Use ViralX through its web API contract. The installed skill can probe the public site, but a complete analysis needs a local ViralX runtime because TK Note, source files, and the official LibTV CLI login live on the user's computer.
 
 ## Route the request
 
 - For a TikTok or Douyin URL, call `analyze` directly. API23 is not involved.
-- For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for API23 discovery; the discovered video then continues to the active analysis provider.
-- The production API used by this Skill supports model analysis only. Set `ANALYSIS_MODE=model`, choose `MODEL_PROVIDER` (`openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom`), and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
-- LibTV uses the official local CLI browser login. To use it from Codex, run ViralX locally, connect LibTV from `http://127.0.0.1:5001/settings`, and set `VIRALX_BASE_URL=http://127.0.0.1:5001`. The hosted website's Connector is a browser-only session bridge and is not an Agent credential. Never try to send a LibTV token or Connector session to EdgeOne.
+- For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for API23 discovery.
+- Every analysis follows one contract: API23 discovery when needed, TK Note collection, LibTV shot analysis, evidence merge, then the selected model API. There is no LibTV/model switch and no silent fallback.
+- Before `analyze`, run ViralX locally, connect LibTV from `http://127.0.0.1:5001/settings`, set `VIRALX_BASE_URL=http://127.0.0.1:5001`, choose `MODEL_PROVIDER`, and provide `MODEL_API_KEY` plus `MODEL_NAME`. Custom providers also use `MODEL_BASE_URL` and `MODEL_PROTOCOL`.
+- The hosted website's Connector is a browser-only session bridge and is not an Agent credential. Never send a LibTV token or Connector session to EdgeOne.
 - Use `health` before analysis when credential or service readiness is unknown.
 - Use `keywords` only when the user asks for existing or suggested topics.
 
@@ -35,8 +36,8 @@ Use `--output <path>` only when the user asks to save the NDJSON stream. Set `VI
 
 - Read credentials from environment variables only. Never request that a user paste a key into chat when they can set it locally.
 - Never pass secrets as CLI arguments, print request headers, or write credentials to output files.
-- A direct URL skips API23, but production still needs the selected model API key. Local LibTV needs a completed CLI browser login instead of a key.
-- A production keyword request normally needs both `RAPIDAPI_KEY` and the active model provider's key. Local LibTV keyword analysis needs `RAPIDAPI_KEY` plus the local CLI login.
-- The production runtime is limited to one video per request and temporary edge storage. Do not claim persistent local caches, browser cookies, arbitrary proxies, or direct filesystem Obsidian writes.
+- A direct URL skips API23 but still needs TK Note, a completed LibTV CLI browser login, and the selected model API key.
+- A keyword request needs those same dependencies plus `RAPIDAPI_KEY`.
+- The EdgeOne endpoint deliberately refuses full analysis because it cannot access local evidence or CLI state. Do not claim the public interface alone completed an analysis.
 
 Read [references/runtime.md](references/runtime.md) only for credential mapping, output contracts, installation, or troubleshooting.

@@ -12,7 +12,7 @@ class ModelProviderTests(unittest.TestCase):
             "openrouter_api_key": "legacy-key",
             "openrouter_model": "openrouter/auto",
         })
-        self.assertEqual(config["analysis_mode"], "model")
+        self.assertEqual(config["analysis_mode"], "pipeline")
         self.assertEqual(config["model_provider"], "openrouter")
         self.assertEqual(config["model_api_key"], "legacy-key")
         self.assertEqual(config["model_base_url"], "https://openrouter.ai/api/v1")
@@ -29,32 +29,29 @@ class ModelProviderTests(unittest.TestCase):
             validate_custom_base_url("http://127.0.0.1:11434/v1", allow_private=False)
 
     @patch("ai_analyzer.OpenAICompatibleAnalyzer")
-    def test_selected_model_provider_is_used_without_minimax_fallback(self, analyzer_class):
-        analyzer_class.return_value.analyze.return_value = "## 分析\n完成"
+    def test_selected_final_model_is_initialized_without_minimax_fallback(self, analyzer_class):
         analyzer = AIAnalyzer(
-            analysis_mode="model",
+            analysis_mode="pipeline",
             model_provider="openai",
             model_api_key="model-key",
             model_name="gpt-4.1-mini",
             api_key="legacy-minimax-key",
         )
-        result = analyzer.analyze_video_script_details({"video_id": "v1", "title": "demo"})
-        self.assertEqual(result["analysis_provider"], "openai")
-        self.assertEqual(result["model_status"], "completed")
-        analyzer_class.return_value.analyze.assert_called_once()
+        self.assertEqual(analyzer.model_provider, "openai")
+        self.assertIs(analyzer.model_analyzer, analyzer_class.return_value)
+        analyzer_class.assert_called_once()
 
     def test_missing_selected_model_key_does_not_fall_back_to_minimax(self):
         analyzer = AIAnalyzer(
-            analysis_mode="model",
+            analysis_mode="pipeline",
             model_provider="openai",
             model_api_key="",
             model_name="gpt-4.1-mini",
             api_key="legacy-minimax-key",
         )
-        result = analyzer.analyze_video_script_details({"video_id": "v1"})
-        self.assertEqual(result["analysis_provider"], "openai")
-        self.assertEqual(result["model_status"], "error")
-        self.assertIn("API Key", result["analysis"])
+        self.assertEqual(analyzer.model_provider, "openai")
+        self.assertIsNone(analyzer.model_analyzer)
+        self.assertNotEqual(analyzer.model_api_key, "legacy-minimax-key")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,15 @@
   const gsapReady = () => !reduceMotion && typeof window.gsap !== "undefined";
 
   const byId = (id) => document.getElementById(id);
+  const PIPELINE_STAGES = ["discovery", "collection", "shot-analysis", "evidence-merge", "final-analysis"];
+  const STAGE_STATE_LABELS = {
+    idle: "等待",
+    running: "运行",
+    complete: "完成",
+    completed: "完成",
+    skipped: "跳过",
+    error: "失败",
+  };
   const apiFetch = (url, options) => window.ViralXCloudConfig
     ? window.ViralXCloudConfig.apiFetch(url, options)
     : window.fetch(url, options);
@@ -168,26 +177,27 @@
     });
   }
 
-  function setPipelineState(percent) {
-    const stages = Array.from(document.querySelectorAll(".stage"));
-    const thresholds = [8, 45, 82];
-
-    stages.forEach((stage, index) => {
+  function resetPipelineStages() {
+    document.querySelectorAll(".stage[data-stage]").forEach((stage) => {
+      stage.dataset.state = "idle";
       const stateLabel = stage.querySelector(".stage__state");
-      let state = "idle";
-      let text = "等待";
-
-      if (percent >= 100 || percent >= (thresholds[index + 1] ?? 100)) {
-        state = "complete";
-        text = "完成";
-      } else if (percent >= thresholds[index]) {
-        state = "active";
-        text = "运行";
-      }
-
-      stage.dataset.state = state;
-      if (stateLabel) stateLabel.textContent = text;
+      if (stateLabel) stateLabel.textContent = STAGE_STATE_LABELS.idle;
     });
+  }
+
+  function setPipelineStage(stageName, state) {
+    if (!PIPELINE_STAGES.includes(stageName)) return;
+    const stage = document.querySelector(`.stage[data-stage="${stageName}"]`);
+    if (!stage) return;
+    const normalized = state === "completed" ? "complete" : (state || "running");
+    stage.dataset.state = normalized;
+    const stateLabel = stage.querySelector(".stage__state");
+    if (stateLabel) stateLabel.textContent = STAGE_STATE_LABELS[normalized] || normalized;
+  }
+
+  function failActiveStage() {
+    const active = document.querySelector('.stage[data-state="running"]');
+    if (active) setPipelineStage(active.dataset.stage, "error");
   }
 
   function updateProgress(label, percent) {
@@ -199,7 +209,6 @@
 
     progressLabel.textContent = label;
     progressBar.parentElement.setAttribute("aria-valuenow", String(Math.round(normalized * 100)));
-    setPipelineState(rawPercent);
 
     if (gsapReady()) {
       window.gsap.to(progressBar, {
@@ -270,20 +279,24 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       runtimeMode = data.runtime || "local";
-      const selectedMode = window.ViralXCloudConfig?.read().analysis_mode || "libtv";
-      if (runtimeMode === "edgeone" && selectedMode === "libtv") {
+      if (runtimeMode === "edgeone") {
+        const session = window.ViralXCloudConfig?.read() || {};
+        const modelReady = Boolean(session.model_api_key && session.model_name && session.model_base_url);
         try {
           await window.ViralXConnector?.ready();
           const connector = await window.ViralXConnector?.probe();
           const paired = Boolean(connector?.paired);
           const libtv = connector?.libtv || {};
-          runtimeReady = paired && Boolean(libtv.connected);
+          const libtvReady = Boolean(libtv.connected || libtv.state === "connected");
+          runtimeReady = paired && libtvReady && modelReady;
           chip.dataset.state = runtimeReady ? "ready" : "warning";
           label.textContent = runtimeReady
-            ? "本机 Connector · LibTV 就绪"
-            : paired
-              ? "Connector 已配对 · 待登录 LibTV"
-              : "Connector 已启动 · 待安全配对";
+            ? "完整链路就绪 · TK Note → LibTV → 模型"
+            : !paired
+              ? "Connector 已启动 · 待安全配对"
+              : !libtvReady
+                ? "Connector 已配对 · 待登录 LibTV"
+                : "LibTV 已连接 · 待配置模型 API";
         } catch (_) {
           runtimeReady = false;
           chip.dataset.state = "warning";
@@ -296,24 +309,12 @@
         return;
       }
       runtimeReady = Boolean(data.analysis_ready);
-      const providerKey = String(data.analysis_provider || "libtv").toLowerCase();
-      const provider = {
-        libtv: "LibTV",
-        gemini: "Gemini",
-        openrouter: "OpenRouter",
-        minimax: "MiniMax",
-      }[providerKey] || providerKey;
-
       if (runtimeReady) {
         chip.dataset.state = "ready";
-        label.textContent = runtimeMode === "edgeone"
-          ? `EdgeOne 云端分析 · ${provider} 就绪`
-          : `本地分析服务 · ${provider} 就绪`;
+        label.textContent = "本地完整链路就绪 · TK Note → LibTV → 模型";
       } else {
         chip.dataset.state = "warning";
-        label.textContent = runtimeMode === "edgeone"
-          ? `云端接口在线 · 待配置 ${provider}`
-          : `本地服务在线 · 待配置 ${provider}`;
+        label.textContent = "本地服务在线 · 待补齐 LibTV 与模型配置";
       }
       syncPrimaryActions();
     } catch (_) {
@@ -487,8 +488,9 @@
     const videoUrl = video.source_url || `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
     const analysisId = `analysis-${Date.now()}-${index}`;
     const remakeId = `remake-${Date.now()}-${index}`;
-    const provider = video.analysis_provider || "ai";
+    const provider = String(video.analysis_provider || "model").toLowerCase();
     const status = video.libtv_status || "";
+    const modelStatus = video.model_status || "";
     const acquisitionProvider = video.acquisition_provider || "";
     const acquisitionStatus = video.tk_note_status || video.video_ingest_status || "";
     const acquisitionLabel = acquisitionProvider === "tk-note"
@@ -496,15 +498,22 @@
       : acquisitionProvider
         ? `${acquisitionProvider} · 已采集`
         : "";
-    const providerLabel = provider === "libtv"
-      ? status === "pending" || status === "timeout"
+    const providerName = {
+      openai: "OpenAI",
+      anthropic: "Claude",
+      gemini: "Gemini",
+      deepseek: "DeepSeek",
+      openrouter: "OpenRouter",
+      custom: "自定义模型",
+    }[provider] || provider;
+    const libtvLabel = status === "error"
+      ? "LibTV · 拉片失败"
+      : status === "timeout" || status === "pending"
         ? "LibTV · 处理中"
-        : status === "uploaded"
-          ? "LibTV · 已上传画布"
-        : status === "error"
-          ? "LibTV · 失败"
-          : "LibTV · 已完成"
-      : provider;
+        : "LibTV · 拉片完成";
+    const providerLabel = modelStatus === "error"
+      ? `${providerName} · 分析失败`
+      : `${providerName} · 最终分析`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
 
     const card = document.createElement("article");
@@ -521,10 +530,11 @@
       </div>
       <div class="provider-row">
         ${acquisitionLabel ? `<span class="provider-badge ${escapeHtml(acquisitionStatus)}">${escapeHtml(acquisitionLabel)}</span>` : ""}
-        <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(providerLabel)}</span>
+        <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(libtvLabel)}</span>
+        <span class="provider-badge ${escapeHtml(modelStatus)}">${escapeHtml(providerLabel)}</span>
       </div>
       <div class="card-actions">
-        <button class="analysis-btn" type="button">打开拉片报告</button>
+        <button class="analysis-btn" type="button">打开最终分析</button>
         ${status === "error" ? runtimeMode === "edgeone" ? '<span class="project-link">云端配置未就绪</span>' : '<a class="project-link" href="/settings">检查 LibTV 设置</a>' : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
@@ -567,12 +577,9 @@
     setBusy(true);
     loading.hidden = false;
     results.replaceChildren();
+    resetPipelineStages();
     updateResultCount(0, "管线运行中");
-    const selectedMode = window.ViralXCloudConfig?.read().analysis_mode || "libtv";
-    updateProgress(
-      selectedMode === "libtv" ? "正在通过本机 Connector 准备视频证据" : "正在准备视频证据并提交模型分析",
-      8,
-    );
+    updateProgress("正在启动完整证据链", 2);
 
     const streamContainer = document.createElement("div");
     streamContainer.id = "stream-results";
@@ -585,18 +592,20 @@
     const handlePayload = (data) => {
       if (data.status === "error") {
         showInlineError(data.message || "分析没有完成，请检查来源后重试。");
-        updateProgress("分析未开始", 0);
+        failActiveStage();
+        updateProgress("分析链已中断", data.stage_progress || 0);
         updateResultCount(received, "管线失败");
         return;
       }
 
       if (data.status === "progress" && !data.done) {
-        received += 1;
-        const total = Math.max(data.total || 1, 1);
-        const percent = 18 + (data.current / total) * 72;
-        updateProgress(`正在拆解 ${data.current}/${total} 条视频`, percent);
-        streamContainer.appendChild(renderVideoCard(data.video, received - 1));
-        updateResultCount(received);
+        if (data.stage) setPipelineStage(data.stage, data.stage_status || "running");
+        updateProgress(data.stage_label || "证据链正在运行", data.stage_progress || 0);
+        if (data.video) {
+          received += 1;
+          streamContainer.appendChild(renderVideoCard(data.video, received - 1));
+          updateResultCount(received);
+        }
         return;
       }
 
@@ -608,7 +617,7 @@
         const completed = Math.max(total - failed - pending, 0);
         const summary = failed || pending
           ? `处理结束：${completed} 条完成，${pending} 条处理中，${failed} 条失败`
-          : `拉片完成，共 ${total} 条视频`;
+          : `完整分析完成，共 ${total} 条视频`;
         updateProgress(summary, 100);
         updateResultCount(received, summary);
       }
@@ -650,10 +659,9 @@
         text.split("\n").forEach(parseLine);
       }
     } catch (error) {
-      const hint = runtimeMode === "edgeone" && selectedMode === "libtv"
-        ? "确认本机 Connector 正在运行且 LibTV 已登录"
-        : runtimeMode === "edgeone"
-          ? "确认云端运行状态与服务配置"
+      failActiveStage();
+      const hint = runtimeMode === "edgeone"
+        ? "确认本机 Connector 正在运行、LibTV 已登录且模型 API 已配置"
         : "确认本地服务仍在运行";
       showInlineError(`分析没有完成：${error.message}。${hint}后重试。`);
       updateResultCount(received, "连接中断");
@@ -674,7 +682,7 @@
 
   function showAnalysis(id, provider = "ai") {
     const content = byId(id).textContent;
-    const title = provider === "libtv" ? "LibTV 画布交接" : provider === "remake" ? "复刻脚本" : "AI 深度拆解";
+    const title = provider === "remake" ? "复刻脚本" : "ViralX 最终分析";
     openModal(title, content);
   }
 
@@ -713,6 +721,7 @@
     syncPrimaryActions();
     checkRuntime();
     loadKeywords();
+    resetPipelineStages();
     updateProgress("等待视频来源", 0);
   });
 })();

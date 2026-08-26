@@ -45,14 +45,14 @@
     <header class="settings-hero" data-motion="reveal">
       <p class="section-label">系统配置 · VIRALX</p>
       <h1>把分析链，<br>配置清楚。</h1>
-      <p>网页通过只监听本机的 ViralX Connector 调用 TK Note 与 LibTV 官方 CLI。授权仍在 LibTV 官网完成，ViralX 不接触登录凭据。</p>
+      <p>一条固定分析链：先采集 TikTok 证据，再由 LibTV 拉片，最后把两部分证据交给你选择的模型完成判断。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
 
     <div class="settings-layout">
       <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
-        <a href="#runtime">运行模式</a>
+        <a href="#runtime">固定链路</a>
         <a href="#tk-note">TK Note</a>
         <a href="#libtv">LibTV</a>
         <a href="#models">模型 API</a>
@@ -74,17 +74,17 @@
         <section class="settings-section" id="runtime" data-motion="reveal">
           <div class="settings-section__head">
             <span>01</span>
-            <div><h2>运行模式</h2><p>决定新任务默认走哪条分析链，以及关键词检索的最低热度。</p></div>
+            <div><h2>固定分析链</h2><p>每个任务按同一顺序执行；这里配置检索阈值与各阶段所需能力。</p></div>
+          </div>
+          <input type="hidden" id="analysis_mode" name="analysis_mode" value="pipeline">
+          <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
+            <div><span>01</span><strong>API23</strong><small>发现候选视频</small></div>
+            <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
+            <div><span>03</span><strong>LibTV</strong><small>逐镜拉片</small></div>
+            <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
+            <div><span>05</span><strong>模型 API</strong><small>最终分析与脚本</small></div>
           </div>
           <div class="settings-grid">
-            <div class="settings-field">
-              <label for="analysis_mode">默认分析模式</label>
-              <select id="analysis_mode" name="analysis_mode">
-                <option value="libtv">LibTV 画布拉片 · 连接本机</option>
-                <option value="model">模型 API 分析</option>
-              </select>
-              <small class="field-note">EdgeOne 网页可通过本机 Connector 使用 LibTV；不启动 Connector 时可选模型 API。</small>
-            </div>
             <div class="settings-field">
               <label for="min_likes">关键词检索最低点赞数</label>
               <input type="number" id="min_likes" name="min_likes" min="0" step="100" placeholder="5000">
@@ -106,7 +106,7 @@
         <section class="settings-section" id="tk-note" data-motion="reveal">
           <div class="settings-section__head">
             <span>02</span>
-            <div><h2>TK Note 采集层</h2><p>管理 TikTok 下载、字幕、ASR、Cookie 与证据复用策略。</p></div>
+            <div><h2>TK Note 采集层</h2><p>下载原视频、平台元数据、评论、字幕与 ASR，形成第一份证据包。</p></div>
           </div>
           <div class="settings-grid">
             <div class="settings-field">
@@ -156,10 +156,10 @@
         <section class="settings-section" id="libtv" data-motion="reveal">
           <div class="settings-section__head">
             <span>03</span>
-            <div><h2>连接 LibTV</h2><p>网页先与本机 Connector 安全配对，再由官方 CLI 打开授权页；连接后创建画布并上传原视频。</p></div>
+            <div><h2>连接 LibTV</h2><p>接收 TK Note 下载的原视频，创建多模态拉片节点并返回镜头、钩子、节奏和转场证据。</p></div>
           </div>
-          <details class="section-disclosure" data-mode-details="libtv" open>
-            <summary><span><strong>网页登录连接</strong><small id="libtv-summary-state">正在检查</small></span></summary>
+          <details class="section-disclosure" open>
+            <summary><span><strong>网页登录连接 · 流水线必需</strong><small id="libtv-summary-state">正在检查</small></span></summary>
             <div class="section-disclosure__body">
               <div class="libtv-connect-panel" id="libtv-connection" data-connection-state="starting" aria-live="polite">
                 <div class="libtv-connect-panel__status">
@@ -176,7 +176,7 @@
                   <a class="refresh-link" id="connector-guide-link" href="https://github.com/chongchonghaoman/ViralX#在网页使用本机-libtv" target="_blank" rel="noopener noreferrer" hidden>启动 Connector</a>
                   <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
                 </div>
-                <p class="libtv-privacy">Connector 只监听 127.0.0.1，并只接受 viralx.metrolabs.mobi。配对密钥保存在本机内存与当前标签页；LibTV token 仍只由官方 CLI 保存。</p>
+                <p class="libtv-privacy">Connector 只监听 127.0.0.1，并只接受 viralx.metrolabs.mobi。配对密钥保存在本机内存与当前标签页；LibTV token 仍只由官方 CLI 保存。每条任务会在 LibTV 生成拉片证据，而不是只上传视频。</p>
               </div>
             </div>
           </details>
@@ -185,14 +185,14 @@
         <section class="settings-section" id="models" data-motion="reveal">
           <div class="settings-section__head">
             <span>04</span>
-            <div><h2>模型 API</h2><p>先选服务商，再填写一组 Key 与模型名。切换服务商时会带入官方接口地址，你仍可以修改模型。</p></div>
+            <div><h2>模型 API</h2><p>读取合并后的 TK Note 与 LibTV 证据，完成最终洞察、爆款结构与可执行复刻脚本。</p></div>
           </div>
-          <details class="section-disclosure" data-mode-details="model">
-            <summary><span><strong>模型服务商与凭据</strong><small>模型分析链</small></span></summary>
+          <details class="section-disclosure" open>
+            <summary><span><strong>模型服务商与凭据 · 流水线必需</strong><small>最终综合分析</small></span></summary>
             <div class="section-disclosure__body">
           <fieldset class="provider-picker" aria-describedby="provider-help">
             <legend>选择模型服务商</legend>
-            <p class="field-note" id="provider-help">这里只决定分析模型；API23 搜索、TK Note 采集和 LibTV 拉片保持独立。</p>
+            <p class="field-note" id="provider-help">模型不直接替代采集或拉片；它只在证据合并完成后做最终综合判断。</p>
             <div class="provider-grid">
               <label class="provider-option">
                 <input type="radio" name="model_provider" value="openai">
@@ -231,7 +231,7 @@
               <div class="settings-field settings-field--wide">
                 <label for="model_api_key">API Key</label>
                 <input type="password" id="model_api_key" name="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴当前服务商的 API Key">
-                <small class="field-note" id="model-key-note">网页端只保存在当前标签页；本地 Flask 写入本机 config.json。</small>
+                <small class="field-note" id="model-key-note">网页端只保存在当前标签页，并经安全配对发送给本机 Connector；Connector 只把它发往所选模型服务，不写入 EdgeOne 或日志。本地 Flask 写入本机 config.json。</small>
               </div>
               <div class="settings-field settings-field--wide">
                 <label for="model_name">模型名称</label>
@@ -252,7 +252,7 @@
                 <small class="field-note" id="model-url-note">填 API 根地址，不要包含 /chat/completions 或查询参数。</small>
               </div>
             </div>
-            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。云端自定义地址仅允许公网 HTTPS；本地 Flask 可连接你自己的 HTTP / 内网服务。</p>
+            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。EdgeOne 不代理分析请求；本机 Connector 完成 TK Note、LibTV、证据合并，再直连你选择的模型服务。</p>
           </div>
             </div>
           </details>
@@ -282,7 +282,7 @@
       <p>配置留在本地；证据留在你的工作区。</p>
     </div>
     <div class="footer-index" aria-label="设置页索引">
-      <div><span>运行</span><a href="#runtime">分析模式</a><a href="#tk-note">TK Note</a><a href="#libtv">LibTV</a></div>
+      <div><span>运行</span><a href="#runtime">固定链路</a><a href="#tk-note">TK Note</a><a href="#libtv">LibTV</a></div>
       <div><span>模型</span><a href="#models">常用服务商</a><a href="#models">自定义 API</a><a href="#models">会话密钥</a></div>
       <div><span>返回</span><a href="/">分析首页</a><p>本地 Flask</p><p>静态 EdgeOne 展示</p></div>
     </div>

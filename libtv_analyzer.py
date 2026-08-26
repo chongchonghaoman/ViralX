@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import threading
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 LIBTV_CLI_PAGE = "https://www.liblib.tv/cli"
 LIBTV_CANVAS_URL = "https://www.liblib.tv/canvas?projectId={}"
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+DEFAULT_SHOT_MODEL = "GVLM 3.1 Flash"
 _LOGIN_URL_RE = re.compile(r"https://www\.liblib\.tv/[^\s]+callback_url=[^\s]+")
 
 
@@ -34,6 +35,7 @@ class LibTVError(RuntimeError):
 class LibTVAnalysisResult:
     analysis: str
     status: str
+    evidence: dict[str, Any] = field(default_factory=dict)
     session_id: str = ""
     project_uuid: str = ""
     project_url: str = ""
@@ -340,8 +342,33 @@ def _find_project_uuid(value: Any) -> str:
     return ""
 
 
+def _extract_generated_text(value: Any) -> str:
+    """Extract generated text from the CLI's nested node response."""
+    if isinstance(value, dict):
+        for key in ("content", "output", "result", "answer", "markdown", "text"):
+            if key not in value:
+                continue
+            found = _extract_generated_text(value[key])
+            if found:
+                return found
+        for key in ("data", "node", "nodes", "task", "response"):
+            if key not in value:
+                continue
+            found = _extract_generated_text(value[key])
+            if found:
+                return found
+    elif isinstance(value, list):
+        parts = [_extract_generated_text(item) for item in value]
+        return "\n".join(part for part in parts if part).strip()
+    elif isinstance(value, str):
+        text = value.strip()
+        if text and not text.startswith(("http://", "https://")):
+            return text[:30000]
+    return ""
+
+
 class LibTVAnalyzer:
-    """Create a LibTV canvas and upload the collected source video via CLI."""
+    """Create a LibTV canvas, upload the source, and run multimodal shot analysis."""
 
     def __init__(
         self,
@@ -350,10 +377,12 @@ class LibTVAnalyzer:
         auth_checker: Optional[Callable[[], bool]] = None,
         cwd: Path | str | None = None,
         timeout: float = 180,
+        shot_model: str = "",
     ):
         self.cli_path = cli_path or find_libtv_cli()
         self.cwd = Path(cwd or Path(__file__).parent)
         self.timeout = max(15.0, float(timeout or 180))
+        self.shot_model = str(shot_model or os.environ.get("LIBTV_SHOT_MODEL") or DEFAULT_SHOT_MODEL).strip()
         self.runner = runner
         self.auth_checker = auth_checker or (lambda: libtv_authenticated(self.cli_path))
 
@@ -434,14 +463,61 @@ class LibTVAnalyzer:
             ],
             self.timeout,
         )
-        project_url = LIBTV_CANVAS_URL.format(project_uuid)
-        analysis = (
-            f"视频已上传到 LibTV 画布。请打开画布继续“{user_request}”；"
-            "ViralX 不会读取或回显你的 LibTV 登录凭据。"
+        shot_prompt = f"""你是 ViralX 的专业短视频拉片分析师。请直接分析左侧原视频，输出可供下游模型引用的证据，不要生成新视频，也不要编造不可见信息。
+
+请使用 Markdown 严格输出：
+1. 基础时长与内容概览；
+2. 按时间码拆分镜头，每个镜头写明画面、动作、景别、机位、转场、字幕、声音和商品展示；
+3. 前 3 秒钩子、节奏变化、情绪曲线与转化节点；
+4. 明确区分“画面可观察事实”和“分析推断”；
+5. 最后列出可被最终模型直接引用的逐条证据。
+
+用户任务：{user_request}"""
+        analysis_node = "ViralX 专业拉片"
+        generated = self._run_json(
+            [
+                "node",
+                "--project",
+                project_uuid,
+                "--x",
+                "520",
+                "--y",
+                "0",
+                "create",
+                analysis_node,
+                "--type",
+                "text",
+                "--left",
+                "ViralX 原视频",
+                "--prompt",
+                shot_prompt,
+                "--set",
+                f"model={self.shot_model}",
+                "--run",
+            ],
+            max(self.timeout, 300),
         )
+        shot_evidence = _extract_generated_text(generated)
+        if not shot_evidence:
+            inspected = self._run_json(
+                ["node", "--project", project_uuid, analysis_node],
+                min(self.timeout, 45),
+            )
+            shot_evidence = _extract_generated_text(inspected)
+        if not shot_evidence:
+            raise LibTVError("LibTV 已创建画布，但拉片节点没有返回可读取的分析证据。")
+
+        project_url = LIBTV_CANVAS_URL.format(project_uuid)
         return LibTVAnalysisResult(
-            analysis=analysis,
-            status="uploaded",
+            analysis=shot_evidence,
+            status="completed",
+            evidence={
+                "provider": "libtv",
+                "model": self.shot_model,
+                "shot_analysis": shot_evidence,
+                "project_uuid": project_uuid,
+                "project_url": project_url,
+            },
             project_uuid=project_uuid,
             project_url=project_url,
             result_urls=[project_url],
