@@ -1,0 +1,5 @@
+interface:
+  display_name: "ViralX Agent"
+  short_description: "Analyze TikTok evidence with the active Codex model"
+  brand_color: "#4DC5E5"
+  default_prompt: "Use $viralx-agent to analyze this TikTok video with local evidence and the current Codex model."

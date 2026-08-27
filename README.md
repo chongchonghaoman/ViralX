@@ -12,7 +12,8 @@
 <p align="center">
   <a href="https://viralx.metrolabs.mobi"><img alt="Live website" src="https://img.shields.io/badge/Live-viralx.metrolabs.mobi-4DC5E5?style=flat-square"></a>
   <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=main&style=flat-square&label=tests"></a>
-  <a href=".agents/skills/viralx"><img alt="Codex Skill" src="https://img.shields.io/badge/Codex-Skill-4DC5E5?style=flat-square"></a>
+  <a href=".agents/skills/viralx-agent"><img alt="Agent-native Skill" src="https://img.shields.io/badge/Codex-Agent--native-4DC5E5?style=flat-square"></a>
+  <a href=".agents/skills/viralx"><img alt="Web API Skill" src="https://img.shields.io/badge/Codex-Web_API-111111?style=flat-square"></a>
   <img alt="Web product" src="https://img.shields.io/badge/Product-Web-111111?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10--3.12-3776AB?style=flat-square">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-111111?style=flat-square"></a>
@@ -25,13 +26,13 @@
   <a href="DEPLOYMENT.md">部署说明</a>
 </p>
 
-<p align="center"><sub>2026-08-27 · Shot evidence pipeline</sub></p>
+<p align="center"><sub>2026-08-27 · Agent-native + shot evidence pipeline</sub></p>
 
 ![ViralX 网页首页](docs/assets/viralx-homepage.png)
 
 ## ViralX 是什么
 
-ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频链接直接丢给大模型，而是先确认来源、下载真实原片、生成可核验的逐镜事实，再让最终模型做综合判断。
+ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作台和 Agent-native Skill。它不是把视频链接直接丢给大模型，而是先确认来源、下载真实原片、生成可核验的视觉与文本证据，再让最终模型做综合判断。
 
 ```text
 关键词 ─→ TikTok Scraper7 ─┐
@@ -45,7 +46,7 @@ ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频�
                             最终模型 API
 ```
 
-产品只有一种交付形态：**Web**。生产界面部署在 EdgeOne；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的工作由本机 Connector 执行。Connector 是最小安全桥，不是另一套桌面客户端。
+面向人的产品界面仍然只有一种：**Web**。生产界面部署在 EdgeOne；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的工作由本机 Connector 执行。Connector 是最小安全桥，不是另一套桌面客户端。仓库另外提供 **Agent-native Skill**：它没有第二套界面，而是让 Codex 等 Agent 直接运行同一套证据优先方法。
 
 ## 本次重点更新：第一原理重构
 
@@ -65,8 +66,9 @@ ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频�
 - **Connector 自动接管旧实例**：从 `1.2.0` 起，再次启动 Connector 会先让 57231 上已经确认的 ViralX 实例优雅退出，等待端口释放后启动当前版本并重新打开配对页；不会结束占用该端口的非 ViralX 程序。
 - **TK Note 下载链修复**：Connector `1.3.0` 会把当前标签页选择的浏览器 Cookie 来源、显式代理与 120–7200 秒等待上限传给 TK Note；未手填代理时自动沿用 Windows 系统代理。`curl-cffi` 为 yt-dlp 提供 Chrome 网络指纹，解决“Scraper7 找到候选、TK Note 却全部停在网页响应”的故障。
 - **逐视频脱敏日志**：每条候选在 `video_cache/tk-note/<video_id>/task.jsonl` 记录开始、下载进度、完成或精确失败原因。日志只保存公开帖子 URL、阶段与状态；不保存 Cookie、代理地址/凭据、请求头或签名媒体 URL。采集失败原因也会直接显示在结果卡片中。
+- **新增 Agent-native Skill**：`$viralx-agent` 只在本机调用 TK Note、FFmpeg 与证据校验脚本；当前 Codex 会话里的 GPT 直接检查带时间戳的 JPEG 帧并完成终审，不再要求用户额外购买 OpenAI、Qwen、Gemini、DeepSeek 或其他模型 API。原有 `$viralx` Web API Skill 完整保留。
 
-原有能力全部保留：TikTok Scraper7 搜索、`picture light` 与 `light painting` 品类消歧、TK Note、共享 Whisper / Qwen3-ASR、LibTV 官方网页登录、Obsidian 导出、本地 Flask、EdgeOne 页面、模型预设、自定义 API 和 Codex Skill。
+原有能力全部保留：TikTok Scraper7 搜索、`picture light` 与 `light painting` 品类消歧、TK Note、共享 Whisper / Qwen3-ASR、LibTV 官方网页登录、Obsidian 导出、本地 Flask、EdgeOne 页面、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
 
 ![ViralX 网页设置](docs/assets/viralx-settings.png)
 
@@ -97,6 +99,7 @@ ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频�
 | 粘贴单条 TikTok / 抖音链接 | 本机 Connector、可用镜头引擎、最终模型 API | LibTV 备用、RapidAPI 不需要 |
 | 输入关键词搜索并分析 | 上述配置 + TikTok Scraper7 `RAPIDAPI_KEY` | LibTV 备用 |
 | `只采集` 模式 | 本机 Connector + TK Note | 镜头模型和最终模型都不调用 |
+| Codex 中用 `$viralx-agent` 分析直链 / 本地 MP4 | Codex 当前模型、Python、FFmpeg；直链再需要 TK Note | **不需要独立模型 API**；关键词发现服务另算 |
 
 ShotLoom Core 需要一个支持 OpenAI Chat Completions 图片输入的视觉模型。可以：
 
@@ -122,28 +125,59 @@ DeepSeek 当前预设是纯文本最终模型，不能直接承担关键帧识�
 
 ## 在 Codex 中直接调用 ViralX
 
-仓库继续提供可安装的 Codex Skill。把下面的 GitHub 地址发给另一台电脑上的 Codex：
+仓库提供两个职责不同、可同时安装的 Codex Skill：
+
+| Skill | 适合谁 | 模型在哪里运行 | 需要独立模型 API Key |
+| --- | --- | --- | --- |
+| [`$viralx-agent`](.agents/skills/viralx-agent) | 已能使用 Codex、但没有单独模型 API Key 的人 | 当前 Codex 会话 | **不需要** |
+| [`$viralx`](.agents/skills/viralx) | 需要调用 ViralX Web / Connector 流水线的人 | Web 配置的镜头模型和最终模型 | 完整分析需要 |
+
+### 推荐：Agent-native，无额外模型 API
+
+把下面的 GitHub 地址发给另一台电脑上的 Codex：
 
 ```text
-https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx
+https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx-agent
 ```
 
 对 Codex 说：
 
 ```text
-请安装这个仓库的 .agents/skills/viralx，然后用 $viralx 分析：
+请安装这个仓库的 .agents/skills/viralx-agent 和 .agents/skills/tk-note，
+然后用 $viralx-agent 分析：
 https://www.tiktok.com/@creator/video/1234567890123456789
 ```
 
-或使用内置安装脚本：
+或使用内置安装脚本一次装好分析 skill 与取证依赖：
 
 ```powershell
 python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
   --repo chongchonghaoman/ViralX `
-  --path .agents/skills/viralx
+  --path .agents/skills/viralx-agent .agents/skills/tk-note
 ```
 
-Skill 调用 ViralX 的 Web API 合同。全功能分析仍需要目标电脑运行本地 Flask，或让网页通过 Connector 连接这台电脑；EdgeOne 不会伪装拥有目标电脑的原片、OpenCV 或 LibTV 登录态。凭据应写入目标电脑环境变量或本地设置，不要发送到聊天。
+`$viralx-agent` 的本地脚本只负责 TK Note 取证、字幕 / 本地 ASR、原片哈希、FFmpeg 抽帧和报告引用校验；它不读取模型 Key，也不调用 `/chat/completions`。当前 Codex 模型按时间顺序检查生成的本地图片，再输出带 `[FRAME:Fxxx@时间]`、`[META:*]`、`[TK:transcript]` 的报告。也就是说，它使用的是用户已经登录的 Codex 模型能力，不会额外产生模型 API 账单，但仍受用户 Codex 套餐与使用额度限制。
+
+这条边界必须说清楚：Agent 处理的是从原片提取的时间戳帧、字幕和元数据，不宣称“原生连续观看视频”。直接 TikTok URL 或本地 MP4 不需要 RapidAPI；如果用户只给关键词，候选视频发现仍可能需要网页搜索或 TikTok Scraper7，但后续分析不需要模型 API。
+
+### 保留：Web API Skill
+
+原有 `$viralx` 继续调用 ViralX Web API 合同。全功能 Web 分析仍需要目标电脑运行本地 Flask / Connector，并配置相应镜头与最终模型；EdgeOne 不会伪装拥有目标电脑的原片、OpenCV 或登录态。安装路径是 `.agents/skills/viralx`。
+
+Agent-native 流程：
+
+```text
+TikTok 直链 ─→ TK Note 下载原片、元数据、字幕 / 本地 ASR ─┐
+本地 MP4 ────────────────────────────────────────────────┤
+                                                            ↓
+                                            FFmpeg 时间戳抽帧 + SHA-256
+                                                            ↓
+                                     当前 Codex GPT 逐帧观察并区分事实/推断
+                                                            ↓
+                                     引用校验器拦截虚构帧、错时间和伪评论
+                                                            ↓
+                                              本地证据报告 `report.md`
+```
 
 ## 在线使用
 
@@ -269,7 +303,9 @@ Browser / EdgeOne
 
 ```text
 ViralX/
-├── .agents/skills/viralx/          Codex 可安装 Skill
+├── .agents/skills/viralx-agent/    Codex 原生分析 Skill（无独立模型 API）
+├── .agents/skills/viralx/          ViralX Web API Skill
+├── .agents/skills/tk-note/         原片、字幕与平台证据采集 Skill
 ├── templates/                      首页与设置页
 ├── static/                         设计 token、GSAP 动效与交互
 ├── cloud-functions/                EdgeOne 公开安全 API
