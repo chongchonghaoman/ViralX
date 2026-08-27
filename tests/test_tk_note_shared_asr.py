@@ -28,6 +28,37 @@ with mock.patch.dict(sys.modules, {"_common": COMMON}):
 
 
 class SharedWhisperEnvironmentTests(unittest.TestCase):
+    def test_cli_download_uses_browser_impersonation_when_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            args = type("Args", (), {
+                "cookies_from_browser": None,
+                "proxy": "http://127.0.0.1:7892",
+            })()
+            completed = subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=json.dumps({"id": "7480000000000000001"}) + "\n",
+                stderr="",
+            )
+            with (
+                mock.patch.object(EXTRACT.shutil, "which", return_value="yt-dlp"),
+                mock.patch.object(EXTRACT, "command_exists", return_value=False),
+                mock.patch.object(EXTRACT, "browser_impersonation_available", return_value=True),
+                mock.patch.object(EXTRACT.subprocess, "run", return_value=completed) as run,
+            ):
+                payload = EXTRACT.download_with_cli(
+                    "https://www.tiktok.com/@creator/video/7480000000000000001",
+                    out_dir,
+                    args,
+                )
+
+            command = run.call_args.args[0]
+            self.assertEqual(payload["id"], "7480000000000000001")
+            self.assertIn("--impersonate", command)
+            self.assertEqual(command[command.index("--impersonate") + 1], "chrome")
+            self.assertIn("--proxy", command)
+
     def test_explicit_whisper_python_takes_precedence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -13,7 +13,7 @@
   const DEFAULTS = {
     rapidapi_key: "", analysis_mode: "pipeline", libtv_concurrency: 1, tk_note_asr_backend: "auto",
     tk_note_language: "auto", tk_note_cookies_from_browser: "", tk_note_proxy: "",
-    tk_note_timeout: 90, video_cache_dir: "./video_cache", model_provider: "openai",
+    tk_note_timeout: 1800, video_cache_dir: "./video_cache", model_provider: "openai",
     model_protocol: "openai", model_api_key: "", model_base_url: "https://api.openai.com/v1",
     model_name: "gpt-4.1-mini", gemini_api_key: "", gemini_model: "gemini-3.7-flash", openrouter_api_key: "",
     shot_engine: "auto", shot_model_source: "inherit", shot_model_api_key: "",
@@ -202,6 +202,15 @@
     const parsedMinLikes = Number.parseInt(byId("min_likes").value, 10);
     settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
+    if (settings.tk_note_proxy) {
+      let proxy;
+      try { proxy = new URL(settings.tk_note_proxy); }
+      catch (_) { throw new SettingsValidationError("tk_note_proxy", "本地代理不是有效的完整地址"); }
+      const supported = ["http:", "https:", "socks4:", "socks4a:", "socks5:", "socks5h:"];
+      if (!supported.includes(proxy.protocol) || !proxy.hostname || proxy.search || proxy.hash) {
+        throw new SettingsValidationError("tk_note_proxy", "代理需使用 HTTP(S) 或 SOCKS 地址，且不能包含查询参数或锚点");
+      }
+    }
     if (settings.shot_engine !== "skip" && !settings.model_api_key) throw new SettingsValidationError("model_api_key", "完整分析链需要填写最终模型 API Key");
     if (settings.shot_engine !== "skip" && !settings.model_name) throw new SettingsValidationError("model_name", "完整分析链需要填写最终模型名称");
     if (settings.shot_engine !== "skip" && selectedProvider === "custom") {
@@ -344,8 +353,8 @@
     byId("save-btn").textContent = "保存到当前会话";
     byId("reset-btn").textContent = "恢复会话值";
     byId("clear-session-btn").hidden = false;
-    byId("tk_note_timeout").min = "30";
-    byId("tk_note_timeout").max = "90";
+    byId("tk_note_timeout").min = "120";
+    byId("tk_note_timeout").max = "7200";
   }
 
   function renderLibTVState(state = {}) {
@@ -581,7 +590,7 @@
       clearFieldErrors();
       collectSettings();
       if (runtimeMode === "edgeone") {
-        settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 30), 90);
+        settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 120), 7200);
         window.ViralXCloudConfig.write(settings);
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
         updateRuntimeNote(healthResponse.ok ? await healthResponse.json() : {});

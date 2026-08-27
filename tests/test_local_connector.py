@@ -50,7 +50,7 @@ class LocalConnectorTests(unittest.TestCase):
             headers={
                 "Origin": TRUSTED_ORIGIN,
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token, x-viralx-model-key, x-viralx-model-name, x-viralx-shot-engine, x-viralx-shot-model-key",
+                "Access-Control-Request-Headers": "content-type, x-viralx-connector-token, x-viralx-model-key, x-viralx-model-name, x-viralx-shot-engine, x-viralx-shot-model-key, x-viralx-tk-cookies-browser, x-viralx-tk-proxy",
                 "Access-Control-Request-Private-Network": "true",
             },
         )
@@ -175,6 +175,8 @@ class LocalConnectorTests(unittest.TestCase):
                     "X-ViralX-Analysis-Mode": "model",
                     "X-ViralX-RapidAPI-Key": "session-search-key",
                     "X-ViralX-TK-ASR": "auto",
+                    "X-ViralX-TK-Cookies-Browser": "edge",
+                    "X-ViralX-TK-Proxy": "socks5://127.0.0.1:7890",
                     "X-ViralX-TK-Timeout": "180",
                     "X-ViralX-Model-Provider": "openai",
                     "X-ViralX-Model-Protocol": "openai",
@@ -194,12 +196,29 @@ class LocalConnectorTests(unittest.TestCase):
         self.assertEqual(captured["max_videos"], local_connector.web_app.MAX_ANALYZE_VIDEOS)
         self.assertEqual(captured["config_override"]["analysis_mode"], "pipeline")
         self.assertEqual(captured["config_override"]["rapidapi_key"], "session-search-key")
+        self.assertEqual(captured["config_override"]["tk_note_cookies_from_browser"], "edge")
+        self.assertEqual(captured["config_override"]["tk_note_proxy"], "socks5://127.0.0.1:7890")
         self.assertEqual(captured["config_override"]["tk_note_timeout"], 180)
         self.assertEqual(captured["config_override"]["model_api_key"], "session-model-key")
         self.assertEqual(captured["config_override"]["model_name"], "gpt-4.1-mini")
         self.assertEqual(captured["config_override"]["shot_engine"], "shotloom")
         self.assertEqual(captured["config_override"]["shot_model_api_key"], "session-shot-key")
         self.assertEqual(captured["config_override"]["shot_scene_threshold"], 31)
+
+    def test_connector_rejects_invalid_tk_note_proxy_without_echoing_it(self):
+        _, token = self.pair()
+        response = self.client.post(
+            "/connector/v1/analyze",
+            json={"keyword": "picture light"},
+            headers={
+                **self.authenticated_headers(token),
+                "X-ViralX-TK-Proxy": "file:///private/proxy-secret",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertIn("代理", payload["message"])
+        self.assertNotIn("proxy-secret", json.dumps(payload))
 
 
 if __name__ == "__main__":

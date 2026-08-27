@@ -14,16 +14,26 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse, urlsplit, urlunsplit
+from urllib.request import getproxies
+
+from tiktok_viral_analyzer import safe_error_message
 
 
 TIKTOK_HOSTS = {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vt.tiktok.com", "vm.tiktok.com"}
+LOG_URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 
 
 class VideoIngestError(RuntimeError):
     """Stable acquisition error safe to return to the local ViralX UI."""
+
+    def __init__(self, message: str, *, code: str = "collection_failed", task_log: str = ""):
+        super().__init__(message)
+        self.code = code
+        self.task_log = task_log
 
 
 def is_tiktok_url(value: str) -> bool:
@@ -39,6 +49,61 @@ def _safe_cache_key(value: str) -> str:
     return cleaned or "video"
 
 
+def _safe_source_url(value: str) -> str:
+    """Keep a public page URL while dropping query strings and signed-media data."""
+    try:
+        parsed = urlsplit(str(value or ""))
+    except ValueError:
+        return ""
+    host = (parsed.hostname or "").lower()
+    if not (host in TIKTOK_HOSTS or host.endswith(".tiktok.com")):
+        return ""
+    return urlunsplit((parsed.scheme or "https", parsed.netloc, parsed.path, "", ""))
+
+
+def _proxy_secret_parts(value: str) -> List[str]:
+    if not value:
+        return []
+    parts = [value]
+    try:
+        parsed = urlsplit(value)
+        parts.extend(filter(None, (unquote(parsed.username or ""), unquote(parsed.password or ""))))
+    except ValueError:
+        pass
+    return parts
+
+
+def _redact_log_urls(value: str) -> str:
+    """Keep canonical TikTok page URLs only; remove signed/CDN/request URLs."""
+    def replace(match: re.Match) -> str:
+        candidate = match.group(0).rstrip(".,;:)]}")
+        suffix = match.group(0)[len(candidate):]
+        safe_page = _safe_source_url(candidate)
+        return (safe_page or "[url redacted]") + suffix
+
+    return LOG_URL_PATTERN.sub(replace, value)
+
+
+def _system_proxy() -> str:
+    """Honor the user's Windows/system proxy when no explicit proxy is supplied."""
+    try:
+        proxies = getproxies()
+    except (OSError, ValueError):
+        return ""
+    for key in ("https", "http", "all"):
+        candidate = str(proxies.get(key) or "").strip()
+        if not candidate:
+            continue
+        try:
+            parsed = urlsplit(candidate)
+            _ = parsed.port
+        except ValueError:
+            continue
+        if parsed.scheme.lower() in {"http", "https", "socks4", "socks4a", "socks5", "socks5h"} and parsed.hostname:
+            return candidate
+    return ""
+
+
 @dataclass
 class VideoAsset:
     provider: str
@@ -50,6 +115,7 @@ class VideoAsset:
     transcript_path: str = ""
     transcript_source: str = ""
     asset_manifest: str = ""
+    task_log: str = ""
     warnings: List[str] = field(default_factory=list)
     blocked_stages: List[str] = field(default_factory=list)
     progress_events: List[Dict[str, object]] = field(default_factory=list)
@@ -62,6 +128,7 @@ class VideoAsset:
             f"{prefix}_status": self.status,
             f"{prefix}_transcript_source": self.transcript_source,
             f"{prefix}_asset_manifest": self.asset_manifest,
+            f"{prefix}_task_log": self.task_log,
             f"{prefix}_warnings": self.warnings,
             f"{prefix}_blocked_stages": self.blocked_stages,
             f"{prefix}_reused": self.status == "reused",
@@ -111,7 +178,9 @@ class TKNoteCollector:
         self.asr_backend = asr_backend if asr_backend in {"auto", "none", "qwen3-asr", "whisper"} else "auto"
         self.language = language or "auto"
         self.cookies_from_browser = cookies_from_browser or ""
-        self.proxy = proxy or ""
+        explicit_proxy = proxy or ""
+        self.proxy = explicit_proxy or _system_proxy()
+        self.proxy_source = "explicit" if explicit_proxy else "system" if self.proxy else "none"
         self.timeout = max(float(timeout), 30)
         self._runner = runner
 
@@ -131,6 +200,29 @@ class TKNoteCollector:
             )
         except subprocess.TimeoutExpired as exc:
             raise VideoIngestError("TK Note 采集超时；已完成的缓存资产仍会保留") from exc
+
+    def _safe_message(self, value: object) -> str:
+        return _redact_log_urls(safe_error_message(value, _proxy_secret_parts(self.proxy)))
+
+    @staticmethod
+    def _append_task_log(path: Path, payload: Dict[str, object]) -> None:
+        record = {
+            "schema": "viralx.tk-note-task.v1",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **payload,
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def _log_progress(self, task_log: Path, events: List[Dict[str, object]]) -> None:
+        for event in events:
+            self._append_task_log(task_log, {
+                "event": "progress",
+                "stage": str(event.get("stage") or ""),
+                "status": str(event.get("status") or ""),
+                "message": self._safe_message(event.get("message") or ""),
+            })
 
     @staticmethod
     def _parse_progress(stderr: str) -> List[Dict[str, object]]:
@@ -171,6 +263,16 @@ class TKNoteCollector:
         if not self.script.is_file():
             raise VideoIngestError(f"缺少项目内 TK Note 脚本：{self.script}")
         out_dir = self.cache_dir / _safe_cache_key(video_id)
+        task_log = out_dir / "task.jsonl"
+        self._append_task_log(task_log, {
+            "event": "collection_started",
+            "video_id": str(video_id or ""),
+            "source_url": _safe_source_url(video_url),
+            "force": bool(force),
+            "cookie_browser": self.cookies_from_browser or "none",
+            "proxy_configured": bool(self.proxy),
+            "proxy_source": self.proxy_source,
+        })
         command = [
             sys.executable,
             str(self.script),
@@ -189,17 +291,50 @@ class TKNoteCollector:
         if force:
             command.append("--force")
 
-        completed = self._run(command)
-        progress = self._parse_progress(completed.stderr)
-        payload = self._parse_result(completed.stdout)
-        if completed.returncode != 0 or payload.get("status") == "error":
-            message = str(payload.get("message") or "TK Note 无法下载当前 TikTok 视频")
-            raise VideoIngestError(message)
+        try:
+            completed = self._run(command)
+            progress = self._parse_progress(completed.stderr)
+            self._log_progress(task_log, progress)
+            payload = self._parse_result(completed.stdout)
+            if completed.returncode != 0 or payload.get("status") == "error":
+                message = str(payload.get("message") or "TK Note 无法下载当前 TikTok 视频")
+                raise VideoIngestError(message)
+        except VideoIngestError as exc:
+            message = self._safe_message(exc)
+            self._append_task_log(task_log, {
+                "event": "collection_failed",
+                "stage": "download",
+                "status": "error",
+                "error_code": getattr(exc, "code", "collection_failed"),
+                "message": message,
+            })
+            raise VideoIngestError(
+                message,
+                code=getattr(exc, "code", "collection_failed"),
+                task_log=str(task_log),
+            ) from exc
         video_file = Path(str(payload.get("video_file") or ""))
         if not video_file.is_file() or video_file.stat().st_size <= 0:
-            raise VideoIngestError("TK Note 返回成功但没有生成非空 source.mp4")
+            message = "TK Note 返回成功但没有生成非空 source.mp4"
+            self._append_task_log(task_log, {
+                "event": "collection_failed",
+                "stage": "download",
+                "status": "error",
+                "error_code": "missing_video_file",
+                "message": message,
+            })
+            raise VideoIngestError(message, code="missing_video_file", task_log=str(task_log))
 
         metadata_path = str(payload.get("metadata") or "")
+        self._append_task_log(task_log, {
+            "event": "collection_completed",
+            "stage": "download",
+            "status": str(payload.get("status") or "success"),
+            "video_id": str(payload.get("video_id") or video_id),
+            "video_size_bytes": video_file.stat().st_size,
+            "transcript_source": str(payload.get("transcript_source") or ""),
+            "blocked_stages": [str(item) for item in payload.get("blocked_stages", [])],
+        })
         return VideoAsset(
             provider="tk-note",
             status=str(payload.get("status") or "success"),
@@ -210,6 +345,7 @@ class TKNoteCollector:
             transcript_path=str(payload.get("transcript") or ""),
             transcript_source=str(payload.get("transcript_source") or ""),
             asset_manifest=str(payload.get("asset_manifest") or ""),
+            task_log=str(task_log),
             warnings=[str(item) for item in payload.get("warnings", [])],
             blocked_stages=[str(item) for item in payload.get("blocked_stages", [])],
             progress_events=progress,

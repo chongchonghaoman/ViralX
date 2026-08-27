@@ -124,7 +124,7 @@
               <input type="text" id="tk_note_language" name="tk_note_language" placeholder="auto">
               <small class="field-note">可填 Chinese、English、ja 等后端支持值。</small>
             </div>
-            <div class="settings-field" data-local-only>
+            <div class="settings-field">
               <label for="tk_note_cookies_from_browser">授权浏览器 Cookie</label>
               <select id="tk_note_cookies_from_browser" name="tk_note_cookies_from_browser">
                 <option value="">不使用</option>
@@ -133,12 +133,12 @@
                 <option value="firefox">Firefox</option>
                 <option value="brave">Brave</option>
               </select>
-              <small class="field-note">仅在公开视频被登录墙拦截时启用。</small>
+              <small class="field-note">仅在公开视频被登录墙拦截时启用；选择值只发送给 127.0.0.1 Connector，Cookie 内容不会进入网页。</small>
             </div>
-            <div class="settings-field" data-local-only>
+            <div class="settings-field">
               <label for="tk_note_proxy">本地代理</label>
               <input type="password" id="tk_note_proxy" name="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
-              <small class="field-note">代理凭据不会写入视频资产或日志。</small>
+              <small class="field-note">留空时自动沿用 Windows 系统代理；手填值只发送给 127.0.0.1 Connector，凭据不会写入视频资产或日志。</small>
             </div>
             <div class="settings-field">
               <label for="tk_note_timeout">单条采集等待上限</label>

@@ -1410,6 +1410,8 @@ class AIAnalyzer:
                 'pipeline_stage': 'collection',
                 'pipeline_status': 'error',
                 'acquisition_provider': acquisition_provider,
+                'acquisition_error_code': getattr(exc, 'code', 'collection_failed'),
+                'tk_note_task_log': getattr(exc, 'task_log', ''),
                 ('tk_note_status' if acquisition_provider == 'tk-note' else 'video_ingest_status'): 'error',
             }
 

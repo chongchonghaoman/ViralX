@@ -63,6 +63,8 @@ ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频�
 - **设置页按职责重构**：先选镜头引擎，再单独配置镜头视觉模型，最后配置最终模型。DeepSeek 等纯文本模型可以做最终综合，但不能被误用为 ShotLoom 视觉模型。
 - **EdgeOne 边界保持诚实**：线上页面负责界面、会话设置与结果呈现；本机 Connector 才能读取原片和运行 OpenCV。API Key 只存当前标签页并发送到 `127.0.0.1`，不经过 EdgeOne。
 - **Connector 自动接管旧实例**：从 `1.2.0` 起，再次启动 Connector 会先让 57231 上已经确认的 ViralX 实例优雅退出，等待端口释放后启动当前版本并重新打开配对页；不会结束占用该端口的非 ViralX 程序。
+- **TK Note 下载链修复**：Connector `1.3.0` 会把当前标签页选择的浏览器 Cookie 来源、显式代理与 120–7200 秒等待上限传给 TK Note；未手填代理时自动沿用 Windows 系统代理。`curl-cffi` 为 yt-dlp 提供 Chrome 网络指纹，解决“Scraper7 找到候选、TK Note 却全部停在网页响应”的故障。
+- **逐视频脱敏日志**：每条候选在 `video_cache/tk-note/<video_id>/task.jsonl` 记录开始、下载进度、完成或精确失败原因。日志只保存公开帖子 URL、阶段与状态；不保存 Cookie、代理地址/凭据、请求头或签名媒体 URL。采集失败原因也会直接显示在结果卡片中。
 
 原有能力全部保留：TikTok Scraper7 搜索、`picture light` 与 `light painting` 品类消歧、TK Note、共享 Whisper / Qwen3-ASR、LibTV 官方网页登录、Obsidian 导出、本地 Flask、EdgeOne 页面、模型预设、自定义 API 和 Codex Skill。
 
@@ -110,7 +112,7 @@ DeepSeek 当前预设是纯文本最终模型，不能直接承担关键帧识�
 | --- | --- |
 | TikTok Scraper7 搜索 | 固定调用 `/feed/search`，归一化 `data.videos`、数字帖子 ID、分享链接和互动数据，按语义相关性优先排序 |
 | `picture light` 消歧 | 把照画灯 / 壁画灯识别为安装在画作上方的灯具，剔除 `light painting / glowing painting` 等“画本身发光”结果 |
-| TK Note 采集 | 保存原片、元数据、字幕 / ASR、评论证据、资产清单和警告；复用本机共享 ASR 环境 |
+| TK Note 采集 | 保存原片、元数据、字幕 / ASR、评论证据、资产清单和警告；自动沿用系统代理并使用浏览器网络指纹；复用本机共享 ASR 环境 |
 | ShotLoom Core | 本地双检测切镜、关键帧采样、视觉事实抽取、时间线质量检查；不输出营销判断 |
 | LibTV 备用 | 通过官方 CLI 网页登录，在自动回退或显式选择时生成画布与拉片证据 |
 | 最终模型 | OpenAI、Claude、Gemini、DeepSeek、OpenRouter 或自定义 API；只读取统一证据包 |
@@ -155,7 +157,7 @@ Skill 调用 ViralX 的 Web API 合同。全功能分析仍需要目标电脑运
 2. Connector 只监听 `127.0.0.1:57231`，会打开 [ViralX 设置页](https://viralx.metrolabs.mobi/settings.html)并完成一次性配对。
    再次运行同一个启动命令即可替换旧实例，不需要先查端口或手动结束 Python 进程。
 3. 选择镜头引擎。默认 `自动`：ShotLoom Core 优先，LibTV 备用。
-4. 配置镜头视觉模型和最终模型；关键词搜索再填写 TikTok Scraper7 Key。
+4. 配置镜头视觉模型和最终模型；关键词搜索再填写 TikTok Scraper7 Key。TK Note 默认沿用 Windows 系统代理；只有登录墙仍阻断时，才在设置页选择 Chrome / Edge Cookie 来源或手填代理。
 5. 返回 [ViralX 首页](https://viralx.metrolabs.mobi)，粘贴视频或输入主题。
 
 Connector 精确允许 `https://viralx.metrolabs.mobi`，拒绝其他 Origin；配对密钥只存在 URL fragment、本机内存和当前标签页。模型 Key 不经过 EdgeOne，也不会写入日志。
@@ -211,8 +213,11 @@ python web_app.py
 | `MODEL_BASE_URL` / `MODEL_PROTOCOL` | 自定义最终模型接口 | 自定义 provider |
 | `LIBTV_CLI_BINARY` | 官方 LibTV CLI 路径 | 仅 LibTV 模式或回退 |
 | `RIMAGINATION_NOTE_CACHE` | TK Note 下载与 ASR 共享缓存 | 可选 |
+| `TK_NOTE_PROXY` | 覆盖系统代理的 TK Note 显式代理 | 可选 |
+| `TK_NOTE_COOKIES_FROM_BROWSER` | `chrome`、`edge`、`firefox`、`brave` 等 yt-dlp Cookie 来源 | 仅登录墙阻断时 |
+| `TK_NOTE_TIMEOUT` | 单条 TK Note 采集等待上限，120–7200 秒 | 默认 1800 |
 
-API Key 不会出现在 `/api/health`、Connector 状态、分析结果或日志中。
+API Key、Cookie、代理地址和代理凭据不会出现在 `/api/health`、Connector 状态、分析结果或日志中。
 
 ## Web API 与结果合同
 

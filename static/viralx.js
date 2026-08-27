@@ -513,10 +513,11 @@
     const modelStatus = video.model_status || "";
     const acquisitionProvider = video.acquisition_provider || "";
     const acquisitionStatus = video.tk_note_status || video.video_ingest_status || "";
+    const acquisitionFailed = ["error", "blocked"].includes(acquisitionStatus);
     const acquisitionLabel = acquisitionProvider === "tk-note"
-      ? "TK Note · 已采集"
+      ? acquisitionFailed ? "TK Note · 采集失败" : "TK Note · 已采集"
       : acquisitionProvider
-        ? `${acquisitionProvider} · 已采集`
+        ? `${acquisitionProvider} · ${acquisitionFailed ? "采集失败" : "已采集"}`
         : "";
     const providerName = {
       openai: "OpenAI",
@@ -536,6 +537,8 @@
       ? `${providerName} · 分析失败`
       : `${providerName} · 最终分析`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
+    const pipelineFailed = video.pipeline_status && video.pipeline_status !== "completed";
+    const failureMessage = pipelineFailed ? String(video.ai_analysis || "分析链没有完成") : "";
 
     const card = document.createElement("article");
     card.className = "video-card";
@@ -554,6 +557,7 @@
         <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(shotLabel)}</span>
         <span class="provider-badge ${escapeHtml(modelStatus)}">${escapeHtml(providerLabel)}</span>
       </div>
+      ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
       <div class="card-actions">
         <button class="analysis-btn" type="button">打开最终分析</button>
         ${["error", "blocked"].includes(status) ? runtimeMode === "edgeone" ? '<span class="project-link">镜头证据未就绪</span>' : '<a class="project-link" href="/settings">检查镜头引擎设置</a>' : ""}

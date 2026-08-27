@@ -39,8 +39,10 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | `GEMINI_*`, `OPENROUTER_*`, `MINIMAX_*` | Legacy compatibility; MiniMax remains available to script generation |
 | `MIN_LIKES` | Default TikTok Scraper7 popularity threshold |
 | `TK_NOTE_ASR_BACKEND`, `TK_NOTE_LANGUAGE`, `TK_NOTE_TIMEOUT` | TK Note collection controls |
+| `TK_NOTE_PROXY` | Explicit proxy override; blank uses the Windows/system proxy |
+| `TK_NOTE_COOKIES_FROM_BROWSER` | Optional yt-dlp browser Cookie source for login walls |
 
-The client never prints these values.
+The client never prints these values. TK Note task logs record only whether the proxy source was `system`, `explicit`, or `none`; they never serialize the proxy value, Cookie content, request headers, or signed media URLs.
 
 ## Commands and contracts
 

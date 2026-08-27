@@ -103,6 +103,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("x-viralx-model-base-url", connector_header_block.lower())
         self.assertIn("x-viralx-shot-engine", connector_header_block.lower())
         self.assertIn("x-viralx-shot-model-key", connector_header_block.lower())
+        self.assertIn("x-viralx-tk-cookies-browser", connector_header_block.lower())
+        self.assertIn("x-viralx-tk-proxy", connector_header_block.lower())
+        self.assertIn('tk_note_cookies_from_browser: "X-ViralX-TK-Cookies-Browser"', self.cloud_config_js)
+        self.assertIn('tk_note_proxy: "X-ViralX-TK-Proxy"', self.cloud_config_js)
         self.assertIn("connector_missing:", self.settings_js)
         self.assertIn("pairing_required:", self.settings_js)
         self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)
@@ -112,6 +116,17 @@ class FrontendContractTests(unittest.TestCase):
             self.assertIn(f'data-stage="{stage}"', self.home)
         self.assertIn("function setPipelineStage", self.home_js)
         self.assertIn("if (data.stage) setPipelineStage", self.home_js)
+        self.assertIn("TK Note · 采集失败", self.home_js)
+        self.assertIn('class="video-card__error"', self.home_js)
+
+    def test_hosted_settings_keep_connector_tk_note_network_controls_visible(self):
+        cookie_field = self.settings.split('id="tk_note_cookies_from_browser"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]
+        proxy_field = self.settings.split('id="tk_note_proxy"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]
+        self.assertNotIn("data-local-only", cookie_field)
+        self.assertNotIn("data-local-only", proxy_field)
+        self.assertIn('tk_note_timeout: 1800', self.settings_js)
+        self.assertIn('Math.min(Math.max(settings.tk_note_timeout, 120), 7200)', self.settings_js)
+        self.assertIn('SettingsValidationError("tk_note_proxy"', self.settings_js)
 
     def test_field_validation_targets_the_relevant_control(self):
         self.assertIn("class SettingsValidationError", self.settings_js)

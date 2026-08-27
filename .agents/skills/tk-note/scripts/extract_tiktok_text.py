@@ -37,6 +37,20 @@ from _common import (
 CORE_FILES = ("source.mp4", "metadata.json", "transcript.txt", "segments.json", "note_budget.json")
 
 
+def browser_impersonation_available() -> bool:
+    try:
+        import curl_cffi  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def browser_impersonation_target():
+    from yt_dlp.networking.impersonate import ImpersonateTarget
+
+    return ImpersonateTarget.from_str("chrome")
+
+
 class QuietLogger:
     def debug(self, message: str) -> None:
         return
@@ -131,6 +145,8 @@ def download_with_cli(url: str, out_dir: Path, args: argparse.Namespace) -> dict
     ]
     if command_exists("ffmpeg"):
         command.extend(("--convert-subs", "srt"))
+    if browser_impersonation_available():
+        command.extend(("--impersonate", "chrome"))
     if args.cookies_from_browser:
         command.extend(("--cookies-from-browser", args.cookies_from_browser))
     if args.proxy:
@@ -187,6 +203,8 @@ def download_video(url: str, out_dir: Path, args: argparse.Namespace) -> tuple[d
     }
     if command_exists("ffmpeg"):
         options["convertsubtitles"] = "srt"
+    if browser_impersonation_available():
+        options["impersonate"] = browser_impersonation_target()
     if args.cookies_from_browser:
         options["cookiesfrombrowser"] = (args.cookies_from_browser,)
     if args.proxy:
@@ -202,7 +220,8 @@ def download_video(url: str, out_dir: Path, args: argparse.Namespace) -> tuple[d
         raise
     except Exception as exc:
         secrets = [args.proxy or "", os.environ.get("TIKTOK_MS_TOKEN", "")]
-        raise TKNoteError(redact_text(f"TikTok 下载失败：{exc}", secrets)) from exc
+        detail = str(exc).strip() or type(exc).__name__
+        raise TKNoteError(redact_text(f"TikTok 下载失败：{detail}", secrets)) from exc
 
     if not isinstance(info, dict):
         raise TKNoteError("yt-dlp 未返回有效的视频元数据")

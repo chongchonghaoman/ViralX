@@ -15,7 +15,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from flask import Flask, jsonify, make_response, request
 
@@ -23,7 +23,7 @@ import web_app
 from shot_analyzers import shotloom_dependency_status
 
 
-CONNECTOR_VERSION = "1.2.0"
+CONNECTOR_VERSION = "1.3.0"
 CONNECTOR_HOST = "127.0.0.1"
 CONNECTOR_PORT = 57231
 CONNECTOR_ORIGIN = f"http://{CONNECTOR_HOST}:{CONNECTOR_PORT}"
@@ -49,7 +49,9 @@ ALLOWED_REQUEST_HEADERS = {
     "x-viralx-min-likes",
     "x-viralx-rapidapi-key",
     "x-viralx-tk-asr",
+    "x-viralx-tk-cookies-browser",
     "x-viralx-tk-language",
+    "x-viralx-tk-proxy",
     "x-viralx-tk-timeout",
     "x-viralx-model-provider",
     "x-viralx-model-protocol",
@@ -63,6 +65,9 @@ ALLOWED_REQUEST_HEADERS = {
     "x-viralx-shot-model-name",
     "x-viralx-shot-threshold",
 }
+
+COOKIE_BROWSERS = {"chrome", "edge", "firefox", "brave", "opera", "vivaldi"}
+PROXY_SCHEMES = {"http", "https", "socks4", "socks4a", "socks5", "socks5h"}
 
 
 def allowed_origins() -> set[str]:
@@ -139,6 +144,28 @@ def _connector_token() -> str:
     return request.headers.get("X-ViralX-Connector-Token", "")
 
 
+def _validated_proxy(value: str) -> str:
+    """Validate a session-only proxy without logging or normalizing credentials."""
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    if len(candidate) > 2048 or "\r" in candidate or "\n" in candidate:
+        raise ValueError("TK Note 代理地址无效")
+    try:
+        parsed = urlsplit(candidate)
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError("TK Note 代理地址无效") from exc
+    if (
+        parsed.scheme.lower() not in PROXY_SCHEMES
+        or not parsed.hostname
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("TK Note 代理需使用 HTTP(S) 或 SOCKS 地址，且不能包含查询参数或锚点")
+    return candidate
+
+
 def _request_config() -> dict[str, Any]:
     """Overlay the current tab's settings for the trusted local pipeline."""
     config = dict(web_app.load_config())
@@ -155,6 +182,16 @@ def _request_config() -> dict[str, Any]:
     language = request.headers.get("X-ViralX-TK-Language", "").strip()
     if language:
         config["tk_note_language"] = language[:40]
+
+    cookie_browser = request.headers.get("X-ViralX-TK-Cookies-Browser", "").strip().lower()
+    if cookie_browser:
+        if cookie_browser not in COOKIE_BROWSERS:
+            raise ValueError("TK Note Cookie 浏览器不受支持")
+        config["tk_note_cookies_from_browser"] = cookie_browser
+
+    proxy = request.headers.get("X-ViralX-TK-Proxy", "").strip()
+    if proxy:
+        config["tk_note_proxy"] = _validated_proxy(proxy)
 
     model_fields = {
         "model_provider": "X-ViralX-Model-Provider",
@@ -374,8 +411,12 @@ def create_connector_app(
             }), 400
         if len(str(body.get("product_name", ""))) > 200 or len(str(body.get("product_info", ""))) > 8000:
             return jsonify({"status": "error", "message": "产品信息超过 Connector 限制。"}), 400
+        try:
+            config_override = _request_config()
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
         return web_app.build_analyze_response(
-            config_override=_request_config(),
+            config_override=config_override,
             max_videos=web_app.MAX_ANALYZE_VIDEOS,
         )
 

@@ -1169,6 +1169,16 @@ h3 {
   color: var(--color-error);
 }
 
+.video-card__error {
+  margin: var(--space-md) 0 0;
+  padding: var(--space-sm) var(--space-md);
+  border-inline-start: 2px solid var(--color-error);
+  background: var(--color-paper-2);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
 .card-actions {
   margin-block-start: var(--space-md);
 }

@@ -45,7 +45,8 @@ Verified on the public custom domain:
 - Production HTTPS page completed a real one-use pairing against the local Connector; the URL fragment was removed before the page reached its steady state
 - Production readiness now evaluates the selected shot strategy: ShotLoom dependencies and visual model, LibTV login, either provider in Auto, or explicit collection-only.
 - Connector returned `403` for an untrusted Origin and `204` for the trusted CORS/private-network preflight
-- Connector `1.2.0` repeated-launch test passed: the existing verified ViralX instance exited cleanly, one replacement process acquired `127.0.0.1:57231`, and the new pairing page completed successfully
+- Connector `1.3.0` repeated-launch test passed: the existing verified ViralX instance exited cleanly, one replacement process acquired `127.0.0.1:57231`, and the new pairing page completed successfully
+- TK Note live smoke passed through the Windows system proxy plus yt-dlp Chrome impersonation; a previously blocked TikTok candidate produced a non-empty `source.mp4` and a redacted `task.jsonl` without Cookie, proxy, request-header, or signed-media data
 - `GET http://viralx.metrolabs.mobi/` -> `302 https://viralx.metrolabs.mobi/`
 - TLS hostname validation succeeds for `viralx.metrolabs.mobi`
 

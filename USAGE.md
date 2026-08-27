@@ -34,6 +34,8 @@ Connector 会打开 `https://viralx.metrolabs.mobi/settings.html` 并用 URL fra
 
 Connector `1.2.0+` 支持单实例自动接管：再次执行 `python connector.py` 或双击 `start-connector.cmd`，新进程会确认旧进程是 ViralX Connector，请求它优雅退出，等待 `127.0.0.1:57231` 释放后再启动并打开新的配对页。其他程序占用端口时不会被结束。
 
+Connector `1.3.0+` 会让 TK Note 自动沿用 Windows 系统代理，并在安装 `curl-cffi` 后使用 Chrome 网络指纹。线上设置页中的“授权浏览器 Cookie”和“本地代理”只传给 `127.0.0.1`，不会经过 EdgeOne；每条采集的脱敏日志保存在 `video_cache/tk-note/<video_id>/task.jsonl`。
+
 ## 本地 Web 运行
 
 ```bash
