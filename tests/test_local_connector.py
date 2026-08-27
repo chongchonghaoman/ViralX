@@ -1,6 +1,7 @@
 import json
+import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlsplit
 
 from flask import jsonify
@@ -96,6 +97,29 @@ class LocalConnectorTests(unittest.TestCase):
             headers=self.origin_headers,
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_local_launcher_can_request_graceful_replacement(self):
+        stopped = threading.Event()
+        self.app.config["VIRALX_SHUTDOWN_CALLBACK"] = stopped.set
+        response = self.client.post(
+            local_connector.LOCAL_SHUTDOWN_PATH,
+            json={},
+            environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["state"], "shutting_down")
+        self.assertTrue(stopped.wait(1.0))
+
+    def test_browser_origin_cannot_shutdown_connector(self):
+        callback = Mock()
+        self.app.config["VIRALX_SHUTDOWN_CALLBACK"] = callback
+        response = self.client.post(
+            local_connector.LOCAL_SHUTDOWN_PATH,
+            json={},
+            headers=self.origin_headers,
+        )
+        self.assertEqual(response.status_code, 403)
+        callback.assert_not_called()
 
     def test_pairing_secret_is_one_use_and_session_is_not_echoed_by_status(self):
         secret, token = self.pair()

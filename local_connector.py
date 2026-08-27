@@ -23,12 +23,13 @@ import web_app
 from shot_analyzers import shotloom_dependency_status
 
 
-CONNECTOR_VERSION = "1.1.0"
+CONNECTOR_VERSION = "1.2.0"
 CONNECTOR_HOST = "127.0.0.1"
 CONNECTOR_PORT = 57231
 CONNECTOR_ORIGIN = f"http://{CONNECTOR_HOST}:{CONNECTOR_PORT}"
 PRODUCTION_ORIGIN = "https://viralx.metrolabs.mobi"
 LOCAL_PAIRING_PATH = "/connector/v1/pairing/new"
+LOCAL_SHUTDOWN_PATH = "/connector/v1/control/shutdown"
 PAIRING_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
 MAX_REQUEST_BYTES = 512 * 1024
@@ -214,11 +215,11 @@ def create_connector_app(
     @app.before_request
     def enforce_origin_and_preflight():
         origin = request.headers.get("Origin", "").rstrip("/")
-        if request.path == LOCAL_PAIRING_PATH:
+        if request.path in {LOCAL_PAIRING_PATH, LOCAL_SHUTDOWN_PATH}:
             remote_address = request.remote_addr or ""
             if request.method == "POST" and not origin and remote_address in {"127.0.0.1", "::1"}:
                 return None
-            return jsonify({"status": "error", "message": "Local pairing control is not allowed"}), 403
+            return jsonify({"status": "error", "message": "Local connector control is not allowed"}), 403
         if origin not in origins:
             return jsonify({"status": "error", "message": "Origin is not allowed"}), 403
 
@@ -309,6 +310,25 @@ def create_connector_app(
             f"#viralx-connector={quote(pairing_secret, safe='')}"
         )
         return jsonify({"status": "ok", "pairing_url": pairing_url})
+
+    @app.post(LOCAL_SHUTDOWN_PATH)
+    def shutdown_for_replacement():
+        callback = app.config.get("VIRALX_SHUTDOWN_CALLBACK")
+        if not callable(callback):
+            return jsonify({
+                "status": "error",
+                "message": "Connector replacement is not available in this runtime",
+            }), 503
+
+        # The callback calls BaseServer.shutdown and must not run on the
+        # serve_forever thread. Connector requests already use worker threads;
+        # one more daemon thread lets this response flush before the socket closes.
+        threading.Thread(target=callback, name="viralx-connector-shutdown", daemon=True).start()
+        return jsonify({
+            "status": "ok",
+            "state": "shutting_down",
+            "version": CONNECTOR_VERSION,
+        })
 
     @app.post("/connector/v1/session/logout")
     def unpair_browser():

@@ -32,6 +32,8 @@ python connector.py
 
 Connector 会打开 `https://viralx.metrolabs.mobi/settings.html` 并用 URL fragment 完成一次性配对。浏览器询问本地网络权限时选择允许，然后保留默认自动策略或选择其他镜头引擎。只有自动回退或 LibTV 模式需要点击“连接 LibTV”。Connector 只开放受限的 `/connector/v1/*` 能力，不开放设置读取、清缓存或本地文件导出。模型 Key 只从当前标签页发送到已配对的 Connector，再直连所选服务商，不经过 EdgeOne。
 
+Connector `1.2.0+` 支持单实例自动接管：再次执行 `python connector.py` 或双击 `start-connector.cmd`，新进程会确认旧进程是 ViralX Connector，请求它优雅退出，等待 `127.0.0.1:57231` 释放后再启动并打开新的配对页。其他程序占用端口时不会被结束。
+
 ## 本地 Web 运行
 
 ```bash

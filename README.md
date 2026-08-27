@@ -62,6 +62,7 @@ ViralX 是一个证据优先的短视频拆解 Web 应用。它不是把视频�
 - **失败成为产品状态**：`blocked`、`fallback_used`、`shot_block_reason`、`fallback_chain`、`shot_evidence_quality` 都会进入流式结果和前端，不再把“云端在线”或“任务跑完”误写成“可信分析完成”。
 - **设置页按职责重构**：先选镜头引擎，再单独配置镜头视觉模型，最后配置最终模型。DeepSeek 等纯文本模型可以做最终综合，但不能被误用为 ShotLoom 视觉模型。
 - **EdgeOne 边界保持诚实**：线上页面负责界面、会话设置与结果呈现；本机 Connector 才能读取原片和运行 OpenCV。API Key 只存当前标签页并发送到 `127.0.0.1`，不经过 EdgeOne。
+- **Connector 自动接管旧实例**：从 `1.2.0` 起，再次启动 Connector 会先让 57231 上已经确认的 ViralX 实例优雅退出，等待端口释放后启动当前版本并重新打开配对页；不会结束占用该端口的非 ViralX 程序。
 
 原有能力全部保留：TikTok Scraper7 搜索、`picture light` 与 `light painting` 品类消歧、TK Note、共享 Whisper / Qwen3-ASR、LibTV 官方网页登录、Obsidian 导出、本地 Flask、EdgeOne 页面、模型预设、自定义 API 和 Codex Skill。
 
@@ -152,6 +153,7 @@ Skill 调用 ViralX 的 Web API 合同。全功能分析仍需要目标电脑运
    ```
 
 2. Connector 只监听 `127.0.0.1:57231`，会打开 [ViralX 设置页](https://viralx.metrolabs.mobi/settings.html)并完成一次性配对。
+   再次运行同一个启动命令即可替换旧实例，不需要先查端口或手动结束 Python 进程。
 3. 选择镜头引擎。默认 `自动`：ShotLoom Core 优先，LibTV 备用。
 4. 配置镜头视觉模型和最终模型；关键词搜索再填写 TikTok Scraper7 Key。
 5. 返回 [ViralX 首页](https://viralx.metrolabs.mobi)，粘贴视频或输入主题。
