@@ -438,8 +438,8 @@
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
     document.querySelector(".settings-hero > p:last-child").textContent = "完整工作流由 ViralX Worker 执行；只有需要临时替换服务端配置时，才填写下面两把 Key。";
-    document.querySelector(".settings-actions > p").textContent = "可选覆盖只保存在当前标签页，关闭后自动清除。";
-    byId("save-btn").textContent = "保存临时覆盖并返回";
+    document.querySelector(".settings-actions > p").textContent = "Key 只保存在当前标签页；请在这里保存并返回分析页，新标签页不会共享 Key。";
+    byId("save-btn").textContent = "保存并返回分析页";
     byId("reset-btn").textContent = "恢复会话值";
     byId("clear-session-btn").hidden = false;
     const rapidNote = byId("rapidapi-key-note");
@@ -658,11 +658,27 @@
         settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 120), 7200);
         window.ViralXCloudConfig.write(settings);
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
-        lastHealth = healthResponse.ok ? await healthResponse.json() : lastHealth;
+        if (!healthResponse.ok) throw new Error(`Worker 返回 HTTP ${healthResponse.status}`);
+        lastHealth = await healthResponse.json();
         serverConfigured = { ...(lastHealth.configured || {}) };
         updateRuntimeNote(lastHealth);
         await refreshLibTVState();
-        showStatus("临时覆盖已保存。返回分析页后立即生效，关闭标签页会自动清除。", "success");
+        if (!serverConfigured.keyword_search) {
+          throw new SettingsValidationError("rapidapi_key", "Worker 没有接受 TikTok Scraper7 Key，请重新粘贴后保存");
+        }
+        if (settings.shot_engine !== "skip" && !serverConfigured.model) {
+          const issue = String(lastHealth.configuration_issues?.model || "").trim();
+          const fieldId = issue.includes("Base URL") ? "model_base_url" : "model_api_key";
+          throw new SettingsValidationError(
+            fieldId,
+            issue || "Worker 没有接受这组视觉模型配置；请确认 Base URL、API Key 与模型名称属于同一服务",
+          );
+        }
+        if (settings.shot_engine !== "skip" && !lastHealth.analysis_ready) {
+          throw new Error("视觉模型已连接，但服务器上的 TK Note / ShotLoom 分析链尚未就绪");
+        }
+        showStatus("配置已验证，正在返回分析页。Key 关闭标签页后自动清除。", "success", { focus: false });
+        window.location.assign("/#analysis-studio");
       } else {
         const response = await window.fetch("/api/settings", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings),

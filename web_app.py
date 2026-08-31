@@ -290,6 +290,9 @@ def build_health_payload(config_override=None, runtime_override=None):
         'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
         'analysis_provider': provider,
         'analysis_ready': readiness.get(mode, False),
+        'configuration_issues': {
+            'model': str(current_config.get('model_config_error') or '')[:240],
+        },
         'configured': {
             **readiness,
             'keyword_search': bool(current_config.get('rapidapi_key')),

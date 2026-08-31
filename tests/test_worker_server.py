@@ -84,6 +84,24 @@ class WorkerServerTests(unittest.TestCase):
         self.assertEqual(config["shot_engine"], "shotloom")
         self.assertEqual(config["model_api_key"], "session-model-key")
 
+    def test_health_returns_safe_model_configuration_issue(self):
+        headers = {
+            **self.headers,
+            "X-ViralX-Model-Provider": "custom",
+            "X-ViralX-Model-Protocol": "openai",
+            "X-ViralX-Model-Key": "session-model-secret",
+            "X-ViralX-Model-Base-URL": "http://127.0.0.1:8000/v1",
+            "X-ViralX-Model-Name": "vision-model",
+        }
+        response = self.client.get("/api/health", headers=headers)
+        payload = response.get_json()
+        serialized = json.dumps(payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(payload["configured"]["model"])
+        self.assertIn("Base URL", payload["configuration_issues"]["model"])
+        self.assertNotIn("session-model-secret", serialized)
+
     def test_only_one_analysis_stream_runs_at_a_time(self):
         def fake_response(**_kwargs):
             return Response(iter([b'{"status":"success","done":true}\n']), mimetype="application/x-ndjson")

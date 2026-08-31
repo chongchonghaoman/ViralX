@@ -493,7 +493,7 @@
     if (!runtimeAnalysisReady) {
       const configurationMissing = ["server_config_missing", "local_config_missing"].includes(runtimeBlocker);
       showInlineError(configurationMissing
-        ? "分析服务已经在线，但视觉模型或镜头分析链还没有配置完成。请补齐模型 Base URL、API Key 与模型名称后重试。"
+        ? "分析服务已经在线，但当前标签页没有可用的视觉模型配置。请在本标签页打开设置，填写后点击“保存并返回分析页”；新标签页不会共享 Key。"
         : "实时分析服务当前离线。网站内容与方法仍可浏览，服务恢复后可直接在这里开始分析。");
       byId("analysis-studio")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
       return;

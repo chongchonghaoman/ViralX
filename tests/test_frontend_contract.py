@@ -216,6 +216,14 @@ class FrontendContractTests(unittest.TestCase):
         self.assertLess(connecting, load)
         self.assertIn('updateRuntimeNote({ runtime: "connecting", configured: {} });', self.settings_js)
 
+    def test_hosted_settings_verify_worker_acceptance_before_same_tab_return(self):
+        self.assertIn('if (!healthResponse.ok) throw new Error(`Worker 返回 HTTP ${healthResponse.status}`);', self.settings_js)
+        self.assertIn('if (settings.shot_engine !== "skip" && !serverConfigured.model)', self.settings_js)
+        self.assertIn('lastHealth.configuration_issues?.model', self.settings_js)
+        self.assertIn('window.location.assign("/#analysis-studio")', self.settings_js)
+        self.assertIn("新标签页不会共享 Key", self.settings_js)
+        self.assertIn("新标签页不会共享 Key", self.home_js)
+
     def test_responsive_hero_assets_are_built(self):
         png = ROOT / "static" / "assets" / "viralx-signal-orbit.png"
         for width in (640, 1024):
