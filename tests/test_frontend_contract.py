@@ -13,7 +13,7 @@ class FrontendContractTests(unittest.TestCase):
         cls.settings = (ROOT / "templates" / "settings.html").read_text(encoding="utf-8")
         cls.home_js = (ROOT / "static" / "viralx.js").read_text(encoding="utf-8")
         cls.settings_js = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
-        cls.connector_js = (ROOT / "static" / "connector.js").read_text(encoding="utf-8")
+        cls.runtime_config_js = (ROOT / "static" / "runtime-config.js").read_text(encoding="utf-8")
         cls.cloud_config_js = (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8")
         cls.build_js = (ROOT / "scripts" / "build-edgeone.mjs").read_text(encoding="utf-8")
 
@@ -81,35 +81,54 @@ class FrontendContractTests(unittest.TestCase):
         for state in ("connected", "awaiting_browser", "starting", "unavailable", "error", "local_only", "disconnected"):
             self.assertIn(f'{state}:', self.settings_js)
 
-    def test_hosted_libtv_uses_a_fixed_paired_loopback_connector(self):
+    def test_settings_has_a_two_key_quick_start_without_removing_advanced_controls(self):
+        self.assertIn('name="quick_mode" value="full"', self.settings)
+        self.assertIn('name="quick_mode" value="evidence"', self.settings)
+        self.assertIn('name="model_provider" value="qwen"', self.settings)
+        self.assertIn("Qwen3-VL Flash", self.settings)
+        self.assertIn('class="settings-section settings-section--advanced"', self.settings)
+        self.assertIn("function selectQuickMode", self.settings_js)
+        self.assertIn('model_provider: "qwen"', self.settings_js)
+        self.assertIn('class="quick-search-card"', self.settings)
+        self.assertIn('SettingsValidationError("rapidapi_key"', self.settings_js)
+        self.assertNotIn("可选 · 视频直链不需要搜索 Key", self.settings)
+
+    def test_settings_explains_the_fixed_collection_and_visual_evidence_contract(self):
+        self.assertIn("TK Note 采集故障处理", self.settings)
+        self.assertIn("每条 Scraper7 候选都会交给 TK Note", self.settings)
+        self.assertIn("ShotLoom 切镜", self.settings)
+        self.assertIn('id="shot-model-inherited-name"', self.settings)
+        self.assertIn("标准流程 · 推荐", self.settings)
+        self.assertIn("视觉模型与接口", self.settings)
+        self.assertIn("同一模型负责逐镜识别与证据终审", self.settings)
+        self.assertIn('workflow_version: 2', self.settings_js)
+        self.assertIn('shot_engine: "shotloom"', self.settings_js)
+        self.assertIn('shot_model_source: "inherit"', self.settings_js)
+
+    def test_quick_model_card_exposes_a_complete_customizable_visual_model_contract(self):
+        quick_card_start = self.settings.index('class="quick-model-card"')
+        quick_card_end = self.settings.index('class="pipeline-peek"', quick_card_start)
+        quick_card = self.settings[quick_card_start:quick_card_end]
+        for control_id in ("model_base_url", "model_api_key", "model_name"):
+            self.assertIn(f'id="{control_id}"', quick_card)
+        self.assertIn("KEY 02 · 推荐模型", quick_card)
+        self.assertIn("所选模型需要具备视频识别能力", quick_card)
+        self.assertIn("第三方兼容地址", quick_card)
+        self.assertIn("function promoteEditedEndpointToCustom", self.settings_js)
+        self.assertIn('selectedProvider = "custom"', self.settings_js)
+
+    def test_hosted_site_uses_a_remote_worker_instead_of_visitor_loopback(self):
         for html in (self.home, self.settings):
-            self.assertIn("http://127.0.0.1:57231", html)
-            self.assertIn("filename='connector.js'", html)
-        self.assertIn('const CONNECTOR_ORIGIN = "http://127.0.0.1:57231"', self.connector_js)
-        self.assertIn('const PAIRING_FRAGMENT = "viralx-connector"', self.connector_js)
-        self.assertIn('targetAddressSpace: "loopback"', self.connector_js)
-        self.assertIn('"loopback-network"', self.connector_js)
-        self.assertIn('X-ViralX-Connector-Token', self.connector_js)
-        self.assertIn("window.sessionStorage.setItem(TOKEN_KEY", self.connector_js)
-        self.assertIn("window.history.replaceState", self.connector_js)
-        self.assertNotIn("console.log", self.connector_js)
-        self.assertIn('(read().analysis_mode || "pipeline") === "pipeline"', self.cloud_config_js)
-        self.assertIn("CONNECTOR_REQUEST_HEADERS", self.cloud_config_js)
-        self.assertIn("headers: connectorHeaders", self.cloud_config_js)
-        connector_header_block = self.cloud_config_js.split(
-            "const CONNECTOR_REQUEST_HEADERS", 1
-        )[1].split("])", 1)[0]
-        self.assertIn("x-viralx-model-key", connector_header_block.lower())
-        self.assertIn("x-viralx-model-base-url", connector_header_block.lower())
-        self.assertIn("x-viralx-shot-engine", connector_header_block.lower())
-        self.assertIn("x-viralx-shot-model-key", connector_header_block.lower())
-        self.assertIn("x-viralx-tk-cookies-browser", connector_header_block.lower())
-        self.assertIn("x-viralx-tk-proxy", connector_header_block.lower())
-        self.assertIn('tk_note_cookies_from_browser: "X-ViralX-TK-Cookies-Browser"', self.cloud_config_js)
-        self.assertIn('tk_note_proxy: "X-ViralX-TK-Proxy"', self.cloud_config_js)
-        self.assertIn("connector_missing:", self.settings_js)
-        self.assertIn("pairing_required:", self.settings_js)
-        self.assertIn('join(projectRoot, "static", "connector.js")', self.build_js)
+            self.assertNotIn("http://127.0.0.1:57231", html)
+            self.assertNotIn("filename='connector.js'", html)
+            self.assertIn("filename='runtime-config.js'", html)
+        self.assertIn('mode: "same-origin"', self.runtime_config_js)
+        self.assertIn("REMOTE_WORKER_PATHS", self.cloud_config_js)
+        self.assertIn("function workerUrl", self.cloud_config_js)
+        self.assertIn("apiBaseUrl", self.build_js)
+        self.assertIn('mode: "remote-worker"', self.build_js)
+        self.assertNotIn('join(projectRoot, "static", "connector.js")', self.build_js)
+        self.assertNotIn("ViralXConnector", self.home_js)
 
     def test_home_uses_explicit_five_stage_pipeline_events(self):
         for stage in ("discovery", "collection", "shot-analysis", "evidence-merge", "final-analysis"):
@@ -119,7 +138,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("TK Note · 采集失败", self.home_js)
         self.assertIn('class="video-card__error"', self.home_js)
 
-    def test_hosted_settings_keep_connector_tk_note_network_controls_visible(self):
+    def test_tk_note_network_controls_remain_available_to_local_owner(self):
         cookie_field = self.settings.split('id="tk_note_cookies_from_browser"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]
         proxy_field = self.settings.split('id="tk_note_proxy"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]
         self.assertNotIn("data-local-only", cookie_field)
@@ -153,10 +172,14 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("sanitizeReportHtml(rendered)", self.home_js)
         self.assertNotIn("innerHTML = window.marked", self.home_js)
 
-    def test_unready_runtime_routes_to_the_correct_settings_page(self):
-        self.assertIn('dataset.deployment === "edgeone"', self.home_js)
-        self.assertIn('return runtimeMode === "edgeone" || deployedToEdgeOne ? "/settings.html" : "/settings"', self.home_js)
+    def test_unready_runtime_stays_on_analysis_page_and_explains_offline_state(self):
         self.assertIn("function syncPrimaryActions()", self.home_js)
+        self.assertIn("function primaryActionLabel(navigation = false)", self.home_js)
+        self.assertIn('offline: "实时分析暂离线"', self.home_js)
+        self.assertIn('server_config_missing: "分析服务配置中"', self.home_js)
+        self.assertIn('action.href = "#analysis-studio"', self.home_js)
+        self.assertNotIn("window.location.assign(settingsUrl())", self.home_js)
+        self.assertNotIn("Connector", self.home_js)
         self.assertIn("function handleAnalyzeAction(refresh = false)", self.home_js)
         self.assertIn("data-runtime-action", self.home)
         self.assertIn('data-deployment="edgeone"', self.build_js)

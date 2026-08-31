@@ -33,7 +33,7 @@ SHOTLOOM_SOURCE_COMMIT = "78b65e24a587052ff2c0c4ccae72575295bde34f"
 VALID_ENGINES = {"auto", "shotloom", "libtv", "skip"}
 VALID_MODEL_SOURCES = {"inherit", "qwen", "custom"}
 DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-DEFAULT_QWEN_MODEL = "qwen-vl-max"
+DEFAULT_QWEN_MODEL = "qwen3-vl-flash"
 
 
 class ShotAnalyzerError(RuntimeError):
@@ -75,11 +75,11 @@ class ShotAnalysisResult:
 def normalize_shot_config(config: dict[str, Any]) -> dict[str, Any]:
     """Normalize the shot engine without ever returning a secret in status."""
     source = str(config.get("shot_model_source") or "inherit").strip().lower()
-    engine = str(config.get("shot_engine") or "auto").strip().lower()
+    engine = str(config.get("shot_engine") or "shotloom").strip().lower()
     if source not in VALID_MODEL_SOURCES:
         source = "inherit"
     if engine not in VALID_ENGINES:
-        engine = "auto"
+        engine = "shotloom"
 
     final_vision = bool(config.get("model_supports_vision"))
     final_protocol = str(config.get("model_protocol") or "openai").lower()
@@ -89,7 +89,7 @@ def normalize_shot_config(config: dict[str, Any]) -> dict[str, Any]:
             "base_url": str(config.get("model_base_url") or "").rstrip("/"),
             "model": str(config.get("model_name") or ""),
             "compatible": final_protocol == "openai" and final_vision,
-            "label": "复用最终视觉模型",
+            "label": "复用上方视觉模型",
         }
     elif source == "qwen":
         model_config = {

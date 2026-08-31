@@ -23,7 +23,7 @@ It does not copy Butter's wordmark, keychain object, copy, imagery, or licensed 
 
 - Genre: refined product editorial, grounded by technical evidence.
 - Primary macrostructure: Centered Marquee + Embedded Studio.
-- Settings macrostructure: Long Form + Sticky Category Index.
+- Settings macrostructure: Quick Setup + Advanced Accordion, with a compact sticky index.
 - Report macrostructure: focused document dialog.
 - The embedded studio is a real entry point, not a fake marketing mockup.
 
@@ -101,23 +101,27 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
 - Visible success is silent; failures explain the recovery action.
 - Every interactive element has hover, focus-visible, active, and disabled treatment where
   applicable.
-- Local settings preserve secrets and local directories in the Flask runtime. EdgeOne settings
-  keep credentials in the current browser session and may connect to the loopback-only ViralX
-  Connector after an explicit one-time pairing. There is one fixed evidence pipeline; the shot
-  stage alone exposes an explicit provider strategy: Auto, ShotLoom, LibTV, or collection-only.
-- ShotLoom Core is the recommended shot provider. It reuses the exact file already downloaded by
-  TK Note and exposes readiness, dependency, fallback, blocked, and evidence-quality states. LibTV
-  remains visible as an optional fallback, never as a hidden mandatory dependency.
-- The shot model and final model are separate responsibilities. Shot model controls use the same
-  provider-option anatomy and progressive disclosure as final-model controls, but must explain
-  that frame evidence cannot prove audio, audience, retention, or conversion claims.
-- Model configuration is one progressive-disclosure flow: choose OpenAI, Claude, Gemini,
-  DeepSeek, OpenRouter, or Custom; then fill one API key and one model ID. Only Custom reveals
-  protocol and Base URL. The provider grid is one column on phones and two columns from 40rem.
+- Local settings preserve secrets and local directories in the Flask runtime. The hosted page calls
+  one owner-operated ViralX Worker over HTTPS; visitors never pair a loopback process. The server may
+  provide default credentials, while optional browser overrides remain session-only. There is one fixed
+  evidence pipeline. TK Note is mandatory collection; owner-only network recovery stays off the public UI.
+- ShotLoom Core is the default scene splitter and frame sampler. It reuses the exact file already
+  downloaded by TK Note, then sends keyframes to the visual model configured above. It is not a
+  second model. LibTV remains an explicit failure fallback, never a silent default dependency.
+- The default contract is `shot_engine=shotloom` plus `shot_model_source=inherit`: one visual-model
+  connection performs frame-fact recognition and final evidence synthesis. A separate shot model,
+  `auto` fallback, LibTV-only, and collection-only remain expert troubleshooting choices.
+- The first settings viewport asks for an outcome and two credentials: Scraper7 for mandatory
+  keyword discovery, then a complete final-model connection with Base URL, API Key and model ID.
+  Qwen3-VL Flash is the recommended default and the capability note requires a video-capable model.
+  Direct-video ingestion remains a compatibility path, not the product's primary information architecture.
+  OpenAI, Claude, Gemini, DeepSeek, OpenRouter, Custom, separate
+  shot-model credentials, network controls and LibTV remain available only inside advanced
+  disclosures. The quick path always exposes Base URL; only Custom reveals the protocol selector.
 - Each provider keeps an in-memory draft while the page is open, so changing providers never
   places one service's key into another service's field. The provider is always the final stage
   after TK Note and shot evidence merge; failed final-model calls never consume a fallback
-  provider. A failed shot provider may use the explicitly configured LibTV fallback in Auto mode.
+  provider. A failed shot stage may use LibTV only when the user explicitly enables Auto fallback.
 - Do not invent customer logos, performance metrics, case studies, or model results.
 
 ## Responsive order
@@ -139,23 +143,22 @@ change this sequence.
 - The Flask build is the full local product. It owns `/api/analyze`, `/api/settings`, TK Note,
   ShotLoom Core, local video/cache files, Obsidian export and optional `/api/libtv/auth/*`.
   ViralX asks the official LibTV CLI for connection state but never reads its tokens.
-- The EdgeOne build combines the static website with a constrained Python Cloud Function. It
-  must not claim it can run the full pipeline because it cannot access a visitor's local source
-  files, CLI login, browser cookies, persistent caches, or direct Obsidian filesystem writes.
-- EdgeOne Cloud Functions cannot access a visitor's local LibTV CLI login. The top-level
-  production page connects directly to `http://127.0.0.1:57231` after the browser grants
-  loopback access and a one-use fragment secret is exchanged for an in-memory session. The
-  Connector runs TK Note, ShotLoom Core (or the configured LibTV fallback), evidence merge, then
-  the selected final model API. The final model receives evidence only, never the source file.
-- Connector binds only to `127.0.0.1`, allows exact trusted Origins, validates CORS/PNA
-  preflights, requires a short-lived session for every action, and limits hosted analysis to one
-  video. It never exposes local settings, cache clearing, arbitrary file export, or CLI tokens.
-- `/settings.html` is a session-first BYOK surface. API keys stay in `sessionStorage`, travel
-  only to the authenticated loopback Connector for analysis, are never echoed by health
+- The EdgeOne build is a static product surface plus browser-safe export helpers. It does not run
+  TK Note, OpenCV, persistent caches, browser-cookie access or CLI login itself.
+- The production page calls an owner-operated ViralX Worker through a credential-free HTTPS base
+  URL. The Worker runs TK Note, ShotLoom Core (or owner-configured LibTV fallback), evidence merge,
+  then the selected visual model API. The model receives sampled frames during shot evidence and
+  the merged named evidence during final synthesis; it never receives an unbounded source-file upload.
+- The public Worker binds locally behind an outbound tunnel, allows exact trusted Origins, validates
+  CORS preflights, limits concurrency and request frequency, and applies evidence-cache retention.
+  It never mounts settings writes, cache clearing, arbitrary file export, local Cookie/proxy controls,
+  LibTV account actions or CLI tokens.
+- `/settings.html` is an optional session-level BYOK surface. Server defaults can make the product
+  ready without visitor configuration. Overrides stay in `sessionStorage`, are never echoed by health
   responses, and disappear when the tab closes.
-- Hosted settings require HTTPS for custom model endpoints. The authenticated local Connector
-  performs the final provider call; local Flask may deliberately use HTTP and private endpoints
-  for self-hosted models.
+- Hosted settings require HTTPS for custom model endpoints, and the public Worker rejects private,
+  loopback and non-standard-port destinations. Local Flask may deliberately use HTTP and private
+  endpoints for self-hosted models.
 - Public readiness labels distinguish interface availability, credential presence, and a
   completed external provider analysis; one must never be presented as proof of another.
 
@@ -166,7 +169,8 @@ change this sequence.
 - static/settings.css: settings-only layout.
 - static/viralx.js: full Flask interaction and GSAP.
 - static/settings.js: settings interaction and route entrance motion.
-- static/connector.js: hosted-page pairing, loopback permission request, session routing.
+- static/runtime-config.js: same-origin development defaults and hosted Worker routing contract.
+- static/cloud-config.js: session-only overrides plus endpoint routing to the public Worker.
 - static/assets/viralx-title-shuei-wide.svg: exact one-line outlined homepage claim.
 - static/assets/viralx-title-shuei-stacked.svg: exact two-line outlined mobile claim.
 - static/assets/viralx-signal-orbit-640.webp: mobile and compact-display hero source.
@@ -174,19 +178,21 @@ change this sequence.
 
 ## Production UX and security contract
 
-- Public availability is not analysis readiness. The homepage health check must route an
-  unconfigured primary action to `/settings` locally and `/settings.html` on EdgeOne. Readiness
-  depends on the selected shot strategy: ShotLoom configuration and dependencies, LibTV login, or
-  either provider in Auto mode; a final model is additionally required unless collection-only is selected.
+- Public availability is not analysis readiness. The homepage health check keeps the user at the
+  analysis studio and distinguishes Worker online, owner configuration incomplete, and Worker offline.
+  An offline primary action explains that static cases remain available; it never sends visitors to
+  Connector setup. Readiness depends on keyword search plus the fixed TK Note + ShotLoom path and a
+  visual-model connection.
 - TikTok Scraper7 is explained at the source field: video URLs bypass it, while keyword discovery needs
   it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> shot evidence ->
-  evidence merge -> final model`. ShotLoom is recommended, LibTV is an optional fallback, and
-  collection-only states plainly that it will not generate a final report.
-- LibTV connection UI exposes `connector_missing`, `pairing_required`, `disconnected`, `starting`,
-  `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
-  Starting/awaiting states prevent duplicate actions; errors always expose a recovery action,
-  and reduced motion removes the status pulse.
+- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> ShotLoom cut/frame ->
+  configured visual model -> evidence merge -> same model final synthesis`. TK Note is marked required,
+  ShotLoom + inherit is the default, LibTV is an explicit fallback, and collection-only states plainly
+  that it will not generate a final report.
+- Hosted LibTV state is owner-managed and read-only. Local Flask still exposes `disconnected`,
+  `starting`, `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
+  Starting/awaiting states prevent duplicate actions; errors always expose a recovery action, and
+  reduced motion removes the status pulse.
 - Settings validation is field-local. API key, model name and custom Base URL errors set
   `aria-invalid`, expose `aria-errormessage`, reveal the correct disclosure and move focus to
   the relevant control without forcing the user back to the page-level status region.
@@ -211,3 +217,44 @@ change this sequence.
   controls reuse the existing native radio, select, disclosure, field-error, and status patterns.
 - Added explicit blocked and fallback states. The UI never renders partial evidence as a completed
   report and never calls collection-only mode a full analysis.
+
+## Settings simplification record — 2026-08-31
+
+- Replaced the five equally prominent technical sections with one quick-setup surface and one
+  advanced accordion. The primary path asks for the desired outcome, Scraper7 Key, then the final
+  model Base URL, API Key and model ID.
+- Made Qwen3-VL Flash the recommended new-user model while keeping all three connection fields
+  visible. Editing the Base URL away from a provider preset automatically promotes the configuration
+  to a custom endpoint without losing the typed Key or model ID. The UI states that full analysis
+  requires a video-capable model.
+- Promoted keyword discovery to the primary configuration path because ViralX begins from a
+  keyword and discovers relevant high-performing videos. Direct URLs remain compatible, but they
+  do not make the Scraper7 credential optional in product setup. TK Note network controls,
+  shot-engine selection, LibTV, protocol selection, storage paths and saved topics remain advanced.
+- Verified the quick and evidence-only modes at desktop and mobile widths. Reduced-motion,
+  keyboard labels, field-local validation and runtime security boundaries remain unchanged.
+
+## Fixed evidence chain record — 2026-08-31
+
+- Reclassified TK Note from an apparent optional module to the mandatory collection stage after every
+  Scraper7 candidate. Advanced TK Note controls now describe recovery only; collection failure blocks all
+  downstream work.
+- Reclassified ShotLoom Core as scene-cut and frame-sampling infrastructure rather than a second model.
+  The default visual path reuses the Base URL, API Key and model ID configured in quick setup.
+- Changed the runtime default from implicit `auto` to `shotloom + inherit`. Legacy implicit-auto settings
+  migrate once through workflow version 2; explicit LibTV fallback, LibTV-only and collection-only remain.
+- Updated the public workflow diagram and copy so visual fact recognition and final evidence synthesis are
+  visibly two jobs performed by the configured visual model, with quality gates between them.
+
+## Owner-operated Worker record — 2026-08-31
+
+- Replaced visitor-side loopback pairing with one HTTPS Worker operated by the site owner. The public
+  webpage no longer loads Connector code, requests local-network permission or links an unready action
+  to settings.
+- Added explicit online, owner-configuration-incomplete and offline states. Offline keeps the portfolio
+  and static cases readable while live analysis is unavailable.
+- Restricted the public API to health, keywords, analysis and variant generation. CORS allowlisting,
+  one-task concurrency, per-source rate limiting, input limits, public-only custom endpoints and cache
+  retention protect a small personal server without exposing local management surfaces.
+- Hosted settings now treat Scraper7 and model credentials as optional session overrides when the Worker
+  already owns defaults. Local Cookie, proxy, directories, shot-engine and LibTV controls remain owner-only.

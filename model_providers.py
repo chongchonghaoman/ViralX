@@ -8,6 +8,13 @@ from urllib.parse import urlparse
 
 
 MODEL_PROVIDER_PRESETS = {
+    "qwen": {
+        "label": "Qwen3-VL Flash",
+        "protocol": "openai",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen3-vl-flash",
+        "vision": True,
+    },
     "openai": {
         "label": "OpenAI",
         "protocol": "openai",
@@ -118,7 +125,7 @@ def normalize_model_config(config: dict, *, allow_private_custom: bool = False) 
     if not provider and legacy_provider:
         provider = "custom" if legacy_provider == "minimax" else legacy_provider
     if provider not in SUPPORTED_MODEL_PROVIDERS:
-        provider = "openai"
+        provider = "qwen"
     preset = MODEL_PROVIDER_PRESETS[provider]
 
     legacy_key = legacy_base = legacy_model = ""

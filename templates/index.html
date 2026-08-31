@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#EDEDED">
   <meta name="description" content="ViralX 把短视频拆成可验证、可复用、可执行的结构证据。">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:57231">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ViralX · 把爆款拆到每一秒</title>
   <link rel="icon" href="data:,">
@@ -14,7 +14,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='connector.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='viralx.js') }}"></script>
 </head>
@@ -37,7 +37,7 @@
       </div>
       <div class="nav-actions">
         <a class="nav-secondary" href="/settings">设置</a>
-        <a class="nav-cta" href="/settings" data-runtime-action>连接分析服务</a>
+        <a class="nav-cta" href="#analysis-studio" data-runtime-action>查看实时状态</a>
         <a class="mobile-settings" href="/settings" aria-label="打开设置">•••</a>
       </div>
     </div>
@@ -63,7 +63,7 @@
           <span class="visually-hidden">把爆款拆到每一秒</span>
         </h1>
         <p class="hero-lede">ViralX 从原片、字幕和评论证据出发，解释钩子、镜头、声音与转化路径，再生成可以直接执行的复刻脚本。</p>
-        <a class="hero-cta" href="/settings" data-runtime-action>连接分析服务</a>
+        <a class="hero-cta" href="#analysis-studio" data-runtime-action>查看实时状态</a>
       </div>
 
       <section class="analysis-studio" id="analysis-studio" aria-labelledby="studio-title" data-motion="hero-form">
@@ -72,16 +72,16 @@
             <span class="section-label">视频来源 · 01</span>
             <h2 id="studio-title">从一条真实视频开始</h2>
           </div>
-          <span class="runtime-chip" id="runtime-chip" data-state="checking"><i aria-hidden="true"></i><span id="runtime-label">本地分析服务</span></span>
+          <span class="runtime-chip" id="runtime-chip" data-state="checking"><i aria-hidden="true"></i><span id="runtime-label">正在连接实时分析服务</span></span>
         </div>
 
         <div class="source-row">
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
             <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
-            <small class="source-help" id="source-help">搜索主题先由 TikTok Scraper7 找视频；随后 TK Note 下载真实原片，ShotLoom Core 生成镜头证据，最后模型 API 只基于证据综合分析。视频直链只跳过第一步。</small>
+            <small class="source-help" id="source-help">搜索主题先由 TikTok Scraper7 找视频；随后 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，上方视觉模型识别逐镜事实并基于合并证据终审。视频直链只跳过第一步。</small>
           </div>
-          <button class="btn btn-primary" id="analyze-btn" type="button">打开设置</button>
+          <button class="btn btn-primary" id="analyze-btn" type="button">检查运行环境</button>
         </div>
 
         <div class="source-tools">
@@ -117,9 +117,9 @@
           <div class="pipeline-stages" aria-label="任务阶段" aria-live="polite">
             <div class="stage" data-stage="discovery" data-state="idle"><span>01</span><strong>发现视频</strong><small class="stage__state">等待</small></div>
             <div class="stage" data-stage="collection" data-state="idle"><span>02</span><strong>TK Note 采集</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-stage="shot-analysis" data-state="idle"><span>03</span><strong>镜头证据</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="shot-analysis" data-state="idle"><span>03</span><strong>切镜与识别</strong><small class="stage__state">等待</small></div>
             <div class="stage" data-stage="evidence-merge" data-state="idle"><span>04</span><strong>合并证据</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-stage="final-analysis" data-state="idle"><span>05</span><strong>模型分析</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="final-analysis" data-state="idle"><span>05</span><strong>证据终审</strong><small class="stage__state">等待</small></div>
           </div>
           <div class="error" id="error" role="alert" tabindex="-1" hidden></div>
           <div class="loading" id="loading" role="status" hidden>正在串联采集、镜头取证与模型分析。视频较长时可能需要几分钟。</div>

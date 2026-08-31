@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import web_app
@@ -12,6 +14,23 @@ class WebAppTests(unittest.TestCase):
     def test_pages_render_without_config_file(self):
         self.assertEqual(self.client.get('/').status_code, 200)
         self.assertEqual(self.client.get('/settings').status_code, 200)
+
+    def test_legacy_implicit_auto_workflow_migrates_to_fixed_visual_pipeline(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / 'config.json'
+            config_path.write_text(json.dumps({
+                'workflow_version': 1,
+                'shot_engine': 'auto',
+                'shot_model_source': 'qwen',
+            }), encoding='utf-8')
+            with patch.object(web_app, 'CONFIG_PATH', config_path), patch.dict(
+                web_app.os.environ, {}, clear=True,
+            ):
+                config = web_app.load_config()
+
+        self.assertEqual(config['workflow_version'], 2)
+        self.assertEqual(config['shot_engine'], 'shotloom')
+        self.assertEqual(config['shot_model_source'], 'inherit')
 
     def test_health_returns_readiness_without_secret_values(self):
         with patch.object(web_app.libtv_auth, 'status', return_value={
@@ -27,7 +46,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload['libtv']['auth'], 'web')
         self.assertEqual(payload['libtv']['connection_state'], 'disconnected')
 
-    def test_health_reports_selected_generic_model_provider(self):
+    def test_health_reports_but_does_not_mark_a_text_only_model_pipeline_ready(self):
         config = {
             **web_app.DEFAULT_CONFIG,
             'analysis_mode': 'pipeline',
@@ -44,7 +63,8 @@ class WebAppTests(unittest.TestCase):
             response = self.client.get('/api/health')
         payload = response.get_json()
         self.assertEqual(payload['analysis_provider'], 'deepseek')
-        self.assertTrue(payload['analysis_ready'])
+        self.assertFalse(payload['analysis_ready'])
+        self.assertFalse(payload['configured']['shot'])
         self.assertTrue(payload['configured']['model'])
         self.assertNotIn('local-secret', json.dumps(payload))
 

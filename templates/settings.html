@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#EDEDED">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' http://127.0.0.1:57231">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='settings.css') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='connector.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js') }}"></script>
   <script defer src="{{ url_for('static', filename='settings.js') }}"></script>
 </head>
@@ -27,10 +27,8 @@
           <span>ViralX</span>
         </a>
         <nav class="desktop-nav" aria-label="主导航">
-          <a href="#runtime">运行模式</a>
-          <a href="#tk-note">TK Note</a>
-          <a href="#shots">镜头证据</a>
-          <a href="#models">模型 API</a>
+          <a href="#runtime">快速配置</a>
+          <a href="#advanced" data-server-owner-only>高级设置</a>
         </nav>
       </div>
       <div class="nav-actions">
@@ -43,294 +41,382 @@
 
   <main class="settings-main" id="main-content">
     <header class="settings-hero" data-motion="reveal">
-      <p class="section-label">系统配置 · VIRALX</p>
-      <h1>把分析链，<br>配置清楚。</h1>
-      <p>一条可验证的分析链：先锁定并下载真实原片，再生成带镜头 ID 的视觉证据，最后才允许模型做综合判断。</p>
+      <p class="section-label">VIRALX · SETUP</p>
+      <h1>先跑起来，<br>再谈参数。</h1>
+      <p>准备两把 Key：Scraper7 从关键词发现爆款，Qwen3-VL Flash 把真实证据变成复刻脚本。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
 
-    <div class="settings-layout">
+    <div class="settings-layout settings-layout--simple">
       <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
-        <a href="#runtime">固定链路</a>
-        <a href="#tk-note">TK Note</a>
-        <a href="#shots">镜头证据</a>
-        <a href="#models">模型 API</a>
-        <a href="#topics">搜索主题</a>
+        <a href="#runtime">快速配置</a>
+        <a href="#advanced">高级设置</a>
       </nav>
 
       <form class="settings-form" id="settings-form" novalidate>
         <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
 
         <div class="settings-actions" data-motion="reveal" aria-label="设置保存操作">
-          <p>保存后，新任务立即使用这组配置。</p>
+          <p>保存后，新的分析任务立即使用这组配置。</p>
           <div>
-            <button class="btn btn-primary" id="save-btn" type="submit">保存设置</button>
+            <button class="btn btn-primary" id="save-btn" type="submit">保存并开始</button>
             <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
             <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
           </div>
         </div>
 
-        <section class="settings-section" id="runtime" data-motion="reveal">
-          <div class="settings-section__head">
+        <section class="settings-section settings-section--quick" id="runtime" data-motion="reveal">
+          <div class="settings-section__head settings-section__head--compact">
             <span>01</span>
-            <div><h2>固定分析链</h2><p>每个任务按同一顺序执行；这里配置检索阈值与各阶段所需能力。</p></div>
+            <div>
+              <h2>快速配置</h2>
+              <p>TK Note 与 ShotLoom 已固定串联，不需要先理解底层组件。</p>
+            </div>
           </div>
+
           <input type="hidden" id="analysis_mode" name="analysis_mode" value="pipeline">
-          <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
-            <div><span>01</span><strong>Scraper7</strong><small>发现候选视频</small></div>
-            <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
-            <div><span>03</span><strong>镜头引擎</strong><small>逐镜事实证据</small></div>
-            <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
-            <div><span>05</span><strong>模型 API</strong><small>最终分析与脚本</small></div>
-          </div>
-          <div class="settings-grid">
-            <div class="settings-field">
-              <label for="min_likes">关键词检索最低点赞数</label>
-              <input type="number" id="min_likes" name="min_likes" min="0" step="100" placeholder="5000">
-              <small class="field-note">直接视频链接不受这个阈值影响。</small>
-            </div>
-            <div class="settings-field">
-              <label for="rapidapi_key">TikTok Scraper7 RapidAPI Key</label>
-              <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" placeholder="用于 TikTok Scraper7 关键词搜索">
-              <small class="field-note">固定调用 <code>/feed/search</code>；仅关键词搜索需要，视频直链仍从 TK Note 开始。</small>
-            </div>
-            <div class="settings-field" data-local-only>
-              <label for="output_dir">分析输出目录</label>
-              <input type="text" id="output_dir" name="output_dir" data-mono="true" placeholder="./data">
-              <small class="field-note">报告、缓存与导出前的本地工作目录。</small>
-            </div>
-          </div>
-        </section>
 
-        <section class="settings-section" id="tk-note" data-motion="reveal">
-          <div class="settings-section__head">
-            <span>02</span>
-            <div><h2>TK Note 采集层</h2><p>下载原视频、平台元数据、评论、字幕与 ASR，形成第一份证据包。</p></div>
-          </div>
-          <div class="settings-grid">
-            <div class="settings-field">
-              <label for="tk_note_asr_backend">字幕 / ASR 策略</label>
-              <select id="tk_note_asr_backend" name="tk_note_asr_backend">
-                <option value="auto">字幕优先，ASR 兜底</option>
-                <option value="none">只下载与字幕</option>
-                <option value="qwen3-asr">固定 Qwen3-ASR</option>
-                <option value="whisper">固定 Whisper</option>
-              </select>
-              <small class="field-note">自动模式优先复用已有字幕与转写。</small>
-            </div>
-            <div class="settings-field">
-              <label for="tk_note_language">转写语言</label>
-              <input type="text" id="tk_note_language" name="tk_note_language" placeholder="auto">
-              <small class="field-note">可填 Chinese、English、ja 等后端支持值。</small>
-            </div>
-            <div class="settings-field">
-              <label for="tk_note_cookies_from_browser">授权浏览器 Cookie</label>
-              <select id="tk_note_cookies_from_browser" name="tk_note_cookies_from_browser">
-                <option value="">不使用</option>
-                <option value="chrome">Chrome</option>
-                <option value="edge">Edge</option>
-                <option value="firefox">Firefox</option>
-                <option value="brave">Brave</option>
-              </select>
-              <small class="field-note">仅在公开视频被登录墙拦截时启用；选择值只发送给 127.0.0.1 Connector，Cookie 内容不会进入网页。</small>
-            </div>
-            <div class="settings-field">
-              <label for="tk_note_proxy">本地代理</label>
-              <input type="password" id="tk_note_proxy" name="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
-              <small class="field-note">留空时自动沿用 Windows 系统代理；手填值只发送给 127.0.0.1 Connector，凭据不会写入视频资产或日志。</small>
-            </div>
-            <div class="settings-field">
-              <label for="tk_note_timeout">单条采集等待上限</label>
-              <input type="number" id="tk_note_timeout" name="tk_note_timeout" min="120" max="7200" step="60" placeholder="1800">
-              <small class="field-note">单位为秒；长视频可适当提高。</small>
-            </div>
-            <div class="settings-field" data-local-only>
-              <label for="video_cache_dir">证据缓存目录</label>
-              <input type="text" id="video_cache_dir" name="video_cache_dir" data-mono="true" placeholder="./video_cache">
-              <small class="field-note">保存原片、元数据、转写和资产清单。</small>
+          <div class="quick-assurance" aria-label="推荐配置说明">
+            <span class="quick-assurance__mark" aria-hidden="true">✓</span>
+            <div>
+              <strong>推荐参数已经就位</strong>
+              <p>Scraper7 发现爆款，TK Note 下载证据，ShotLoom 切镜取帧，Qwen3-VL Flash 先识别再终审。</p>
             </div>
           </div>
-        </section>
 
-        <section class="settings-section" id="shots" data-motion="reveal">
-          <div class="settings-section__head">
-            <span>03</span>
-            <div><h2>镜头证据引擎</h2><p>直接读取 TK Note 已下载的同一份原片，输出带时间线、镜头 ID 和文件哈希的视觉事实。LibTV 现在是备用，不再是强制前置。</p></div>
-          </div>
-          <fieldset class="provider-picker" aria-describedby="shot-engine-help">
-            <legend>选择运行策略</legend>
-            <p class="field-note" id="shot-engine-help">推荐自动模式：优先在本机运行 ShotLoom Core；不可用或证据不完整时才回退到 LibTV。</p>
-            <div class="provider-grid">
-              <label class="provider-option">
-                <input type="radio" name="shot_engine" value="auto">
-                <span><strong>自动 · 推荐</strong><small>ShotLoom 优先，LibTV 备用</small></span>
+          <fieldset class="quick-mode-picker" aria-describedby="quick-mode-help" data-server-owner-only>
+            <legend>你想得到什么？</legend>
+            <p class="field-note" id="quick-mode-help">之后仍可在高级设置中更换模型，或配置故障回退。</p>
+            <div class="quick-mode-grid">
+              <label class="quick-mode-option">
+                <input type="radio" name="quick_mode" value="full">
+                <span>
+                  <small>推荐</small>
+                  <strong>完整分析与复刻脚本</strong>
+                  <em>原片、证据、镜头结构和最终脚本</em>
+                </span>
               </label>
-              <label class="provider-option">
-                <input type="radio" name="shot_engine" value="shotloom">
-                <span><strong>仅 ShotLoom</strong><small>本地检测，不静默回退</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="shot_engine" value="libtv">
-                <span><strong>仅 LibTV</strong><small>使用官方 CLI 与网页授权</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="shot_engine" value="skip">
-                <span><strong>只采集</strong><small>保存 TK Note 证据，不生成报告</small></span>
+              <label class="quick-mode-option">
+                <input type="radio" name="quick_mode" value="evidence">
+                <span>
+                  <small>轻量</small>
+                  <strong>只下载原片与证据</strong>
+                  <em>不调用模型，不生成最终报告</em>
+                </span>
               </label>
             </div>
           </fieldset>
 
-          <details class="section-disclosure" id="shot-model-disclosure" open>
-            <summary><span><strong>ShotLoom Core 视觉模型</strong><small id="shotloom-summary-state">正在检查</small></span></summary>
-            <div class="section-disclosure__body">
-              <div class="settings-grid">
-                <div class="settings-field">
-                  <label for="shot_model_source">模型来源</label>
-                  <select id="shot_model_source" name="shot_model_source">
-                    <option value="inherit">复用最终视觉模型</option>
-                    <option value="qwen">Qwen VL</option>
-                    <option value="custom">自定义 OpenAI-compatible</option>
-                  </select>
-                  <small class="field-note">DeepSeek 等纯文本模型不能被复用；镜头模型与最终模型职责分离。</small>
-                </div>
-                <div class="settings-field">
-                  <label for="shot_scene_threshold">切镜灵敏度</label>
-                  <input type="number" id="shot_scene_threshold" name="shot_scene_threshold" min="5" max="80" step="1" placeholder="27">
-                  <small class="field-note">数值越低越敏感；默认 27。少于 80ms 的检测噪声才会合并。</small>
-                </div>
-                <div class="settings-field settings-field--wide" data-shot-model-field="credential">
-                  <label for="shot_model_api_key">镜头模型 API Key</label>
-                  <input type="password" id="shot_model_api_key" name="shot_model_api_key" autocomplete="off" placeholder="仅 Qwen / 自定义模型需要">
-                  <small class="field-note">只用于关键帧事实识别；不会发送平台评论或要求营销判断。</small>
-                </div>
-                <div class="settings-field" data-shot-model-field="base">
-                  <label for="shot_model_base_url">镜头模型 Base URL</label>
-                  <input type="url" id="shot_model_base_url" name="shot_model_base_url" data-mono="true" placeholder="https://api.example.com/v1">
-                  <small class="field-note">填写 API 根地址，不含 <code>/chat/completions</code>。</small>
-                </div>
-                <div class="settings-field" data-shot-model-field="model">
-                  <label for="shot_model_name">镜头模型名称</label>
-                  <input type="text" id="shot_model_name" name="shot_model_name" data-mono="true" placeholder="qwen-vl-max">
-                  <small class="field-note">必须支持 OpenAI Chat Completions 图片输入。</small>
-                </div>
+          <div class="quick-search-card">
+            <div class="quick-search-card__head">
+              <span>KEY 01</span>
+              <div>
+                <h3>TikTok Scraper7</h3>
+                <p>ViralX 的基础入口：根据关键词抓取相关爆款视频，再交给证据流水线。</p>
               </div>
-            </div>
-          </details>
-
-          <details class="section-disclosure" id="libtv-fallback-disclosure">
-            <summary><span><strong>LibTV 备用连接 · 可选</strong><small id="libtv-summary-state">正在检查</small></span></summary>
-            <div class="section-disclosure__body">
-              <div class="libtv-connect-panel" id="libtv-connection" data-connection-state="starting" aria-live="polite">
-                <div class="libtv-connect-panel__status">
-                  <span class="libtv-status-dot" aria-hidden="true"></span>
-                  <div>
-                    <strong id="libtv-auth-label">正在检查 LibTV</strong>
-                    <p id="libtv-auth-message">确认本机 CLI 与网页登录状态…</p>
-                  </div>
-                </div>
-                <div class="libtv-connect-panel__actions">
-                  <button class="btn btn-primary" id="libtv-connect-btn" type="button">连接 LibTV</button>
-                  <button class="refresh-link" id="libtv-refresh-btn" type="button">刷新状态</button>
-                  <button class="refresh-link" id="libtv-disconnect-btn" type="button" hidden>断开连接</button>
-                  <a class="refresh-link" id="connector-guide-link" href="https://github.com/chongchonghaoman/ViralX#在网页使用本机-libtv" target="_blank" rel="noopener noreferrer" hidden>启动 Connector</a>
-                  <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
-                </div>
-                <p class="libtv-privacy">自动模式只在 ShotLoom Core 不可用或证据质量不达标时调用 LibTV。Connector 只监听 127.0.0.1；LibTV token 仍只由官方 CLI 保存。</p>
-              </div>
-            </div>
-          </details>
-        </section>
-
-        <section class="settings-section" id="models" data-motion="reveal">
-          <div class="settings-section__head">
-            <span>04</span>
-            <div><h2>最终模型 API</h2><p>只读取已经合并的平台、TK Note 与镜头证据；不会收到原视频文件，也不能绕过镜头引用进行猜测。</p></div>
-          </div>
-          <details class="section-disclosure" open>
-            <summary><span><strong>模型服务商与凭据 · 流水线必需</strong><small>最终综合分析</small></span></summary>
-            <div class="section-disclosure__body">
-          <fieldset class="provider-picker" aria-describedby="provider-help">
-            <legend>选择模型服务商</legend>
-            <p class="field-note" id="provider-help">模型不直接替代采集或拉片；它只在证据合并完成后做最终综合判断。</p>
-            <div class="provider-grid">
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="openai">
-                <span><strong>OpenAI</strong><small>通用视觉与文本分析</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="anthropic">
-                <span><strong>Claude</strong><small>Anthropic Messages API</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="gemini">
-                <span><strong>Gemini</strong><small>原生视频多模态分析</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="deepseek">
-                <span><strong>DeepSeek</strong><small>低成本文本证据分析</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="openrouter">
-                <span><strong>OpenRouter</strong><small>一个 Key 切换多家模型</small></span>
-              </label>
-              <label class="provider-option">
-                <input type="radio" name="model_provider" value="custom">
-                <span><strong>自定义</strong><small>自己的协议、地址与模型</small></span>
-              </label>
-            </div>
-          </fieldset>
-
-          <div class="provider-config" id="provider-config">
-            <div class="provider-summary" aria-live="polite">
-              <span>当前接口</span>
-              <strong id="provider-name">OpenAI</strong>
-              <code id="provider-endpoint">https://api.openai.com/v1</code>
             </div>
             <div class="settings-grid">
               <div class="settings-field settings-field--wide">
-                <label for="model_api_key">API Key</label>
-                <input type="password" id="model_api_key" name="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴当前服务商的 API Key">
-                <small class="field-note" id="model-key-note">网页端只保存在当前标签页，并经安全配对发送给本机 Connector；Connector 只把它发往所选模型服务，不写入 EdgeOne 或日志。本地 Flask 写入本机 config.json。</small>
+                <label for="rapidapi_key">RapidAPI Key</label>
+                <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" aria-describedby="rapidapi-key-note" placeholder="粘贴 TikTok Scraper7 RapidAPI Key">
+                <small class="field-note" id="rapidapi-key-note">关键词发现必填。Key 只发送给 Scraper7，不会出现在结果或日志中。</small>
               </div>
-              <div class="settings-field settings-field--wide">
-                <label for="model_name">模型名称</label>
-                <input type="text" id="model_name" name="model_name" data-mono="true" aria-describedby="model-name-note" placeholder="model-id">
-                <small class="field-note" id="model-name-note">使用账户实际可调用的完整模型 ID。</small>
-              </div>
-              <div class="settings-field" data-custom-model hidden>
-                <label for="model_protocol">接口协议</label>
-                <select id="model_protocol" name="model_protocol">
-                  <option value="openai">OpenAI Chat Completions 兼容</option>
-                  <option value="anthropic">Anthropic Messages 兼容</option>
-                </select>
-                <small class="field-note">决定请求体、鉴权和响应解析方式。</small>
-              </div>
-              <div class="settings-field" data-custom-model hidden>
-                <label for="model_base_url">Base URL</label>
-                <input type="url" id="model_base_url" name="model_base_url" data-mono="true" aria-describedby="model-url-note" placeholder="https://api.example.com/v1">
-                <small class="field-note" id="model-url-note">填 API 根地址，不要包含 /chat/completions 或查询参数。</small>
+              <div class="settings-field">
+                <label for="min_likes">爆款最低点赞数</label>
+                <input type="number" id="min_likes" name="min_likes" min="0" step="100" placeholder="5000">
+                <small class="field-note">用于筛选关键词搜索结果，默认 5000。</small>
               </div>
             </div>
-            <p class="provider-privacy">ViralX 不会在健康检查、分析结果或日志中回显 API Key。EdgeOne 不代理分析请求；本机 Connector 完成 TK Note、镜头证据与合并后，再把证据文本发给最终模型。</p>
           </div>
+
+          <div class="quick-model-card" id="quick-model-card">
+            <div class="quick-model-card__head">
+              <div>
+                <span class="recommend-pill">KEY 02 · 推荐模型</span>
+                <h3>Qwen3-VL Flash</h3>
+                <p id="quick-model-copy">推荐配置已填好，也可以接入第三方兼容服务。</p>
+                <small class="quick-model-requirement">所选模型需要具备视频识别能力。</small>
+              </div>
+              <a href="#models">使用其他预设</a>
+            </div>
+            <div class="settings-grid quick-model-fields">
+              <div class="settings-field settings-field--wide">
+                <label for="model_base_url">Base URL</label>
+                <input type="url" id="model_base_url" name="model_base_url" data-mono="true" aria-describedby="model-url-note" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+                <small class="field-note" id="model-url-note">可填写官方或第三方兼容地址；填写 API 根地址，不含 /chat/completions。</small>
+              </div>
+              <div class="settings-field">
+                <label for="model_api_key">API Key</label>
+                <input type="password" id="model_api_key" name="model_api_key" autocomplete="off" aria-describedby="model-key-note" placeholder="粘贴模型服务的 API Key">
+                <small class="field-note" id="model-key-note">只保存在当前标签页或本机配置，不会出现在结果与日志中。</small>
+              </div>
+              <div class="settings-field">
+                <label for="model_name">模型名称</label>
+                <input type="text" id="model_name" name="model_name" data-mono="true" aria-describedby="model-name-note" placeholder="qwen3-vl-flash">
+                <small class="field-note" id="model-name-note">推荐 qwen3-vl-flash；第三方服务请填写它实际提供的模型 ID。</small>
+              </div>
+            </div>
+          </div>
+
+          <details class="pipeline-peek">
+            <summary>查看 ViralX 如何工作</summary>
+            <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
+              <div><span>01</span><strong>Scraper7</strong><small>发现候选视频</small></div>
+              <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
+              <div><span>03</span><strong>ShotLoom + 视觉模型</strong><small>切镜并识别逐镜事实</small></div>
+              <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
+              <div><span>05</span><strong>模型 API</strong><small>最终分析与脚本</small></div>
             </div>
           </details>
         </section>
 
-        <section class="settings-section" id="topics" data-motion="reveal">
+        <section class="settings-section settings-section--advanced" id="advanced" data-motion="reveal" data-server-owner-only>
           <div class="settings-section__head">
-            <span>05</span>
-            <div><h2>搜索主题</h2><p>管理分析页会显示的常用主题；按回车添加。</p></div>
-          </div>
-          <div class="keyword-editor">
-            <div class="keywords-list" id="keywords-list" aria-live="polite"></div>
-            <div class="settings-field">
-              <label for="new-keyword">新主题</label>
-              <input type="text" id="new-keyword" name="new_keyword" autocomplete="off" placeholder="例如：camping light review">
-              <small class="field-note">输入后按 Enter 添加。</small>
+            <span>02</span>
+            <div>
+              <h2>高级设置</h2>
+              <p>只有默认流程不适合你时才需要打开。所有原有能力仍在这里。</p>
             </div>
           </div>
+
+          <details class="advanced-disclosure" id="tk-note">
+            <summary>
+              <span><strong>TK Note 采集故障处理</strong><small>基础流程固定执行；这里只调整字幕、登录墙与网络</small></span>
+              <em>必经</em>
+            </summary>
+            <div class="advanced-disclosure__body">
+              <div class="fixed-flow-note" role="note">
+                <span>固定步骤</span>
+                <div>
+                  <strong>每条 Scraper7 候选都会交给 TK Note</strong>
+                  <p>TK Note 下载对应原片、帖子元数据、字幕或转写；采集失败会阻断后续镜头与模型分析。</p>
+                </div>
+              </div>
+              <div class="settings-grid">
+                <div class="settings-field">
+                  <label for="tk_note_asr_backend">字幕 / ASR 策略</label>
+                  <select id="tk_note_asr_backend" name="tk_note_asr_backend">
+                    <option value="auto">字幕优先，ASR 兜底</option>
+                    <option value="none">只下载与字幕</option>
+                    <option value="qwen3-asr">固定 Qwen3-ASR</option>
+                    <option value="whisper">固定 Whisper</option>
+                  </select>
+                  <small class="field-note">自动模式优先复用已有字幕与转写。</small>
+                </div>
+                <div class="settings-field">
+                  <label for="tk_note_language">转写语言</label>
+                  <input type="text" id="tk_note_language" name="tk_note_language" placeholder="auto">
+                  <small class="field-note">可填 Chinese、English、ja 等后端支持值。</small>
+                </div>
+                <div class="settings-field">
+                  <label for="tk_note_cookies_from_browser">授权浏览器 Cookie</label>
+                  <select id="tk_note_cookies_from_browser" name="tk_note_cookies_from_browser">
+                    <option value="">不使用</option>
+                    <option value="chrome">Chrome</option>
+                    <option value="edge">Edge</option>
+                    <option value="firefox">Firefox</option>
+                    <option value="brave">Brave</option>
+                  </select>
+                  <small class="field-note">只在公开视频被登录墙拦截时启用；网页不会读取 Cookie 内容。</small>
+                </div>
+                <div class="settings-field">
+                  <label for="tk_note_proxy">本地代理</label>
+                  <input type="password" id="tk_note_proxy" name="tk_note_proxy" autocomplete="off" placeholder="http://127.0.0.1:7890">
+                  <small class="field-note">留空时自动沿用 Windows 系统代理。</small>
+                </div>
+                <div class="settings-field">
+                  <label for="tk_note_timeout">单条采集等待上限</label>
+                  <input type="number" id="tk_note_timeout" name="tk_note_timeout" min="120" max="7200" step="60" placeholder="1800">
+                  <small class="field-note">单位为秒；长视频可适当提高。</small>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details class="advanced-disclosure" id="shots">
+            <summary>
+              <span><strong>镜头取证与故障回退</strong><small>ShotLoom 负责切镜；默认复用上方视觉模型识别</small></span>
+              <em id="shot-engine-summary">固定</em>
+            </summary>
+            <div class="advanced-disclosure__body">
+              <div class="fixed-flow-note fixed-flow-note--shots" role="note">
+                <span>默认链路</span>
+                <div>
+                  <strong>ShotLoom 切镜 → <span id="shot-model-inherited-name">qwen3-vl-flash</span> 识别</strong>
+                  <p>ShotLoom Core 不是第二个模型：它只对 TK Note 原片切镜、抽帧，再把关键帧交给上方配置的视觉模型生成事实证据。</p>
+                </div>
+              </div>
+              <fieldset class="provider-picker" aria-describedby="shot-engine-help">
+                <legend>故障回退策略</legend>
+                <p class="field-note" id="shot-engine-help">默认不需要修改。只有 ShotLoom 无法生成完整证据时，才考虑启用 LibTV 或只采集。</p>
+                <div class="provider-grid provider-grid--compact">
+                  <label class="provider-option">
+                    <input type="radio" name="shot_engine" value="shotloom">
+                    <span><strong>标准流程 · 推荐</strong><small>ShotLoom 切镜，上方视觉模型识别</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="shot_engine" value="auto">
+                    <span><strong>失败后回退 LibTV</strong><small>ShotLoom 证据失败时再调用 LibTV</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="shot_engine" value="libtv">
+                    <span><strong>仅 LibTV</strong><small>使用官方 CLI 与网页授权</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="shot_engine" value="skip">
+                    <span><strong>只采集</strong><small>不生成镜头与最终报告</small></span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <details class="section-disclosure" id="shot-model-disclosure">
+                <summary><span><strong>独立镜头模型 · 专家选项</strong><small id="shotloom-summary-state">默认复用上方模型</small></span></summary>
+                <div class="section-disclosure__body">
+                  <p class="section-disclosure__intro">只有上方模型不支持视觉输入，或你明确需要另一套镜头识别服务时才修改。</p>
+                  <div class="settings-grid">
+                    <div class="settings-field">
+                      <label for="shot_model_source">模型来源</label>
+                      <select id="shot_model_source" name="shot_model_source">
+                        <option value="inherit">复用上方视觉模型</option>
+                        <option value="qwen">单独使用 Qwen3-VL Flash</option>
+                        <option value="custom">自定义 OpenAI-compatible</option>
+                      </select>
+                      <small class="field-note">默认复用上方视觉模型，不需要第二把 Key。</small>
+                    </div>
+                    <div class="settings-field">
+                      <label for="shot_scene_threshold">切镜灵敏度</label>
+                      <input type="number" id="shot_scene_threshold" name="shot_scene_threshold" min="5" max="80" step="1" placeholder="27">
+                      <small class="field-note">数值越低越敏感；建议保留 27。</small>
+                    </div>
+                    <div class="settings-field settings-field--wide" data-shot-model-field="credential">
+                      <label for="shot_model_api_key">镜头模型 API Key</label>
+                      <input type="password" id="shot_model_api_key" name="shot_model_api_key" autocomplete="off" placeholder="只在使用独立镜头模型时填写">
+                      <small class="field-note">只用于关键帧事实识别。</small>
+                    </div>
+                    <div class="settings-field" data-shot-model-field="base">
+                      <label for="shot_model_base_url">镜头模型 Base URL</label>
+                      <input type="url" id="shot_model_base_url" name="shot_model_base_url" data-mono="true" placeholder="https://api.example.com/v1">
+                    </div>
+                    <div class="settings-field" data-shot-model-field="model">
+                      <label for="shot_model_name">镜头模型名称</label>
+                      <input type="text" id="shot_model_name" name="shot_model_name" data-mono="true" placeholder="qwen3-vl-flash">
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="section-disclosure" id="libtv-fallback-disclosure">
+                <summary><span><strong>LibTV 故障回退 · 可选</strong><small id="libtv-summary-state">正在检查</small></span></summary>
+                <div class="section-disclosure__body">
+                  <div class="libtv-connect-panel" id="libtv-connection" data-connection-state="starting" aria-live="polite">
+                    <div class="libtv-connect-panel__status">
+                      <span class="libtv-status-dot" aria-hidden="true"></span>
+                      <div>
+                        <strong id="libtv-auth-label">正在检查 LibTV</strong>
+                        <p id="libtv-auth-message">确认本机 CLI 与网页登录状态…</p>
+                      </div>
+                    </div>
+                    <div class="libtv-connect-panel__actions">
+                      <button class="btn btn-primary" id="libtv-connect-btn" type="button">连接 LibTV</button>
+                      <button class="refresh-link" id="libtv-refresh-btn" type="button">刷新状态</button>
+                      <button class="refresh-link" id="libtv-disconnect-btn" type="button" hidden>断开连接</button>
+                      <a class="refresh-link" id="libtv-install-link" href="https://www.liblib.tv/cli" target="_blank" rel="noopener noreferrer" hidden>安装官方 CLI</a>
+                    </div>
+                    <p class="libtv-privacy">标准流程不会调用 LibTV；只有你明确选择“失败后回退 LibTV”或“仅 LibTV”才会使用。LibTV token 仍只由官方 CLI 保存。</p>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </details>
+
+          <details class="advanced-disclosure" id="models">
+            <summary>
+              <span><strong>视觉模型与接口</strong><small>同一模型负责逐镜识别与证据终审</small></span>
+              <em id="model-summary">Qwen3-VL Flash</em>
+            </summary>
+            <div class="advanced-disclosure__body">
+              <fieldset class="provider-picker" aria-describedby="provider-help">
+                <legend>视觉模型服务商</legend>
+                <p class="field-note" id="provider-help">Qwen3-VL Flash 是推荐项；切换服务商会自动填写上方参数，完整分析请选择具备视频识别能力的模型。</p>
+                <div class="provider-grid">
+                  <label class="provider-option provider-option--recommended">
+                    <input type="radio" name="model_provider" value="qwen">
+                    <span><strong>Qwen3-VL Flash</strong><small>推荐 · 视频识别与脚本共用一把 Key</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="openai">
+                    <span><strong>OpenAI</strong><small>通用视觉与文本分析</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="anthropic">
+                    <span><strong>Claude</strong><small>Anthropic Messages API</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="gemini">
+                    <span><strong>Gemini</strong><small>原生多模态分析</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="deepseek">
+                    <span><strong>DeepSeek</strong><small>低成本文本终审，需独立视觉模型</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="openrouter">
+                    <span><strong>OpenRouter</strong><small>一个 Key 切换多家模型</small></span>
+                  </label>
+                  <label class="provider-option">
+                    <input type="radio" name="model_provider" value="custom">
+                    <span><strong>自定义 API</strong><small>自己的协议、地址与模型</small></span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <div class="provider-config" id="provider-config">
+                <div class="provider-summary" aria-live="polite">
+                  <span>当前接口</span>
+                  <strong id="provider-name">Qwen3-VL Flash</strong>
+                  <code id="provider-endpoint">https://dashscope.aliyuncs.com/compatible-mode/v1</code>
+                </div>
+                <div class="settings-grid">
+                  <div class="settings-field" data-custom-model hidden>
+                    <label for="model_protocol">接口协议</label>
+                    <select id="model_protocol" name="model_protocol">
+                      <option value="openai">OpenAI Chat Completions 兼容</option>
+                      <option value="anthropic">Anthropic Messages 兼容</option>
+                    </select>
+                  </div>
+                </div>
+                <p class="provider-privacy">选择预设会自动填写上方三项参数；也可以直接修改 Base URL、API Key 与模型名称接入第三方服务。</p>
+              </div>
+            </div>
+          </details>
+
+          <details class="advanced-disclosure" id="topics">
+            <summary>
+              <span><strong>目录与常用主题</strong><small>本地缓存、输出位置与搜索主题</small></span>
+              <em>可选</em>
+            </summary>
+            <div class="advanced-disclosure__body">
+              <div class="settings-grid">
+                <div class="settings-field" data-local-only>
+                  <label for="output_dir">分析输出目录</label>
+                  <input type="text" id="output_dir" name="output_dir" data-mono="true" placeholder="./data">
+                </div>
+                <div class="settings-field" data-local-only>
+                  <label for="video_cache_dir">证据缓存目录</label>
+                  <input type="text" id="video_cache_dir" name="video_cache_dir" data-mono="true" placeholder="./video_cache">
+                </div>
+              </div>
+              <div class="keyword-editor">
+                <div class="keywords-list" id="keywords-list" aria-live="polite"></div>
+                <div class="settings-field">
+                  <label for="new-keyword">添加常用搜索主题</label>
+                  <input type="text" id="new-keyword" name="new_keyword" autocomplete="off" placeholder="例如：picture lights">
+                  <small class="field-note">输入后按 Enter 添加。</small>
+                </div>
+              </div>
+            </div>
+          </details>
         </section>
       </form>
     </div>
@@ -339,12 +425,12 @@
   <footer class="site-footer">
     <div class="footer-lead">
       <a class="brand brand--footer" href="/">ViralX</a>
-      <p>配置留在本地；证据留在你的工作区。</p>
+      <p>默认就能开始，高级能力仍然完整。</p>
     </div>
     <div class="footer-index" aria-label="设置页索引">
-      <div><span>运行</span><a href="#runtime">固定链路</a><a href="#tk-note">TK Note</a><a href="#shots">镜头证据</a></div>
-      <div><span>模型</span><a href="#models">常用服务商</a><a href="#models">自定义 API</a><a href="#models">会话密钥</a></div>
-      <div><span>返回</span><a href="/">分析首页</a><p>本地 Flask</p><p>静态 EdgeOne 展示</p></div>
+      <div><span>开始</span><a href="#runtime">快速配置</a><a href="/">分析首页</a></div>
+      <div><span>调整</span><a href="#advanced">高级设置</a><a href="#models">更换模型</a></div>
+      <div><span>流程</span><p>TK Note 必经</p><p>ShotLoom 切镜</p><p>视觉模型终审</p></div>
     </div>
     <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>
     <strong class="footer-wordmark" aria-hidden="true">ViralX</strong>

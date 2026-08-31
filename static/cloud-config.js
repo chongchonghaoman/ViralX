@@ -7,6 +7,7 @@
     "min_likes",
     "rapidapi_key",
     "tk_note_asr_backend",
+    "tk_note_cookies_from_browser",
     "tk_note_language",
     "tk_note_proxy",
     "tk_note_timeout",
@@ -59,30 +60,11 @@
     minimax_model: "X-ViralX-MiniMax-Model",
   };
 
-  // The trusted loopback Connector owns the complete serial pipeline. The model
-  // credential goes only to 127.0.0.1, then directly to the selected provider;
-  // it is never sent to or persisted by EdgeOne.
-  const CONNECTOR_REQUEST_HEADERS = new Set([
-    "content-type",
-    "x-viralx-analysis-mode",
-    "x-viralx-min-likes",
-    "x-viralx-rapidapi-key",
-    "x-viralx-tk-asr",
-    "x-viralx-tk-cookies-browser",
-    "x-viralx-tk-language",
-    "x-viralx-tk-proxy",
-    "x-viralx-tk-timeout",
-    "x-viralx-model-provider",
-    "x-viralx-model-protocol",
-    "x-viralx-model-key",
-    "x-viralx-model-base-url",
-    "x-viralx-model-name",
-    "x-viralx-shot-engine",
-    "x-viralx-shot-model-source",
-    "x-viralx-shot-model-key",
-    "x-viralx-shot-model-base-url",
-    "x-viralx-shot-model-name",
-    "x-viralx-shot-threshold",
+  const REMOTE_WORKER_PATHS = new Set([
+    "/api/health",
+    "/api/analyze",
+    "/api/keywords",
+    "/api/generate_variants",
   ]);
 
   function clean(input) {
@@ -131,28 +113,39 @@
     return result;
   }
 
-  function apiFetch(url, options = {}) {
-    const requestHeaders = new Headers(options.headers || {});
-    Object.entries(headers()).forEach(([name, value]) => requestHeaders.set(name, value));
-    const hosted = document.documentElement.dataset.deployment === "edgeone";
-    const useConnector = hosted
-      && (read().analysis_mode || "pipeline") === "pipeline"
-      && new URL(url, window.location.origin).pathname === "/api/analyze"
-      && window.ViralXConnector;
-    if (useConnector) {
-      const connectorHeaders = new Headers();
-      requestHeaders.forEach((value, name) => {
-        if (CONNECTOR_REQUEST_HEADERS.has(name.toLowerCase())) {
-          connectorHeaders.set(name, value);
-        }
-      });
-      return window.ViralXConnector.request("/connector/v1/analyze", {
-        ...options,
-        headers: connectorHeaders,
-      });
-    }
-    return window.fetch(url, { ...options, headers: requestHeaders });
+  function runtime() {
+    const source = window.ViralXRuntimeConfig || {};
+    return {
+      mode: String(source.mode || "same-origin"),
+      apiBaseUrl: String(source.apiBaseUrl || "").trim().replace(/\/+$/, ""),
+      allowSessionOverrides: source.allowSessionOverrides !== false,
+    };
   }
 
-  window.ViralXCloudConfig = { read, write, clear, headers, apiFetch };
+  function workerUrl(url) {
+    const target = new URL(url, window.location.origin);
+    const config = runtime();
+    const hosted = document.documentElement.dataset.deployment === "edgeone";
+    if (!hosted || config.mode !== "remote-worker" || !REMOTE_WORKER_PATHS.has(target.pathname)) {
+      return target.origin === window.location.origin ? `${target.pathname}${target.search}` : target.href;
+    }
+    if (!config.apiBaseUrl) throw new Error("实时分析服务尚未配置公网地址");
+    return `${config.apiBaseUrl}${target.pathname}${target.search}`;
+  }
+
+  function apiFetch(url, options = {}) {
+    const requestHeaders = new Headers(options.headers || {});
+    if (runtime().allowSessionOverrides) {
+      Object.entries(headers()).forEach(([name, value]) => requestHeaders.set(name, value));
+    }
+    let target;
+    try {
+      target = workerUrl(url);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    return window.fetch(target, { ...options, headers: requestHeaders });
+  }
+
+  window.ViralXCloudConfig = { read, write, clear, headers, runtime, workerUrl, apiFetch };
 })();

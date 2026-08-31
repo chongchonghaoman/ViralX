@@ -1145,7 +1145,7 @@ class AIAnalyzer:
         self.libtv = LibTVAnalyzer()
         shot_config = {
             **model_config,
-            'shot_engine': shot_engine or config.get('shot_engine', 'auto'),
+            'shot_engine': shot_engine or config.get('shot_engine', 'shotloom'),
             'shot_model_source': shot_model_source or config.get('shot_model_source', 'inherit'),
             'shot_model_api_key': shot_model_api_key or config.get('shot_model_api_key', ''),
             'shot_model_base_url': shot_model_base_url or config.get('shot_model_base_url', ''),

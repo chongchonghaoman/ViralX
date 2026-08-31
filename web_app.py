@@ -40,14 +40,15 @@ MAX_ANALYZE_VIDEOS = max(
 )
 
 DEFAULT_CONFIG = {
+    'workflow_version': 2,
     'rapidapi_key': '',
     'analysis_mode': 'pipeline',
     'libtv_concurrency': 2,
-    'shot_engine': 'auto',
+    'shot_engine': 'shotloom',
     'shot_model_source': 'inherit',
     'shot_model_api_key': '',
     'shot_model_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    'shot_model_name': 'qwen-vl-max',
+    'shot_model_name': 'qwen3-vl-flash',
     'shot_scene_threshold': 27.0,
     'tk_note_asr_backend': 'auto',
     'tk_note_language': 'auto',
@@ -55,11 +56,11 @@ DEFAULT_CONFIG = {
     'tk_note_proxy': '',
     'tk_note_timeout': 1800,
     'video_cache_dir': './video_cache',
-    'model_provider': '',
-    'model_protocol': '',
+    'model_provider': 'qwen',
+    'model_protocol': 'openai',
     'model_api_key': '',
-    'model_base_url': '',
-    'model_name': '',
+    'model_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    'model_name': 'qwen3-vl-flash',
     'gemini_api_key': '',
     'gemini_model': 'gemini-3.7-flash',
     'openrouter_api_key': '',
@@ -79,6 +80,15 @@ def load_config():
         loaded = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
         loaded = {key: value for key, value in loaded.items() if key in DEFAULT_CONFIG}
     merged = {**DEFAULT_CONFIG, **loaded}
+    try:
+        workflow_version = int(loaded.get('workflow_version', 0) or 0)
+    except (TypeError, ValueError):
+        workflow_version = 0
+    if workflow_version < 2:
+        if str(merged.get('shot_engine') or '').lower() in {'', 'auto'}:
+            merged['shot_engine'] = 'shotloom'
+        merged['shot_model_source'] = 'inherit'
+        merged['workflow_version'] = 2
 
     env_map = {
         'RAPIDAPI_KEY': ('rapidapi_key', str),
@@ -235,8 +245,13 @@ def libtv_auth_logout():
 @app.route('/api/health', methods=['GET'])
 def health():
     """返回不含密钥的运行状态，供本地与 EdgeOne 前端探活。"""
-    current_config = load_config()
-    runtime = 'edgeone' if IS_EDGE_RUNTIME else 'local'
+    return jsonify(build_health_payload())
+
+
+def build_health_payload(config_override=None, runtime_override=None):
+    """Build a credential-safe readiness payload for local and public workers."""
+    current_config = dict(config_override) if config_override is not None else load_config()
+    runtime = runtime_override or ('edgeone' if IS_EDGE_RUNTIME else 'local')
     mode = str(current_config.get('analysis_mode', 'pipeline')).lower()
     provider = current_config.get('model_provider', 'openai')
     libtv_state = (
@@ -258,7 +273,7 @@ def health():
     if IS_EDGE_RUNTIME:
         shotloom_state.update({
             'ready': False,
-            'message': 'ShotLoom Core 需要本机 Connector 读取原视频并运行 OpenCV。',
+            'message': 'Edge 运行时不能读取原视频；请使用 ViralX Worker 运行 TK Note 与 ShotLoom Core。',
         })
     engine = shot_config['engine']
     engine_ready = {
@@ -269,7 +284,7 @@ def health():
     }.get(engine, False)
     readiness['shot'] = engine_ready
     readiness['pipeline'] = engine_ready and (readiness['model'] or engine == 'skip')
-    return jsonify({
+    return {
         'status': 'ok',
         'runtime': runtime,
         'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
@@ -299,7 +314,7 @@ def health():
         'exports': {
             'obsidian': 'browser' if IS_EDGE_RUNTIME else 'filesystem',
         },
-    })
+    }
 
 def build_analyze_response(config_override=None, max_videos=None):
     """
@@ -400,7 +415,7 @@ def build_analyze_response(config_override=None, max_videos=None):
                 tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
                 tk_note_proxy=current_config.get('tk_note_proxy', ''),
                 tk_note_timeout=current_config.get('tk_note_timeout', 1800),
-                shot_engine=current_config.get('shot_engine', 'auto'),
+                shot_engine=current_config.get('shot_engine', 'shotloom'),
                 shot_model_source=current_config.get('shot_model_source', 'inherit'),
                 shot_model_api_key=current_config.get('shot_model_api_key', ''),
                 shot_model_base_url=current_config.get('shot_model_base_url', ''),
@@ -544,10 +559,10 @@ def export_obsidian():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/generate_variants', methods=['POST'])
-def generate_variants():
+def generate_variants(config_override=None):
     """基于爆款分析生成 4 种裂变变体脚本"""
     try:
-        current_config = load_config()
+        current_config = dict(config_override) if config_override is not None else load_config()
         data = request.json
         video = data.get('video', {})
         analysis = data.get('analysis', '')

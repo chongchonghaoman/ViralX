@@ -59,7 +59,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-26-shot-evidence-v1"
+VIRALX_RELEASE = "2026-08-31-fixed-evidence-chain-v2"
 
 
 def _number(name, fallback, cast):
@@ -74,7 +74,7 @@ def load_config():
     config = {
         "rapidapi_key": os.environ.get("RAPIDAPI_KEY", ""),
         "analysis_mode": os.environ.get("ANALYSIS_MODE", "pipeline"),
-        "shot_engine": os.environ.get("VIRALX_SHOT_ENGINE", "auto"),
+        "shot_engine": os.environ.get("VIRALX_SHOT_ENGINE", "shotloom"),
         "shot_model_source": os.environ.get("SHOT_MODEL_SOURCE", "inherit"),
         "shot_model_api_key": os.environ.get("SHOT_MODEL_API_KEY", ""),
         "shot_model_base_url": os.environ.get("SHOT_MODEL_BASE_URL", ""),
@@ -224,13 +224,13 @@ def health():
             "cli_installed": False,
         },
         "shot": {
-            "engine": str(config.get("shot_engine") or "auto"),
+            "engine": str(config.get("shot_engine") or "shotloom"),
             "ready": False,
-            "collection_only": str(config.get("shot_engine") or "auto") == "skip",
+            "collection_only": str(config.get("shot_engine") or "shotloom") == "skip",
             "shotloom": {
                 "ready": False,
                 "installed": False,
-                "message": "ShotLoom Core 需要本机 Connector 读取原片并运行 OpenCV。",
+                "message": "Edge 运行时不能读取原片；请使用 ViralX Worker 运行 TK Note 与 ShotLoom Core。",
             },
         },
         "limits": {
@@ -269,7 +269,7 @@ def analyze():
             if str(config.get("analysis_mode") or "pipeline").lower() == "pipeline":
                 yield json.dumps({
                     "status": "error",
-                    "message": "完整链路需要本机 Connector 执行 TK Note、镜头取证与证据合并，再调用最终模型 API；请启动 Connector，或在本地运行 ViralX。",
+                    "message": "完整链路需要 ViralX Worker 执行 TK Note、镜头取证与证据合并，再调用最终模型 API；请连接 Worker，或在本地运行 ViralX。",
                     "done": True,
                 }, ensure_ascii=False) + "\n"
                 return

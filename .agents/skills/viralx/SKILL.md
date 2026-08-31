@@ -13,7 +13,7 @@ Use ViralX through its web API contract. The installed skill can probe the publi
 - For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for TikTok Scraper7 discovery.
 - Every analysis follows one contract: TikTok Scraper7 discovery when needed, TK Note collection, provider-neutral shot evidence, evidence merge, then the selected final model API. The recommended shot strategy is `auto`: ShotLoom Core first, LibTV only as an auditable fallback.
 - Before `analyze`, run ViralX locally, set `VIRALX_BASE_URL=http://127.0.0.1:5001`, choose `VIRALX_SHOT_ENGINE`, configure a compatible shot vision model, then provide `MODEL_PROVIDER`, `MODEL_API_KEY`, and `MODEL_NAME`. Connect LibTV from `/settings` only when `libtv` is selected or wanted as an `auto` fallback.
-- The hosted website's Connector is a browser-only session bridge and is not an Agent credential. Never send a LibTV token or Connector session to EdgeOne.
+- The hosted website may call an owner-operated ViralX Worker, but an Agent should use the configured Web API or run ViralX locally. Never send a LibTV token or local-management credential to a hosted endpoint.
 - Use `health` before analysis when credential or service readiness is unknown.
 - Use `keywords` only when the user asks for existing or suggested topics.
 

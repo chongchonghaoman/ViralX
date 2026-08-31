@@ -6,6 +6,7 @@
   let lastModalTrigger = null;
   let runtimeMode = "unknown";
   let runtimeReady = false;
+  let runtimeBlocker = "checking";
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const gsapReady = () => !reduceMotion && typeof window.gsap !== "undefined";
@@ -250,22 +251,24 @@
     error.hidden = true;
   }
 
-  function settingsUrl() {
-    const deployedToEdgeOne = document.documentElement.dataset.deployment === "edgeone";
-    return runtimeMode === "edgeone" || deployedToEdgeOne ? "/settings.html" : "/settings";
+  function primaryActionLabel(navigation = false) {
+    if (runtimeReady) return navigation ? "开始分析" : "开始拉片";
+    return {
+      checking: "正在连接服务",
+      server_config_missing: "分析服务配置中",
+      local_config_missing: "完成本机配置",
+      offline: "实时分析暂离线",
+    }[runtimeBlocker] || "查看实时状态";
   }
 
   function syncPrimaryActions() {
-    const destination = runtimeReady ? "#analysis-studio" : settingsUrl();
     document.querySelectorAll("[data-runtime-action]").forEach((action) => {
-      action.href = destination;
-      action.textContent = runtimeReady
-        ? (action.classList.contains("nav-cta") ? "开始拉片" : "开始分析")
-        : "连接分析服务";
+      action.href = "#analysis-studio";
+      action.textContent = primaryActionLabel(action.classList.contains("nav-cta"));
     });
     const analyzeButton = byId("analyze-btn");
     if (analyzeButton && !analyzeButton.disabled) {
-      analyzeButton.textContent = runtimeReady ? "开始拉片" : "打开设置";
+      analyzeButton.textContent = primaryActionLabel(false);
     }
   }
 
@@ -281,67 +284,43 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       runtimeMode = data.runtime || "local";
+      if (runtimeMode === "worker") {
+        runtimeReady = Boolean(data.analysis_ready && data.configured?.keyword_search);
+        runtimeBlocker = runtimeReady ? "ready" : "server_config_missing";
+        chip.dataset.state = runtimeReady ? "ready" : "warning";
+        label.textContent = runtimeReady
+          ? "实时分析在线 · TK Note → ShotLoom + 视觉模型"
+          : "分析服务在线 · 所有者正在补齐模型或搜索配置";
+        syncPrimaryActions();
+        return;
+      }
       if (runtimeMode === "edgeone") {
-        const session = window.ViralXCloudConfig?.read() || {};
-        const engine = session.shot_engine || "auto";
-        const collectionOnly = engine === "skip";
-        const modelReady = collectionOnly || Boolean(session.model_api_key && session.model_name && session.model_base_url);
-        try {
-          await window.ViralXConnector?.ready();
-          const connector = await window.ViralXConnector?.probe();
-          const paired = Boolean(connector?.paired);
-          const libtv = connector?.libtv || {};
-          const libtvReady = Boolean(libtv.connected || libtv.state === "connected");
-          const shotloomInstalled = Boolean(connector?.shotloom_core?.installed);
-          const shotModelReady = session.shot_model_source === "inherit"
-            ? Boolean(session.model_api_key && session.model_name)
-            : Boolean(session.shot_model_api_key && session.shot_model_base_url && session.shot_model_name);
-          const shotloomReady = shotloomInstalled && shotModelReady;
-          const shotReady = {
-            auto: shotloomReady || libtvReady,
-            shotloom: shotloomReady,
-            libtv: libtvReady,
-            skip: true,
-          }[engine] || false;
-          runtimeReady = paired && shotReady && modelReady;
-          chip.dataset.state = runtimeReady ? "ready" : "warning";
-          label.textContent = runtimeReady
-            ? collectionOnly
-              ? "采集链就绪 · 只保存 TK Note 证据"
-              : `完整链路就绪 · TK Note → ${engine === "libtv" ? "LibTV" : "ShotLoom"} → 模型`
-            : !paired
-              ? "Connector 已启动 · 待安全配对"
-              : !shotReady
-                ? "Connector 已配对 · 待配置镜头引擎"
-                : "镜头引擎已就绪 · 待配置最终模型";
-        } catch (_) {
-          runtimeReady = false;
-          chip.dataset.state = "warning";
-          const permission = await window.ViralXConnector?.permissionState();
-          label.textContent = permission === "denied"
-            ? "网页在线 · 本机网络权限已拒绝"
-            : "网页在线 · 未检测到本机 Connector";
-        }
+        runtimeReady = false;
+        runtimeBlocker = "offline";
+        chip.dataset.state = "offline";
+        label.textContent = "展示站在线 · 实时分析服务暂未接入";
         syncPrimaryActions();
         return;
       }
       runtimeReady = Boolean(data.analysis_ready);
+      runtimeBlocker = runtimeReady ? "ready" : "local_config_missing";
       if (runtimeReady) {
         chip.dataset.state = "ready";
         const shot = data.shot || {};
         label.textContent = shot.collection_only
           ? "本地采集链就绪 · 不生成最终报告"
-          : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "镜头证据"} → 模型`;
+          : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom + 视觉模型"} → 证据终审`;
       } else {
         chip.dataset.state = "warning";
-        label.textContent = "本地服务在线 · 待补齐镜头引擎与最终模型配置";
+        label.textContent = "本地服务在线 · 待补齐 ShotLoom 与视觉模型配置";
       }
       syncPrimaryActions();
     } catch (_) {
       runtimeMode = "offline";
       runtimeReady = false;
+      runtimeBlocker = "offline";
       chip.dataset.state = "offline";
-      label.textContent = "分析服务暂不可用";
+      label.textContent = "实时分析暂离线 · 网站内容仍可浏览";
       syncPrimaryActions();
     }
   }
@@ -493,12 +472,15 @@
     analyzeButton.disabled = isBusy;
     refreshButton.disabled = isBusy;
     analyzeButton.setAttribute("aria-busy", String(isBusy));
-    analyzeButton.textContent = isBusy ? "正在拉片" : runtimeReady ? "开始拉片" : "打开设置";
+    analyzeButton.textContent = isBusy ? "正在拉片" : primaryActionLabel(false);
   }
 
   function handleAnalyzeAction(refresh = false) {
     if (!runtimeReady) {
-      window.location.assign(settingsUrl());
+      showInlineError(runtimeBlocker === "server_config_missing"
+        ? "实时分析服务已经在线，但服务器所有者还没有补齐搜索或视觉模型配置。"
+        : "实时分析服务当前离线。网站内容与方法仍可浏览，服务恢复后可直接在这里开始分析。");
+      byId("analysis-studio")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
       return;
     }
     analyze(refresh);
@@ -560,7 +542,7 @@
       ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
       <div class="card-actions">
         <button class="analysis-btn" type="button">打开最终分析</button>
-        ${["error", "blocked"].includes(status) ? runtimeMode === "edgeone" ? '<span class="project-link">镜头证据未就绪</span>' : '<a class="project-link" href="/settings">检查镜头引擎设置</a>' : ""}
+        ${["error", "blocked"].includes(status) ? runtimeMode === "edgeone" ? '<span class="project-link">镜头证据未就绪</span>' : '<a class="project-link" href="/settings">检查镜头取证设置</a>' : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
       <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || "")}</div>
@@ -685,8 +667,8 @@
       }
     } catch (error) {
       failActiveStage();
-      const hint = runtimeMode === "edgeone"
-        ? "确认本机 Connector 正在运行、镜头引擎与最终模型已配置"
+      const hint = runtimeMode === "worker"
+        ? "实时分析服务可能刚刚离线，请稍后重试"
         : "确认本地服务仍在运行";
       showInlineError(`分析没有完成：${error.message}。${hint}后重试。`);
       updateResultCount(received, "连接中断");

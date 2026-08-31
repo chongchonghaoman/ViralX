@@ -70,7 +70,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         )
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
-        self.assertIn("本机 Connector", payload["message"])
+        self.assertIn("ViralX Worker", payload["message"])
         self.assertIn("TK Note", payload["message"])
         self.assertIn("模型 API", payload["message"])
 
@@ -117,7 +117,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         response = self.client.post("/analyze", json={"keyword": "camping light"})
         payload = json.loads(response.get_data(as_text=True).strip())
         self.assertEqual(payload["status"], "error")
-        self.assertIn("Connector", payload["message"])
+        self.assertIn("Worker", payload["message"])
         self.assertIn("镜头取证", payload["message"])
 
     def test_private_settings_and_cache_routes_are_not_public(self):

@@ -58,6 +58,11 @@ class NetworkFailingProvider(FakeProvider):
 
 
 class ShotAnalyzerTests(unittest.TestCase):
+    def test_default_shot_config_uses_shotloom_and_inherits_the_final_visual_model(self):
+        config = normalize_shot_config({})
+        self.assertEqual(config["engine"], "shotloom")
+        self.assertEqual(config["model_source"], "inherit")
+
     def test_fast_cuts_are_retained_and_timeline_stays_contiguous(self):
         shots = merge_short_boundaries([0.04, 0.12, 0.4, None, float("nan")], duration=1.0)
         self.assertEqual([(shot.start_time, shot.end_time) for shot in shots], [

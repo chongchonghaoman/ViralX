@@ -2,13 +2,14 @@ flowchart LR
     K[搜索主题] --> A[01 Scraper7<br/>发现候选视频]
     U[视频直链] -->|跳过 Scraper7| T
     A --> T[02 TK Note / yt-dlp<br/>原片与平台证据]
-    T --> S[03 ShotLoom Core<br/>同一原片的镜头证据]
-    S -. 失败且为自动模式 .-> L[LibTV 备用<br/>官方 CLI 拉片]
-    S --> E[04 证据合并<br/>viralx.evidence_bundle.v1]
+    T --> F[03a ShotLoom Core<br/>切镜与关键帧采样]
+    F --> V[03b 上方视觉模型<br/>识别逐镜事实]
+    V -. 仅显式开启失败回退 .-> L[LibTV 备用<br/>官方 CLI 拉片]
+    V --> E[04 证据合并<br/>viralx.evidence_bundle.v1]
     L --> E
     E --> M[05 已选模型 API<br/>最终分析]
     M --> R[最终报告]
-    M --> S[复刻脚本]
+    M --> P[复刻脚本]
     M --> O[Obsidian / Markdown]
     L --> C[可选 LibTV 画布]
 
@@ -16,14 +17,15 @@ flowchart LR
         K
         U
         R
-        S
+        P
         O
         C
     end
 
-    subgraph Connector[本机 Connector 串联编排]
+    subgraph Worker[ViralX Worker 串联编排]
         T
-        S
+        F
+        V
         L
         E
     end

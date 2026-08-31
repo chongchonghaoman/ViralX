@@ -2,10 +2,20 @@ import unittest
 from unittest.mock import patch
 
 from ai_analyzer import AIAnalyzer
-from model_providers import normalize_model_config, validate_custom_base_url
+from model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config, validate_custom_base_url
 
 
 class ModelProviderTests(unittest.TestCase):
+    def test_qwen3_vl_flash_is_the_new_user_default(self):
+        config = normalize_model_config({})
+        self.assertEqual(config["model_provider"], "qwen")
+        self.assertEqual(config["model_name"], "qwen3-vl-flash")
+        self.assertEqual(
+            config["model_base_url"],
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        self.assertTrue(MODEL_PROVIDER_PRESETS["qwen"]["vision"])
+
     def test_legacy_openrouter_config_migrates_to_generic_contract(self):
         config = normalize_model_config({
             "analysis_mode": "openrouter",
