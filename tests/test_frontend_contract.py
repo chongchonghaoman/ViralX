@@ -184,6 +184,12 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("data-runtime-action", self.home)
         self.assertIn('data-deployment="edgeone"', self.build_js)
 
+    def test_hosted_settings_enter_connecting_mode_before_remote_health_returns(self):
+        connecting = self.settings_js.index('runtimeMode = "connecting";')
+        load = self.settings_js.rindex("loadSettings();")
+        self.assertLess(connecting, load)
+        self.assertIn('updateRuntimeNote({ runtime: "connecting", configured: {} });', self.settings_js)
+
     def test_responsive_hero_assets_are_built(self):
         png = ROOT / "static" / "assets" / "viralx-signal-orbit.png"
         for width in (640, 1024):

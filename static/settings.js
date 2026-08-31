@@ -403,19 +403,24 @@
     const searchProvider = String(health.keyword_search_provider || "scraper7").toLowerCase() === "scraper7"
       ? "TikTok Scraper7"
       : String(health.keyword_search_provider || "scraper7");
+    const connecting = health.runtime === "connecting";
     note.replaceChildren();
     const copy = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = health.runtime === "worker" ? "ViralX 实时分析服务" : "实时分析服务暂离线";
+    title.textContent = health.runtime === "worker"
+      ? "ViralX 实时分析服务"
+      : connecting ? "正在连接实时分析服务" : "实时分析服务暂离线";
     const description = document.createElement("p");
     description.textContent = health.runtime === "worker"
       ? "TK Note 与 ShotLoom 运行在站点所有者的电脑上。服务器默认配置可直接使用；这里填写的 Key 只作为当前标签页的临时覆盖。"
-      : "网站与案例仍可浏览；实时分析会在站点所有者的电脑重新上线后自动恢复。";
+      : connecting
+        ? "正在读取 Worker 与模型状态；页面配置不会发送到其他站点。"
+        : "网站内容与方法仍可浏览；实时分析会在站点所有者的电脑重新上线后自动恢复。";
     copy.append(title, description);
     const badges = document.createElement("div");
     badges.className = "runtime-badges";
     const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
-    const workerLabel = health.runtime === "worker" ? "在线" : "离线";
+    const workerLabel = health.runtime === "worker" ? "在线" : connecting ? "连接中" : "离线";
     [["实时 Worker", workerLabel], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [`${searchProvider} 搜索`, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
@@ -746,6 +751,11 @@
       control.addEventListener("change", clear);
     });
     settings = { ...DEFAULTS };
+    if (hostedPage()) {
+      runtimeMode = "connecting";
+      configureCloudPage();
+      updateRuntimeNote({ runtime: "connecting", configured: {} });
+    }
     applySettings();
     initMotion();
     bindCategoryNav();
