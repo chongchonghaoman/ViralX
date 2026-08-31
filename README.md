@@ -6,11 +6,10 @@
 
 <p align="center">
   <strong>把爆款拆到每一秒，也把每个结论还给证据。</strong><br>
-  浏览器里的短视频发现、取证、逐镜分析与复刻工作台。
+  短视频发现、原片采集、逐镜取证与复刻分析工作台。
 </p>
 
 <p align="center">
-  <a href="https://viralx.metrolabs.mobi"><img alt="Live website" src="https://img.shields.io/badge/Live-viralx.metrolabs.mobi-4DC5E5?style=flat-square"></a>
   <a href="https://github.com/chongchonghaoman/ViralX/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/chongchonghaoman/ViralX/ci.yml?branch=main&style=flat-square&label=tests"></a>
   <a href=".agents/skills/viralx-agent"><img alt="Agent-native Skill" src="https://img.shields.io/badge/Codex-Agent--native-4DC5E5?style=flat-square"></a>
   <a href=".agents/skills/viralx"><img alt="Web API Skill" src="https://img.shields.io/badge/Codex-Web_API-111111?style=flat-square"></a>
@@ -20,19 +19,16 @@
 </p>
 
 <p align="center">
-  <a href="https://viralx.metrolabs.mobi">打开 ViralX</a> ·
-  <a href="https://viralx.metrolabs.mobi/settings.html">网页设置</a> ·
-  <a href="DESIGN.md">设计合同</a> ·
-  <a href="DEPLOYMENT.md">部署说明</a>
+  <a href="#工作逻辑">工作逻辑</a> ·
+  <a href="#在-codex-中直接调用-viralx">Codex Skill</a> ·
+  <a href="DESIGN.md">设计合同</a>
 </p>
-
-<p align="center"><sub>2026-08-27 · Agent-native + shot evidence pipeline</sub></p>
 
 ![ViralX 网页首页](docs/assets/viralx-homepage.png)
 
 ## ViralX 是什么
 
-ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作台和 Agent-native Skill。它不是把视频链接直接丢给大模型，而是先确认来源、下载真实原片、生成可核验的视觉与文本证据，再让最终模型做综合判断。
+ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作台和 Agent-native Skill。它不会把视频链接直接丢给模型并让模型凭印象作答，而是先确认帖子身份、下载真实原片、生成可核验的视觉与文本证据，再进行综合分析。
 
 ```text
 关键词 ─→ TikTok Scraper7 ─┐
@@ -40,35 +36,30 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 视频直链 ──────────────────┘
                                   ↓ 同一份本地原片
                          ShotLoom Core 镜头取证
-                                  ↓ 失败时可回退 LibTV
+                                  ↓ 必要时回退 LibTV
                          统一证据包 + 质量门禁
                                   ↓ 仅证据文本
-                            最终模型 API
+                            最终模型分析
 ```
 
-面向人的产品界面仍然只有一种：**Web**。生产界面部署在 EdgeOne；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的工作由本机 Connector 执行。Connector 是最小安全桥，不是另一套桌面客户端。仓库另外提供 **Agent-native Skill**：它没有第二套界面，而是让 Codex 等 Agent 直接运行同一套证据优先方法。
+面向人的产品界面是 Web；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的能力由本机 Connector 执行。仓库同时提供 Agent-native Skill，让 Codex 等 Agent 直接运行同一套证据方法，不需要第二套客户端界面。
 
-## 本次重点更新：第一原理重构
+## 本次重点更新：从“模型猜测”改为“证据流水线”
 
-这次优化先回答四个最基础的问题：找的是不是目标视频、下载的是不是同一条原片、模型看到了什么证据、证据失败后系统是否会停。
+这次重构首先解决四个问题：找的是不是目标视频、下载的是不是同一条原片、模型实际看到了什么、证据失败后系统是否会停止。
 
-- **ShotLoom Core 成为默认镜头引擎**：直接读取 TK Note 已下载的 `source.mp4`，不重复下载、不重复上传。ViralX 适配了 ShotLoom 的 PySceneDetect 双检测思路，并修正了上游丢弃全部 `< 0.5s` 片段的问题；现在只合并 `< 80ms` 的检测噪声，真实快切会被保留。
-- **LibTV 从强制前置改为可选备用**：设置支持 `自动 / 仅 ShotLoom / 仅 LibTV / 只采集`。自动模式优先 ShotLoom Core；只有本地依赖、视觉模型或证据质量不合格时才回退 LibTV，并把原因写入 `fallback_chain`。
-- **镜头模型与最终模型拆开**：镜头模型只回答关键帧中直接可见的事实，禁止输出钩子、受众、留存、转化和优化建议；最终模型只读取合并证据，不再接收原视频路径。
-- **统一证据合同**：镜头层输出 `viralx.shot_evidence.v1`，合并层输出 `viralx.evidence_bundle.v1`。每条镜头带 `S001` 形式的 ID、开始/结束时间、关键帧时间、视觉事实、未知项、置信度和原片 SHA-256。
-- **质量门禁阻止猜测**：镜头时间线覆盖率低于 98%、已分析覆盖率低于 90%、镜头 ID 重复、原片哈希缺失或任一镜头没有视觉事实，都会阻断最终模型。
-- **报告引用门禁**：最终报告必须引用真实存在的 `[SHOT:Sxxx]`，以及相应 `[META:*]`、`[TK:*]` 来源。没有评论正文时不得声称“用户认为”，没有标签时不得生成具体标签。
-- **搜索与下载身份核对**：搜索候选包含可核验数字 TikTok 帖子 ID 时，TK Note 下载结果必须与它一致；不一致就停在采集阶段，避免“链接是假的但模型仍然分析”。
-- **声音证据只有一个来源**：关键帧不能证明声音、配音或台词。音频文字只能来自 TK Note 字幕 / ASR，并明确记录转写来源与警告。
-- **失败成为产品状态**：`blocked`、`fallback_used`、`shot_block_reason`、`fallback_chain`、`shot_evidence_quality` 都会进入流式结果和前端，不再把“云端在线”或“任务跑完”误写成“可信分析完成”。
-- **设置页按职责重构**：先选镜头引擎，再单独配置镜头视觉模型，最后配置最终模型。DeepSeek 等纯文本模型可以做最终综合，但不能被误用为 ShotLoom 视觉模型。
-- **EdgeOne 边界保持诚实**：线上页面负责界面、会话设置与结果呈现；本机 Connector 才能读取原片和运行 OpenCV。API Key 只存当前标签页并发送到 `127.0.0.1`，不经过 EdgeOne。
-- **Connector 自动接管旧实例**：从 `1.2.0` 起，再次启动 Connector 会先让 57231 上已经确认的 ViralX 实例优雅退出，等待端口释放后启动当前版本并重新打开配对页；不会结束占用该端口的非 ViralX 程序。
-- **TK Note 下载链修复**：Connector `1.3.0` 会把当前标签页选择的浏览器 Cookie 来源、显式代理与 120–7200 秒等待上限传给 TK Note；未手填代理时自动沿用 Windows 系统代理。`curl-cffi` 为 yt-dlp 提供 Chrome 网络指纹，解决“Scraper7 找到候选、TK Note 却全部停在网页响应”的故障。
-- **逐视频脱敏日志**：每条候选在 `video_cache/tk-note/<video_id>/task.jsonl` 记录开始、下载进度、完成或精确失败原因。日志只保存公开帖子 URL、阶段与状态；不保存 Cookie、代理地址/凭据、请求头或签名媒体 URL。采集失败原因也会直接显示在结果卡片中。
-- **新增 Agent-native Skill**：`$viralx-agent` 只在本机调用 TK Note、FFmpeg 与证据校验脚本；当前 Codex 会话里的 GPT 直接检查带时间戳的 JPEG 帧并完成终审，不再要求用户额外购买 OpenAI、Qwen、Gemini、DeepSeek 或其他模型 API。原有 `$viralx` Web API Skill 完整保留。
+- **ShotLoom Core 成为默认镜头引擎**：直接读取 TK Note 下载的 `source.mp4`，不重复下载或上传；保留真实快切并过滤检测噪声。
+- **LibTV 改为可选备用**：支持 `自动 / 仅 ShotLoom / 仅 LibTV / 只采集`；自动模式只在本地镜头证据不可用或质量不合格时回退。
+- **镜头模型与最终模型分工**：镜头模型只描述关键帧中直接可见的事实；最终模型只读取合并证据，负责区分事实、推断和建议。
+- **统一证据合同**：镜头层输出 `viralx.shot_evidence.v1`，合并层输出 `viralx.evidence_bundle.v1`；每个镜头都有 ID、时间范围、关键帧、视觉事实、未知项、置信度和原片哈希。
+- **质量门禁阻止猜测**：时间线覆盖不足、镜头 ID 冲突、原片哈希缺失或视觉事实为空时，最终模型不会运行。
+- **报告引用门禁**：事实必须引用真实 `[SHOT:Sxxx]`、`[META:*]` 或 `[TK:*]`；没有评论正文时不得声称“用户认为”。
+- **搜索与下载身份核对**：搜索候选和 TK Note 下载结果的视频 ID 必须一致，避免搜索链接与实际原片错配。
+- **声音证据单独取证**：声音、台词和字幕只能来自 TK Note 字幕或 ASR，不能从静态关键帧推断。
+- **失败成为正式状态**：采集、镜头、合并或模型任一阶段失败都会明确阻断，不再把“任务结束”写成“可信分析完成”。
+- **Agent-native Skill**：`$viralx-agent` 使用 TK Note、FFmpeg 和当前 Codex 模型完成取证与分析，不要求用户额外购买模型 API。
 
-原有能力全部保留：TikTok Scraper7 搜索、`picture light` 与 `light painting` 品类消歧、TK Note、共享 Whisper / Qwen3-ASR、LibTV 官方网页登录、Obsidian 导出、本地 Flask、EdgeOne 页面、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
+原有能力继续保留：TikTok Scraper7 关键词发现、品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、Obsidian 导出、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
 
 ![ViralX 网页设置](docs/assets/viralx-settings.png)
 
@@ -82,73 +73,60 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 | --- | --- | --- | --- |
 | 01 · 发现视频 | 关键词通过 TikTok Scraper7 找候选；直链跳过 | 可打开的真实帖子 URL 与平台指标 | 没有候选就停止 |
 | 02 · TK Note 采集 | 下载原片、元数据、字幕 / ASR、评论与资产清单 | 原片非空；可核验帖子 ID 一致 | 阻断镜头与模型 |
-| 03 · 镜头取证 | ShotLoom Core 默认；LibTV 可回退 | 完整时间线、镜头 ID、视觉事实、原片哈希 | 自动模式回退；仍失败则阻断 |
+| 03 · 镜头取证 | ShotLoom Core 默认；LibTV 可回退 | 完整时间线、镜头 ID、视觉事实、原片哈希 | 回退仍失败则阻断 |
 | 04 · 合并证据 | 合并平台、TK Note 与镜头证据 | `viralx.evidence_bundle.v1` | 保存部分证据并阻断最终模型 |
-| 05 · 最终分析 | 只基于命名证据生成事实、推断与创意提案 | 具体事实引用对应来源和镜头 ID | 拦截不可信原始输出 |
+| 05 · 最终分析 | 只基于命名证据生成事实、推断与创意提案 | 每项事实引用对应证据 | 拦截不可信输出 |
 
-三个不能混淆的角色：
+三个角色不能混淆：
 
 - TikTok Scraper7 是**关键词发现器**，不是原片下载器。视频直链不需要 RapidAPI。
-- TK Note 是**原片和平台证据采集器**，ShotLoom / LibTV 都只能分析它交出的同一份文件。
-- 最终模型是**证据综合器**，不是兜底视频解析器。镜头证据失败时它不会被调用。
+- TK Note 是**原片和平台证据采集器**，后续镜头引擎分析的是它交出的同一份文件。
+- 最终模型是**证据综合器**，不是失败后的兜底视频解析器。
 
-## 现在需要哪些 API
+## 使用方式与 API 边界
 
 | 使用方式 | 必需项 | 可选项 |
 | --- | --- | --- |
-| 粘贴单条 TikTok / 抖音链接 | 本机 Connector、可用镜头引擎、最终模型 API | LibTV 备用、RapidAPI 不需要 |
+| 粘贴单条 TikTok / 抖音链接 | 本机 Connector、可用镜头引擎、最终模型 API | LibTV 备用；RapidAPI 不需要 |
 | 输入关键词搜索并分析 | 上述配置 + TikTok Scraper7 `RAPIDAPI_KEY` | LibTV 备用 |
-| `只采集` 模式 | 本机 Connector + TK Note | 镜头模型和最终模型都不调用 |
-| Codex 中用 `$viralx-agent` 分析直链 / 本地 MP4 | Codex 当前模型、Python、FFmpeg；直链再需要 TK Note | **不需要独立模型 API**；关键词发现服务另算 |
+| `只采集` 模式 | 本机 Connector + TK Note | 不调用镜头模型和最终模型 |
+| Codex 中使用 `$viralx-agent` | Codex 当前模型、Python、FFmpeg；直链再需要 TK Note | **不需要独立模型 API**；关键词发现服务另算 |
 
-ShotLoom Core 需要一个支持 OpenAI Chat Completions 图片输入的视觉模型。可以：
-
-1. 复用最终模型，但它必须是 OpenAI-compatible 且支持视觉；
-2. 使用 Qwen VL；
-3. 使用自定义 OpenAI-compatible 视觉接口。
-
-DeepSeek 当前预设是纯文本最终模型，不能直接承担关键帧识别。LibTV 只在 `auto` 回退或显式选择 `libtv` 时需要官方 CLI 网页登录。
+ShotLoom Core 的视觉事实抽取需要支持图片输入的模型。DeepSeek 等纯文本模型可以承担最终证据综合，但不能直接替代视觉镜头模型。LibTV 只在被明确选择或自动回退时需要官方 CLI 登录。
 
 ## 网页能力
 
 | 能力 | 实际行为 |
 | --- | --- |
-| TikTok Scraper7 搜索 | 固定调用 `/feed/search`，归一化 `data.videos`、数字帖子 ID、分享链接和互动数据，按语义相关性优先排序 |
-| `picture light` 消歧 | 把照画灯 / 壁画灯识别为安装在画作上方的灯具，剔除 `light painting / glowing painting` 等“画本身发光”结果 |
-| TK Note 采集 | 保存原片、元数据、字幕 / ASR、评论证据、资产清单和警告；自动沿用系统代理并使用浏览器网络指纹；复用本机共享 ASR 环境 |
-| ShotLoom Core | 本地双检测切镜、关键帧采样、视觉事实抽取、时间线质量检查；不输出营销判断 |
-| LibTV 备用 | 通过官方 CLI 网页登录，在自动回退或显式选择时生成画布与拉片证据 |
-| 最终模型 | OpenAI、Claude、Gemini、DeepSeek、OpenRouter 或自定义 API；只读取统一证据包 |
-| 流式进度 | NDJSON 返回发现、采集、镜头取证、证据合并、最终分析五个真实阶段 |
-| 审计文件 | 保存证据包、镜头证据和最终模型原始输出，便于追查每个结论 |
-| Obsidian | 本地写入，或在线生成 URI / 下载 Markdown |
+| TikTok Scraper7 搜索 | 调用 `/feed/search`，归一化候选、帖子 ID、分享链接和互动数据，并进行语义筛选 |
+| 品类消歧 | 区分 `picture light` 与 `light painting` 等相邻但不同的内容 |
+| TK Note 采集 | 保存原片、元数据、字幕 / ASR、评论证据、资产清单和警告 |
+| ShotLoom Core | 本地切镜、关键帧采样、视觉事实抽取和时间线质量检查 |
+| LibTV 备用 | 通过官方 CLI 登录，在回退或显式选择时生成拉片证据 |
+| 最终模型 | 支持常见模型服务和自定义兼容接口，只读取统一证据包 |
+| 流式进度 | NDJSON 返回发现、采集、镜头、合并和最终分析五个真实阶段 |
+| 审计文件 | 保存证据包、镜头证据和最终原始输出，便于追查结论 |
+| Obsidian | 本地写入，或生成 URI / 下载 Markdown |
 
 ## 在 Codex 中直接调用 ViralX
 
-仓库提供两个职责不同、可同时安装的 Codex Skill：
+仓库提供两个职责不同、可同时安装的 Skill：
 
-| Skill | 适合谁 | 模型在哪里运行 | 需要独立模型 API Key |
-| --- | --- | --- | --- |
-| [`$viralx-agent`](.agents/skills/viralx-agent) | 已能使用 Codex、但没有单独模型 API Key 的人 | 当前 Codex 会话 | **不需要** |
-| [`$viralx`](.agents/skills/viralx) | 需要调用 ViralX Web / Connector 流水线的人 | Web 配置的镜头模型和最终模型 | 完整分析需要 |
+| Skill | 模型在哪里运行 | 独立模型 API Key |
+| --- | --- | --- |
+| [`$viralx-agent`](.agents/skills/viralx-agent) | 当前 Codex 会话 | **不需要** |
+| [`$viralx`](.agents/skills/viralx) | ViralX Web / Connector 配置的模型 | 完整分析需要 |
 
-### 推荐：Agent-native，无额外模型 API
+### 推荐：Agent-native
 
-把下面的 GitHub 地址发给另一台电脑上的 Codex：
-
-```text
-https://github.com/chongchonghaoman/ViralX/tree/main/.agents/skills/viralx-agent
-```
-
-对 Codex 说：
+把仓库链接发给 Codex，并说明：
 
 ```text
 请安装这个仓库的 .agents/skills/viralx-agent 和 .agents/skills/tk-note，
-然后用 $viralx-agent 分析：
-https://www.tiktok.com/@creator/video/1234567890123456789
+然后使用 $viralx-agent 分析下面的 TikTok 直链或本地 MP4。
 ```
 
-或使用内置安装脚本一次装好分析 skill 与取证依赖：
+也可以使用 Codex 自带的 Skill 安装器安装：
 
 ```powershell
 python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
@@ -156,49 +134,13 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
   --path .agents/skills/viralx-agent .agents/skills/tk-note
 ```
 
-`$viralx-agent` 的本地脚本只负责 TK Note 取证、字幕 / 本地 ASR、原片哈希、FFmpeg 抽帧和报告引用校验；它不读取模型 Key，也不调用 `/chat/completions`。当前 Codex 模型按时间顺序检查生成的本地图片，再输出带 `[FRAME:Fxxx@时间]`、`[META:*]`、`[TK:transcript]` 的报告。也就是说，它使用的是用户已经登录的 Codex 模型能力，不会额外产生模型 API 账单，但仍受用户 Codex 套餐与使用额度限制。
+`$viralx-agent` 的脚本只负责 TK Note 采集、字幕 / 本地 ASR、原片哈希、FFmpeg 抽帧和引用校验。当前 Codex 模型按时间顺序检查生成的本地图片，再输出带 `[FRAME:Fxxx@时间]`、`[META:*]` 和 `[TK:transcript]` 的报告。
 
-这条边界必须说清楚：Agent 处理的是从原片提取的时间戳帧、字幕和元数据，不宣称“原生连续观看视频”。直接 TikTok URL 或本地 MP4 不需要 RapidAPI；如果用户只给关键词，候选视频发现仍可能需要网页搜索或 TikTok Scraper7，但后续分析不需要模型 API。
+它分析的是从原片提取的时间戳帧、字幕和元数据，不会伪装成原生连续观看视频。视频直链和本地 MP4 不需要 RapidAPI；只有关键词发现可能需要搜索服务。
 
-### 保留：Web API Skill
+## 本地启动 Web 工作台
 
-原有 `$viralx` 继续调用 ViralX Web API 合同。全功能 Web 分析仍需要目标电脑运行本地 Flask / Connector，并配置相应镜头与最终模型；EdgeOne 不会伪装拥有目标电脑的原片、OpenCV 或登录态。安装路径是 `.agents/skills/viralx`。
-
-Agent-native 流程：
-
-```text
-TikTok 直链 ─→ TK Note 下载原片、元数据、字幕 / 本地 ASR ─┐
-本地 MP4 ────────────────────────────────────────────────┤
-                                                            ↓
-                                            FFmpeg 时间戳抽帧 + SHA-256
-                                                            ↓
-                                     当前 Codex GPT 逐帧观察并区分事实/推断
-                                                            ↓
-                                     引用校验器拦截虚构帧、错时间和伪评论
-                                                            ↓
-                                              本地证据报告 `report.md`
-```
-
-## 在线使用
-
-1. 安装依赖并启动 Connector：
-
-   ```bash
-   python -m pip install -r requirements.txt
-   python connector.py
-   ```
-
-2. Connector 只监听 `127.0.0.1:57231`，会打开 [ViralX 设置页](https://viralx.metrolabs.mobi/settings.html)并完成一次性配对。
-   再次运行同一个启动命令即可替换旧实例，不需要先查端口或手动结束 Python 进程。
-3. 选择镜头引擎。默认 `自动`：ShotLoom Core 优先，LibTV 备用。
-4. 配置镜头视觉模型和最终模型；关键词搜索再填写 TikTok Scraper7 Key。TK Note 默认沿用 Windows 系统代理；只有登录墙仍阻断时，才在设置页选择 Chrome / Edge Cookie 来源或手填代理。
-5. 返回 [ViralX 首页](https://viralx.metrolabs.mobi)，粘贴视频或输入主题。
-
-Connector 精确允许 `https://viralx.metrolabs.mobi`，拒绝其他 Origin；配对密钥只存在 URL fragment、本机内存和当前标签页。模型 Key 不经过 EdgeOne，也不会写入日志。
-
-## 本地运行
-
-环境要求：Python 3.10–3.12。构建 EdgeOne 页面时需要 Node.js 18+。
+环境要求：Python 3.10–3.12。
 
 ```bash
 python -m pip install -r requirements.txt
@@ -214,7 +156,7 @@ Copy-Item config.json.example config.json
 python web_app.py
 ```
 
-打开 `http://127.0.0.1:5001/settings` 完成配置。
+浏览器打开 `http://127.0.0.1:5001/settings` 完成配置。`config.json`、模型 Key、浏览器 Cookie、代理凭据、下载原片和本地缓存都不应提交到 Git。
 
 最小配置示例：
 
@@ -225,7 +167,7 @@ python web_app.py
   "shot_model_source": "inherit",
   "model_provider": "openai",
   "model_api_key": "YOUR_MODEL_API_KEY",
-  "model_name": "gpt-4.1-mini",
+  "model_name": "YOUR_MODEL_NAME",
   "rapidapi_key": "ONLY_FOR_KEYWORD_SEARCH"
 }
 ```
@@ -240,28 +182,27 @@ python web_app.py
 | `SHOT_MODEL_API_KEY` | 独立镜头视觉模型 Key | Qwen / custom |
 | `SHOT_MODEL_BASE_URL` | 独立镜头模型 API 根地址 | Qwen / custom |
 | `SHOT_MODEL_NAME` | 独立镜头模型 ID | Qwen / custom |
-| `SHOT_SCENE_THRESHOLD` | 切镜阈值，默认 27 | 可选 |
-| `MODEL_PROVIDER` | `openai`、`anthropic`、`gemini`、`deepseek`、`openrouter`、`custom` | 完整分析 |
+| `MODEL_PROVIDER` | 最终模型服务商 | 完整分析 |
 | `MODEL_API_KEY` | 最终模型 Key | 完整分析 |
 | `MODEL_NAME` | 最终模型 ID | 完整分析 |
 | `MODEL_BASE_URL` / `MODEL_PROTOCOL` | 自定义最终模型接口 | 自定义 provider |
 | `LIBTV_CLI_BINARY` | 官方 LibTV CLI 路径 | 仅 LibTV 模式或回退 |
 | `RIMAGINATION_NOTE_CACHE` | TK Note 下载与 ASR 共享缓存 | 可选 |
 | `TK_NOTE_PROXY` | 覆盖系统代理的 TK Note 显式代理 | 可选 |
-| `TK_NOTE_COOKIES_FROM_BROWSER` | `chrome`、`edge`、`firefox`、`brave` 等 yt-dlp Cookie 来源 | 仅登录墙阻断时 |
-| `TK_NOTE_TIMEOUT` | 单条 TK Note 采集等待上限，120–7200 秒 | 默认 1800 |
+| `TK_NOTE_COOKIES_FROM_BROWSER` | yt-dlp 浏览器 Cookie 来源 | 仅登录墙阻断时 |
+| `TK_NOTE_TIMEOUT` | 单条 TK Note 采集等待上限 | 默认 1800 秒 |
 
-API Key、Cookie、代理地址和代理凭据不会出现在 `/api/health`、Connector 状态、分析结果或日志中。
+API Key、Cookie、代理地址和代理凭据不会出现在健康状态、Connector 状态、分析结果或日志中。
 
 ## Web API 与结果合同
 
 | 端点 | 方法 | 说明 |
 | --- | --- | --- |
-| `/api/health` | GET | 无密钥的运行时、镜头引擎和最终模型就绪状态 |
+| `/api/health` | GET | 无密钥的运行时与模型就绪状态 |
 | `/api/keywords` | GET | 常用主题 |
 | `/api/analyze` | POST | NDJSON 流式分析 |
 | `/api/export-obsidian` | POST | 本地写入或浏览器导出 |
-| `/api/libtv/auth/*` | GET / POST | 本地官方 CLI 网页授权；只在 LibTV 被选择时需要 |
+| `/api/libtv/auth/*` | GET / POST | 本地官方 CLI 授权；仅在选择 LibTV 时需要 |
 
 关键结果字段：
 
@@ -269,7 +210,6 @@ API Key、Cookie、代理地址和代理凭据不会出现在 `/api/health`、Co
 {
   "pipeline_status": "completed | blocked | error",
   "shot_provider": "shotloom | libtv | none",
-  "shot_model": "model-id",
   "shot_status": "completed | blocked",
   "shot_evidence_quality": {
     "timeline_coverage": 1.0,
@@ -282,63 +222,55 @@ API Key、Cookie、代理地址和代理凭据不会出现在 `/api/health`、Co
 }
 ```
 
-## Web 架构
+## 架构
 
 ```text
-Browser / EdgeOne
+Browser
 ├── 首页与设置页
 ├── 会话级 BYOK
 ├── 流式进度、报告与导出
-└── http://127.0.0.1:57231
-    └── ViralX Connector
-        ├── TikTok Scraper7（仅关键词发现）
-        ├── TK Note / yt-dlp（原片与平台证据）
-        ├── ShotLoom Core（默认镜头证据）
-        ├── official LibTV CLI（可选回退）
-        ├── evidence merge + quality gates
-        └── selected final model API（只接收证据）
+└── 127.0.0.1 ViralX Connector
+    ├── TikTok Scraper7（仅关键词发现）
+    ├── TK Note / yt-dlp（原片与平台证据）
+    ├── ShotLoom Core（默认镜头证据）
+    ├── official LibTV CLI（可选回退）
+    ├── evidence merge + quality gates
+    └── selected final model（只接收证据）
 ```
 
 ## 项目结构
 
 ```text
 ViralX/
-├── .agents/skills/viralx-agent/    Codex 原生分析 Skill（无独立模型 API）
+├── .agents/skills/viralx-agent/    Codex 原生分析 Skill
 ├── .agents/skills/viralx/          ViralX Web API Skill
 ├── .agents/skills/tk-note/         原片、字幕与平台证据采集 Skill
 ├── templates/                      首页与设置页
 ├── static/                         设计 token、GSAP 动效与交互
-├── cloud-functions/                EdgeOne 公开安全 API
-├── tiktok_viral_analyzer.py        Scraper7 搜索与语义筛选
+├── tiktok_viral_analyzer.py        搜索与语义筛选
 ├── video_ingest.py                 TK Note / yt-dlp 原片采集
-├── shot_analyzers.py               ShotLoom Core、LibTV adapter、质量门禁
-├── libtv_analyzer.py               官方 CLI 登录与拉片实现
+├── shot_analyzers.py               ShotLoom、LibTV adapter 与质量门禁
 ├── ai_analyzer.py                  证据流水线与最终报告门禁
 ├── local_connector.py              loopback 安全边界
 ├── web_app.py                      本地 Flask Web API
 ├── tests/                          后端、前端、Connector 与证据合同测试
-├── DESIGN.md                       视觉、交互与状态合同
-└── DEPLOYMENT.md                   EdgeOne 与本地运行边界
+└── DESIGN.md                       视觉、交互与状态合同
 ```
 
-## 测试与部署
+## 测试
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py"
-npm run build:edgeone
-npm run deploy:edgeone
 ```
-
-生产域名：[viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。构建产物写入已忽略的 `public/`，不复制本机 `config.json` 或任何密钥。详见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ## 设计与动效
 
-- Butter 式中性画布、双悬浮导航与深色证据工作台；不复制 Butter 的品牌资产或文案。
-- Hanken Grotesk + Noto Sans SC，主标题使用用户提供字体生成的轮廓 SVG。
-- GSAP 3.13 + ScrollTrigger；`prefers-reduced-motion` 下完整降级。
-- 同一套桌面与移动任务顺序；运行状态来自真实后端事件。
+- 中性画布、双悬浮导航与深色证据工作台。
+- Hanken Grotesk + Noto Sans SC，主标题使用项目字体资产。
+- GSAP + ScrollTrigger，并为 `prefers-reduced-motion` 完整降级。
+- 桌面与移动端保持同一任务顺序；运行状态只来自真实后端事件。
 
-详见 [DESIGN.md](DESIGN.md)。
+完整约束见 [DESIGN.md](DESIGN.md)。
 
 ## License
 
