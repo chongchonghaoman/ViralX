@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "viralx.cloud.session.v1";
+  const HEALTH_TIMEOUT_MS = 4500;
   const ALLOWED_FIELDS = [
     "analysis_mode",
     "min_likes",
@@ -144,7 +145,16 @@
     } catch (error) {
       return Promise.reject(error);
     }
-    return window.fetch(target, { ...options, headers: requestHeaders });
+    const route = new URL(url, window.location.origin).pathname;
+    const timeoutMs = route === "/api/health" ? HEALTH_TIMEOUT_MS : 0;
+    if (!timeoutMs || options.signal) {
+      return window.fetch(target, { ...options, headers: requestHeaders });
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    return window.fetch(target, { ...options, headers: requestHeaders, signal: controller.signal })
+      .finally(() => window.clearTimeout(timeout));
   }
 
   window.ViralXCloudConfig = { read, write, clear, headers, runtime, workerUrl, apiFetch };

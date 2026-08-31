@@ -87,8 +87,8 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
 
 - Library: GSAP 3.13 with ScrollTrigger.
 - First screen: one ordered sequence for navigation, product object, claim, and studio.
-- Story sections: one-time reveals when entering the viewport.
-- Evidence map: frames and waveform reveal in the order a viewer reads them.
+- Story sections stay immediately visible instead of repeating the same fade-up on every chapter.
+- Evidence map: frames and waveform provide the single below-fold reveal, in reading order.
 - Live analysis progress remains bound to scaleX and actual streamed state.
 - Result cards and reports reveal only when real content arrives.
 - No infinite floating, bounce loops, or celebratory effects.
@@ -181,8 +181,9 @@ change this sequence.
 - Public availability is not analysis readiness. The homepage health check keeps the user at the
   analysis studio and distinguishes Worker online, owner configuration incomplete, and Worker offline.
   An offline primary action explains that static cases remain available; it never sends visitors to
-  Connector setup. Readiness depends on keyword search plus the fixed TK Note + ShotLoom path and a
-  visual-model connection.
+  Connector setup. Search readiness and analysis readiness are reported separately: keyword input needs
+  Scraper7 plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
+  needs the analysis path. A missing search Key must never block a valid direct-video analysis.
 - TikTok Scraper7 is explained at the source field: video URLs bypass it, while keyword discovery needs
   it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
 - The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> ShotLoom cut/frame ->
@@ -258,3 +259,15 @@ change this sequence.
   retention protect a small personal server without exposing local management surfaces.
 - Hosted settings now treat Scraper7 and model credentials as optional session overrides when the Worker
   already owns defaults. Local Cookie, proxy, directories, shot-engine and LibTV controls remain owner-only.
+
+## Source-aware readiness record — 2026-08-31
+
+- Split public readiness into two capabilities instead of one misleading master switch. Keyword discovery
+  requires Scraper7 and the complete evidence pipeline; direct HTTP(S) video input bypasses only discovery.
+- Added a short health-check timeout so an unreachable home Worker resolves to an honest offline state
+  instead of leaving the interface stuck on “正在连接服务”. Long-running analysis streams remain unbounded by
+  that probe timeout.
+- Removed hosted-page anchors to owner-only advanced controls, preventing navigation into sections that are
+  intentionally absent from the public BYOK surface.
+- Removed repeated section fade-ups. GSAP now concentrates motion in the first-screen sequence and the
+  evidence timeline, so scrolling feels deliberate rather than continuously animated.

@@ -51,7 +51,7 @@
     <div class="settings-layout settings-layout--simple">
       <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
         <a href="#runtime">快速配置</a>
-        <a href="#advanced">高级设置</a>
+        <a href="#advanced" data-server-owner-only>高级设置</a>
       </nav>
 
       <form class="settings-form" id="settings-form" novalidate>
@@ -138,7 +138,7 @@
                 <p id="quick-model-copy">推荐配置已填好，也可以接入第三方兼容服务。</p>
                 <small class="quick-model-requirement">所选模型需要具备视频识别能力。</small>
               </div>
-              <a href="#models">使用其他预设</a>
+              <a href="#models" data-server-owner-only>使用其他预设</a>
             </div>
             <div class="settings-grid quick-model-fields">
               <div class="settings-field settings-field--wide">
@@ -429,7 +429,7 @@
     </div>
     <div class="footer-index" aria-label="设置页索引">
       <div><span>开始</span><a href="#runtime">快速配置</a><a href="/">分析首页</a></div>
-      <div><span>调整</span><a href="#advanced">高级设置</a><a href="#models">更换模型</a></div>
+      <div data-server-owner-only><span>调整</span><a href="#advanced">高级设置</a><a href="#models">更换模型</a></div>
       <div><span>流程</span><p>TK Note 必经</p><p>ShotLoom 切镜</p><p>视觉模型终审</p></div>
     </div>
     <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>

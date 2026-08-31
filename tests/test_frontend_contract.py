@@ -129,6 +129,26 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('mode: "remote-worker"', self.build_js)
         self.assertNotIn('join(projectRoot, "static", "connector.js")', self.build_js)
         self.assertNotIn("ViralXConnector", self.home_js)
+        self.assertIn("const HEALTH_TIMEOUT_MS = 4500;", self.cloud_config_js)
+        self.assertIn("new AbortController()", self.cloud_config_js)
+
+    def test_home_readiness_distinguishes_keyword_search_from_direct_video(self):
+        self.assertIn("let runtimeAnalysisReady = false;", self.home_js)
+        self.assertIn("let runtimeSearchReady = false;", self.home_js)
+        self.assertIn("function isDirectVideoSource(value)", self.home_js)
+        self.assertIn("if (!isDirectVideoSource(source) && !runtimeSearchReady)", self.home_js)
+        self.assertIn("直链分析已经就绪", self.home_js)
+        self.assertNotIn("Boolean(data.analysis_ready && data.configured?.keyword_search)", self.home_js)
+
+    def test_motion_is_concentrated_instead_of_repeating_on_every_story_section(self):
+        self.assertIn('document.querySelectorAll("[data-motion]")', self.home_js)
+        self.assertNotIn('window.gsap.utils.toArray(".story-section")', self.home_js)
+        self.assertIn('window.gsap.from(".waveform i"', self.home_js)
+
+    def test_hosted_settings_hide_links_to_owner_only_sections(self):
+        self.assertIn('<a href="#advanced" data-server-owner-only>高级设置</a>', self.settings)
+        self.assertIn('<a href="#models" data-server-owner-only>使用其他预设</a>', self.settings)
+        self.assertIn('<div data-server-owner-only><span>调整</span>', self.settings)
 
     def test_home_uses_explicit_five_stage_pipeline_events(self):
         for stage in ("discovery", "collection", "shot-analysis", "evidence-merge", "final-analysis"):

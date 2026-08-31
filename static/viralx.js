@@ -5,7 +5,8 @@
   let currentModalContent = "";
   let lastModalTrigger = null;
   let runtimeMode = "unknown";
-  let runtimeReady = false;
+  let runtimeAnalysisReady = false;
+  let runtimeSearchReady = false;
   let runtimeBlocker = "checking";
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -107,7 +108,7 @@
   }
 
   function initMotion() {
-    const motionItems = document.querySelectorAll("[data-motion], .story-section");
+    const motionItems = document.querySelectorAll("[data-motion]");
     if (!motionItems.length || !gsapReady()) {
       motionItems.forEach((item) => {
         item.style.opacity = "1";
@@ -126,20 +127,6 @@
       .from("[data-motion='hero-form']", { autoAlpha: 0, y: 24, duration: 0.65 }, "-=0.4");
 
     if (!window.ScrollTrigger) return;
-
-    window.gsap.utils.toArray(".story-section").forEach((section) => {
-      window.gsap.from(section, {
-        y: 40,
-        duration: 0.75,
-        ease: "power4.out",
-        clearProps: "transform",
-        scrollTrigger: {
-          trigger: section,
-          start: "top 82%",
-          once: true,
-        },
-      });
-    });
 
     window.gsap.from(".waveform i", {
       scaleY: 0.16,
@@ -251,8 +238,25 @@
     error.hidden = true;
   }
 
+  function isDirectVideoSource(value) {
+    try {
+      const source = new URL(String(value || "").trim());
+      return ["http:", "https:"].includes(source.protocol) && Boolean(source.hostname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function sourceReady() {
+    if (!runtimeAnalysisReady) return false;
+    const value = byId("keyword")?.value || "";
+    return isDirectVideoSource(value) || runtimeSearchReady;
+  }
+
   function primaryActionLabel(navigation = false) {
-    if (runtimeReady) return navigation ? "开始分析" : "开始拉片";
+    if (runtimeAnalysisReady && navigation) return "开始分析";
+    if (sourceReady()) return "开始拉片";
+    if (runtimeAnalysisReady && !runtimeSearchReady) return "需要搜索 Key";
     return {
       checking: "正在连接服务",
       server_config_missing: "分析服务配置中",
@@ -284,32 +288,40 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       runtimeMode = data.runtime || "local";
+      runtimeAnalysisReady = Boolean(data.analysis_ready);
+      runtimeSearchReady = Boolean(data.configured?.keyword_search);
       if (runtimeMode === "worker") {
-        runtimeReady = Boolean(data.analysis_ready && data.configured?.keyword_search);
-        runtimeBlocker = runtimeReady ? "ready" : "server_config_missing";
-        chip.dataset.state = runtimeReady ? "ready" : "warning";
-        label.textContent = runtimeReady
-          ? "实时分析在线 · TK Note → ShotLoom + 视觉模型"
-          : "分析服务在线 · 所有者正在补齐模型或搜索配置";
+        runtimeBlocker = runtimeAnalysisReady
+          ? (runtimeSearchReady ? "ready" : "search_config_missing")
+          : "server_config_missing";
+        chip.dataset.state = runtimeAnalysisReady && runtimeSearchReady ? "ready" : "warning";
+        label.textContent = runtimeAnalysisReady && runtimeSearchReady
+          ? "完整分析在线 · 关键词搜索 → TK Note → ShotLoom + 视觉模型"
+          : runtimeAnalysisReady
+            ? "直链分析在线 · 关键词搜索 Key 待配置"
+            : runtimeSearchReady
+              ? "关键词搜索在线 · 视觉分析链待配置"
+              : "分析服务在线 · 搜索与视觉模型配置待补齐";
         syncPrimaryActions();
         return;
       }
       if (runtimeMode === "edgeone") {
-        runtimeReady = false;
+        runtimeAnalysisReady = false;
+        runtimeSearchReady = false;
         runtimeBlocker = "offline";
         chip.dataset.state = "offline";
         label.textContent = "展示站在线 · 实时分析服务暂未接入";
         syncPrimaryActions();
         return;
       }
-      runtimeReady = Boolean(data.analysis_ready);
-      runtimeBlocker = runtimeReady ? "ready" : "local_config_missing";
-      if (runtimeReady) {
-        chip.dataset.state = "ready";
+      runtimeBlocker = runtimeAnalysisReady ? "ready" : "local_config_missing";
+      if (runtimeAnalysisReady) {
+        chip.dataset.state = runtimeSearchReady ? "ready" : "warning";
         const shot = data.shot || {};
-        label.textContent = shot.collection_only
+        const pipelineLabel = shot.collection_only
           ? "本地采集链就绪 · 不生成最终报告"
           : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom + 视觉模型"} → 证据终审`;
+        label.textContent = runtimeSearchReady ? pipelineLabel : `${pipelineLabel} · 关键词搜索 Key 待配置`;
       } else {
         chip.dataset.state = "warning";
         label.textContent = "本地服务在线 · 待补齐 ShotLoom 与视觉模型配置";
@@ -317,7 +329,8 @@
       syncPrimaryActions();
     } catch (_) {
       runtimeMode = "offline";
-      runtimeReady = false;
+      runtimeAnalysisReady = false;
+      runtimeSearchReady = false;
       runtimeBlocker = "offline";
       chip.dataset.state = "offline";
       label.textContent = "实时分析暂离线 · 网站内容仍可浏览";
@@ -476,11 +489,18 @@
   }
 
   function handleAnalyzeAction(refresh = false) {
-    if (!runtimeReady) {
-      showInlineError(runtimeBlocker === "server_config_missing"
-        ? "实时分析服务已经在线，但服务器所有者还没有补齐搜索或视觉模型配置。"
+    const source = byId("keyword")?.value.trim() || "";
+    if (!runtimeAnalysisReady) {
+      const configurationMissing = ["server_config_missing", "local_config_missing"].includes(runtimeBlocker);
+      showInlineError(configurationMissing
+        ? "分析服务已经在线，但视觉模型或镜头分析链还没有配置完成。请补齐模型 Base URL、API Key 与模型名称后重试。"
         : "实时分析服务当前离线。网站内容与方法仍可浏览，服务恢复后可直接在这里开始分析。");
       byId("analysis-studio")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      return;
+    }
+    if (!isDirectVideoSource(source) && !runtimeSearchReady) {
+      showInlineError("直链分析已经就绪；关键词发现还缺少 TikTok Scraper7 RapidAPI Key。你可以先粘贴视频直链，或由站点所有者补齐搜索配置。");
+      byId("keyword")?.focus();
       return;
     }
     analyze(refresh);
@@ -698,6 +718,7 @@
     byId("refresh-btn").addEventListener("click", () => handleAnalyzeAction(true));
     byId("focus-source").addEventListener("click", () => byId("keyword").focus());
     byId("export-btn").addEventListener("click", exportToObsidian);
+    byId("keyword").addEventListener("input", syncPrimaryActions);
     document.querySelector(".modal-close").addEventListener("click", closeModal);
 
     const modal = byId("modal");
