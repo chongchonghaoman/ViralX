@@ -676,7 +676,11 @@
         showStatus(`设置没有保存：${error.message}。`, "error", { focus: false });
         showFieldError(error.fieldId, error.message);
       } else {
-        showStatus(`设置没有保存：${error.message}。检查字段后重试。`, "error");
+        const fetchFailed = hostedPage() && (error.name === "AbortError" || /failed to fetch/i.test(error.message || ""));
+        const message = fetchFailed
+          ? "无法连接实时 Worker。请刷新页面确认“实时 Worker · 在线”后重试"
+          : `${error.message}。检查字段后重试`;
+        showStatus(`设置没有保存：${message}。`, "error");
       }
     } finally {
       button.disabled = false;

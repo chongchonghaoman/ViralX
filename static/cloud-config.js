@@ -61,6 +61,17 @@
     minimax_model: "X-ViralX-MiniMax-Model",
   };
 
+  const REMOTE_WORKER_HEADER_FIELDS = new Set([
+    "min_likes",
+    "rapidapi_key",
+    "model_provider",
+    "model_protocol",
+    "model_api_key",
+    "model_base_url",
+    "model_name",
+    "shot_scene_threshold",
+  ]);
+
   const REMOTE_WORKER_PATHS = new Set([
     "/api/health",
     "/api/analyze",
@@ -103,10 +114,11 @@
     window.sessionStorage.removeItem(STORAGE_KEY);
   }
 
-  function headers() {
+  function headers({ remoteWorker = false } = {}) {
     const result = {};
     const value = read();
     Object.entries(HEADER_MAP).forEach(([field, header]) => {
+      if (remoteWorker && !REMOTE_WORKER_HEADER_FIELDS.has(field)) return;
       if (value[field] !== undefined && value[field] !== "") {
         result[header] = String(value[field]);
       }
@@ -135,9 +147,14 @@
   }
 
   function apiFetch(url, options = {}) {
+    const route = new URL(url, window.location.origin).pathname;
+    const config = runtime();
+    const remoteWorker = document.documentElement.dataset.deployment === "edgeone"
+      && config.mode === "remote-worker"
+      && REMOTE_WORKER_PATHS.has(route);
     const requestHeaders = new Headers(options.headers || {});
     if (runtime().allowSessionOverrides) {
-      Object.entries(headers()).forEach(([name, value]) => requestHeaders.set(name, value));
+      Object.entries(headers({ remoteWorker })).forEach(([name, value]) => requestHeaders.set(name, value));
     }
     let target;
     try {
@@ -145,7 +162,6 @@
     } catch (error) {
       return Promise.reject(error);
     }
-    const route = new URL(url, window.location.origin).pathname;
     const timeoutMs = route === "/api/health" ? HEALTH_TIMEOUT_MS : 0;
     if (!timeoutMs || options.signal) {
       return window.fetch(target, { ...options, headers: requestHeaders });

@@ -131,6 +131,12 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("ViralXConnector", self.home_js)
         self.assertIn("const HEALTH_TIMEOUT_MS = 4500;", self.cloud_config_js)
         self.assertIn("new AbortController()", self.cloud_config_js)
+        self.assertIn("const REMOTE_WORKER_HEADER_FIELDS = new Set", self.cloud_config_js)
+        self.assertIn("headers({ remoteWorker })", self.cloud_config_js)
+        self.assertIn("if (remoteWorker && !REMOTE_WORKER_HEADER_FIELDS.has(field)) return;", self.cloud_config_js)
+        for field in ("min_likes", "rapidapi_key", "model_provider", "model_protocol", "model_api_key", "model_base_url", "model_name", "shot_scene_threshold"):
+            self.assertIn(f'    "{field}",', self.cloud_config_js)
+        self.assertIn("无法连接实时 Worker", self.settings_js)
 
     def test_home_readiness_distinguishes_keyword_search_from_direct_video(self):
         self.assertIn("let runtimeAnalysisReady = false;", self.home_js)
