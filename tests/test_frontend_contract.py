@@ -195,7 +195,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
         home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
         settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
-        self.assertEqual(home_versions, {"1.1.7"})
+        self.assertEqual(home_versions, {"1.1.8"})
         self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
         self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)
@@ -210,6 +210,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("124rem", self.home_css)
         self.assertIn("grid-template-columns: minmax(36rem, 0.76fr) minmax(64rem, 1.34fr);", self.home_css)
         self.assertIn("background: var(--color-ink);", self.home_css)
+
+    def test_hero_visual_preserves_the_complete_artwork(self):
+        self.assertIn("object-fit: contain;", self.home_css)
+        self.assertIn("clip-path: none;", self.home_css)
+        self.assertIn('(min-width: 52rem) 36rem', self.home)
 
     def test_production_deploy_cannot_silently_fall_back_to_edgeone_proxying(self):
         self.assertIn("VIRALX_PUBLIC_API_BASE_URL", self.deploy_guard_js)

@@ -238,18 +238,20 @@ h3 {
   position: relative;
   z-index: var(--z-raised);
   display: grid;
-  width: min(100%, 32rem);
-  min-height: clamp(14rem, 52vw, 21rem);
+  width: min(100%, 36rem);
+  min-height: clamp(14rem, 60vw, 24rem);
   place-items: center;
   margin: 0;
+  padding-inline: clamp(0.5rem, 2vw, 1rem);
 }
 
 .hero-visual img {
+  display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 3 / 2;
-  object-fit: cover;
-  clip-path: ellipse(48% 40% at 50% 50%);
+  object-fit: contain;
+  clip-path: none;
   filter: saturate(0.82) contrast(1.12);
   mix-blend-mode: multiply;
 }
@@ -1822,8 +1824,8 @@ h3 {
 
   .hero-visual {
     grid-column: 1;
-    width: min(100%, 32rem);
-    min-height: 20rem;
+    width: min(100%, 36rem);
+    min-height: 22rem;
     justify-self: center;
   }
 
@@ -1926,8 +1928,8 @@ h3 {
 
 @media (min-width: 80rem) {
   .hero-visual {
-    width: min(100%, 32rem);
-    min-height: 21rem;
+    width: min(100%, 36rem);
+    min-height: 24rem;
   }
 
   .analysis-studio {
