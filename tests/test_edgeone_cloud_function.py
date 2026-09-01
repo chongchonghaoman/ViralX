@@ -170,6 +170,26 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(call.kwargs["headers"]["X-ViralX-Model-Key"], "session-secret-model")
         self.assertNotIn("X-ViralX-TK-Proxy", call.kwargs["headers"])
 
+    def test_checkpoint_routes_proxy_the_exact_opaque_task_id(self):
+        task_id = "A" * 24
+        with patch.object(
+            self.module,
+            "_proxy_worker",
+            return_value=({"status": "ready"}, 200),
+        ) as proxy:
+            get_response = self.client.get(f"/tasks/{task_id}")
+            post_response = self.client.post(f"/tasks/{task_id}/resume", json={})
+
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(post_response.status_code, 200)
+        self.assertEqual(proxy.call_args_list[0].args, (f"/api/tasks/{task_id}",))
+        self.assertEqual(proxy.call_args_list[1].args, (f"/api/tasks/{task_id}/resume",))
+        self.assertTrue(proxy.call_args_list[1].kwargs["stream"])
+
+    def test_checkpoint_routes_reject_path_like_ids_before_proxying(self):
+        response = self.client.get("/tasks/too-short")
+        self.assertEqual(response.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

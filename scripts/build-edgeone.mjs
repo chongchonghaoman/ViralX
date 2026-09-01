@@ -6,7 +6,11 @@ const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(projectRoot, "public");
 const publicStatic = join(publicDir, "static");
 const publicFunctions = join(publicDir, "cloud-functions");
-const assetVersion = "1.1.4";
+const assetVersion = "1.1.5";
+const renderStaticUrls = (source) => source.replace(
+  /\{\{\s*url_for\('static',\s*filename='([^']+)'(?:,\s*v='([^']+)')?\)\s*\}\}/g,
+  (_match, filename, version) => `/static/${filename}${version ? `?v=${assetVersion}` : ""}`,
+);
 const publicApiBaseUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
 let publicApiOrigin = "";
 if (publicApiBaseUrl) {
@@ -20,26 +24,9 @@ if (publicApiBaseUrl) {
 await rm(publicDir, { recursive: true, force: true });
 await mkdir(join(publicStatic, "assets"), { recursive: true });
 
-let html = await readFile(join(projectRoot, "templates", "index.html"), "utf8");
+let html = renderStaticUrls(await readFile(join(projectRoot, "templates", "index.html"), "utf8"));
 html = html
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
-  .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
-  .replaceAll(
-    "{{ url_for('static', filename='viralx.css', v='1.1.4') }}",
-    `/static/viralx.css?v=${assetVersion}`,
-  )
-  .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-640.webp') }}", "/static/assets/viralx-signal-orbit-640.webp")
-  .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-1024.webp') }}", "/static/assets/viralx-signal-orbit-1024.webp")
-  .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}", "/static/assets/viralx-signal-orbit.png")
-  .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}", "/static/assets/viralx-title-shuei-wide.svg")
-  .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}", "/static/assets/viralx-title-shuei-stacked.svg")
-  .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.webp') }}", "/static/assets/viralx-title-shuei-stacked.webp")
-  .replaceAll("{{ url_for('static', filename='runtime-config.js', v='1.1.4') }}", `/static/runtime-config.js?v=${assetVersion}`)
-  .replaceAll("{{ url_for('static', filename='cloud-config.js', v='1.1.4') }}", `/static/cloud-config.js?v=${assetVersion}`)
-  .replaceAll(
-    "{{ url_for('static', filename='viralx.js', v='1.1.4') }}",
-    `/static/viralx.js?v=${assetVersion}`,
-  )
   .replaceAll('href="/settings"', 'href="/settings.html"')
   .replaceAll('href="/"', 'href="#main-content"')
   .replace("connect-src 'self'", `connect-src 'self'${publicApiOrigin ? ` ${publicApiOrigin}` : ""}`)
@@ -48,18 +35,9 @@ html = html
 
 await writeFile(join(publicDir, "index.html"), html, "utf8");
 
-let settingsHtml = await readFile(join(projectRoot, "templates", "settings.html"), "utf8");
+let settingsHtml = renderStaticUrls(await readFile(join(projectRoot, "templates", "settings.html"), "utf8"));
 settingsHtml = settingsHtml
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
-  .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
-  .replaceAll(
-    "{{ url_for('static', filename='viralx.css', v='1.1.4') }}",
-    `/static/viralx.css?v=${assetVersion}`,
-  )
-  .replaceAll("{{ url_for('static', filename='settings.css', v='1.1.4') }}", `/static/settings.css?v=${assetVersion}`)
-  .replaceAll("{{ url_for('static', filename='runtime-config.js', v='1.1.4') }}", `/static/runtime-config.js?v=${assetVersion}`)
-  .replaceAll("{{ url_for('static', filename='cloud-config.js', v='1.1.4') }}", `/static/cloud-config.js?v=${assetVersion}`)
-  .replaceAll("{{ url_for('static', filename='settings.js', v='1.1.4') }}", `/static/settings.js?v=${assetVersion}`)
   .replace("connect-src 'self'", `connect-src 'self'${publicApiOrigin ? ` ${publicApiOrigin}` : ""}`)
   .replace("配置留在本地；证据留在你的工作区。", "网页负责展示与可选会话配置；完整证据链由 ViralX Worker 执行。")
   .replace("静态 EdgeOne 展示", "EdgeOne 网页 + 健康检查")

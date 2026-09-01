@@ -1,4 +1,5 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -124,6 +125,48 @@ class WorkerServerTests(unittest.TestCase):
                 "/api/analyze",
                 headers=self.headers,
                 json={"keyword": "picture lights"},
+            )
+            self.assertEqual(second.status_code, 409)
+            first.close()
+
+    def test_task_status_is_persistent_cors_enabled_and_hides_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = {**worker_server.web_app.DEFAULT_CONFIG, "video_cache_dir": tmp}
+            store = worker_server.web_app._checkpoint_store(config)
+            task = store.create_final_checkpoint({
+                "video_id": "123",
+                "pipeline_status": "error",
+                "pipeline_stage": "final-analysis",
+                "evidence_status": "merged",
+                "evidence_bundle": {
+                    "schema": "viralx.evidence_bundle.v1",
+                    "shot_evidence": {"shot_count": 2},
+                },
+                "evidence_bundle_path": str(Path(tmp) / "private" / "evidence-bundle.json"),
+            })
+            with patch.object(worker_server.web_app, "load_config", return_value=config):
+                response = self.client.get(f'/api/tasks/{task["task_id"]}', headers=self.headers)
+
+            serialized = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], ORIGIN)
+            self.assertEqual(response.get_json()["retry_scope"], "model-only")
+            self.assertNotIn(str(Path(tmp)), serialized)
+            self.assertNotIn("internal", serialized)
+
+    def test_resume_route_uses_the_streaming_worker_slot(self):
+        def fake_response(*_args, **_kwargs):
+            return Response(iter([b'{"status":"success","done":true}\n']), mimetype="application/x-ndjson")
+
+        with patch.object(worker_server.web_app, "build_resume_response", side_effect=fake_response):
+            first = self.client.post(
+                "/api/tasks/AAAAAAAAAAAAAAAAAAAAAAAA/resume",
+                headers=self.headers,
+                json={},
+                buffered=False,
+            )
+            second = self.client.post(
+                "/api/analyze", headers=self.headers, json={"keyword": "picture lights"},
             )
             self.assertEqual(second.status_code, 409)
             first.close()

@@ -178,6 +178,14 @@
     });
   }
 
+  function checkpointExpiryLabel(value) {
+    const date = new Date(String(value || ""));
+    if (Number.isNaN(date.getTime())) return "任务保留期结束";
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+    }).format(date);
+  }
+
   function setPipelineStage(stageName, state) {
     if (!PIPELINE_STAGES.includes(stageName)) return;
     const stage = document.querySelector(`.stage[data-stage="${stageName}"]`);
@@ -632,8 +640,8 @@
     return `fallback:${String(video?.author || "").trim().toLowerCase()}|${String(video?.title || "").trim().toLowerCase()}`;
   }
 
-  async function consumeAnalysisStream(requestBody, onPayload) {
-    const response = await apiFetch("/api/analyze", {
+  async function consumeAnalysisStream(requestBody, onPayload, endpoint = "/api/analyze") {
+    const response = await apiFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
@@ -736,6 +744,10 @@
     })}`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
     const pipelineFailed = video.pipeline_status && video.pipeline_status !== "completed";
+    const canResumeFinal = pipelineFailed
+      && video.resumable_stage === "final-analysis"
+      && video.retry_scope === "model-only"
+      && Boolean(video.task_id);
     const failureMessage = pipelineFailed ? String(video.ai_analysis || "分析链没有完成") : "";
     const recoveryLabel = video.pipeline_stage === "collection"
       ? "检查采集设置"
@@ -761,8 +773,9 @@
         <span class="provider-badge ${escapeHtml(modelStatus || "not_run")}">${escapeHtml(providerLabel)}</span>
       </div>
       ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
+      ${canResumeFinal ? `<p class="video-card__checkpoint">证据检查点保留至 ${escapeHtml(checkpointExpiryLabel(video.checkpoint_expires_at))}。仅再次调用模型，不会重新下载或切镜。</p>` : ""}
       <div class="card-actions">
-        ${pipelineFailed ? '<button class="retry-video-btn" type="button">重试这条视频</button>' : ""}
+        ${pipelineFailed ? `<button class="retry-video-btn" type="button">${canResumeFinal ? "仅重试终审" : "重试这条视频"}</button>` : ""}
         <button class="analysis-btn" type="button">${pipelineFailed ? "查看失败详情" : "打开最终分析"}</button>
         ${pipelineFailed ? `<a class="project-link" href="/settings">${recoveryLabel}</a>` : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
@@ -795,12 +808,15 @@
   async function retryVideo(video, card, button) {
     const source = videoSourceUrl(video);
     const retryStatus = card.querySelector(".video-card__retry-status");
-    if (!isDirectVideoSource(source)) {
+    const finalOnly = video.resumable_stage === "final-analysis"
+      && video.retry_scope === "model-only"
+      && Boolean(video.task_id);
+    if (!finalOnly && !isDirectVideoSource(source)) {
       showInlineError("这条结果没有可重试的真实视频直链。请重新运行关键词搜索获取有效来源。");
       return;
     }
 
-    const refresh = video.pipeline_stage === "collection";
+    const refresh = !finalOnly && video.pipeline_stage === "collection";
     let retriedVideo = null;
     let terminalError = "";
     clearInlineError();
@@ -808,21 +824,25 @@
     button.textContent = "正在重试";
     card.dataset.retrying = "true";
     retryStatus.hidden = false;
-    retryStatus.textContent = refresh ? "正在重新采集原片与字幕证据…" : "正在复用已采集证据并重跑视觉终审…";
-    updateProgress(retryStatus.textContent.replace("…", ""), refresh ? 24 : 48);
+    retryStatus.textContent = finalOnly
+      ? "正在复用服务端证据检查点，仅重试模型终审…"
+      : refresh ? "正在重新采集原片与字幕证据…" : "正在复用已采集证据并重跑视觉终审…";
+    updateProgress(retryStatus.textContent.replace("…", ""), finalOnly ? 86 : refresh ? 24 : 48);
 
     try {
-      await consumeAnalysisStream({
+      const requestBody = finalOnly ? {} : {
         keyword: source,
         refresh,
         product_name: byId("product-name")?.value || "",
         product_info: byId("product-info")?.value || "",
-      }, (data) => {
+      };
+      const endpoint = finalOnly ? `/api/tasks/${encodeURIComponent(video.task_id)}/resume` : "/api/analyze";
+      await consumeAnalysisStream(requestBody, (data) => {
         if (data.stage) setPipelineStage(data.stage, data.stage_status || "running");
         if (data.stage_label) updateProgress(data.stage_label, data.stage_progress || 0);
         if (data.video) retriedVideo = data.video;
         if (data.status === "error") terminalError = data.message || "单条重试没有完成";
-      });
+      }, endpoint);
       if (terminalError) throw new Error(terminalError);
       if (!retriedVideo) throw new Error("重试完成但没有返回视频结果");
 

@@ -191,21 +191,19 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("min-height: 2.75rem", self.home_css)
 
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
-        self.assertIn("filename='viralx.css', v='1.1.4'", self.home)
-        self.assertIn("filename='runtime-config.js', v='1.1.4'", self.home)
-        self.assertIn("filename='cloud-config.js', v='1.1.4'", self.home)
-        self.assertIn("filename='viralx.js', v='1.1.4'", self.home)
-        self.assertIn("filename='viralx.css', v='1.1.4'", self.settings)
-        self.assertIn("filename='settings.css', v='1.1.4'", self.settings)
-        self.assertIn("filename='runtime-config.js', v='1.1.4'", self.settings)
-        self.assertIn("filename='cloud-config.js', v='1.1.4'", self.settings)
-        self.assertIn("filename='settings.js', v='1.1.4'", self.settings)
-        self.assertIn("/static/viralx.css?v=${assetVersion}", self.build_js)
-        self.assertIn("/static/runtime-config.js?v=${assetVersion}", self.build_js)
-        self.assertIn("/static/cloud-config.js?v=${assetVersion}", self.build_js)
-        self.assertIn("/static/viralx.js?v=${assetVersion}", self.build_js)
-        self.assertIn("/static/settings.css?v=${assetVersion}", self.build_js)
-        self.assertIn("/static/settings.js?v=${assetVersion}", self.build_js)
+        self.assertIn("filename='viralx.css', v='1.1.5'", self.home)
+        self.assertIn("filename='runtime-config.js', v='1.1.5'", self.home)
+        self.assertIn("filename='cloud-config.js', v='1.1.5'", self.home)
+        self.assertIn("filename='viralx.js', v='1.1.5'", self.home)
+        self.assertIn("filename='viralx.css', v='1.1.5'", self.settings)
+        self.assertIn("filename='settings.css', v='1.1.5'", self.settings)
+        self.assertIn("filename='runtime-config.js', v='1.1.5'", self.settings)
+        self.assertIn("filename='cloud-config.js', v='1.1.5'", self.settings)
+        self.assertIn("filename='settings.js', v='1.1.5'", self.settings)
+        self.assertIn('const assetVersion = "1.1.5";', self.build_js)
+        self.assertIn("const renderStaticUrls", self.build_js)
+        self.assertIn('`/static/${filename}${version ? `?v=${assetVersion}` : ""}`', self.build_js)
+        self.assertNotIn("filename='viralx.css', v='1.1.4'", self.build_js)
 
     def test_gateway_timeout_explains_recovery_path(self):
         self.assertIn("responseError.status = response.status", self.home_js)
@@ -213,7 +211,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("请稍后重试后重试", self.home_js)
 
     def test_stream_protocol_deduplicates_results_and_requires_a_terminal_event(self):
-        self.assertIn("async function consumeAnalysisStream(requestBody, onPayload)", self.home_js)
+        self.assertIn('async function consumeAnalysisStream(requestBody, onPayload, endpoint = "/api/analyze")', self.home_js)
         self.assertIn("if (terminal) return;", self.home_js)
         self.assertIn("function stableVideoKey(video)", self.home_js)
         self.assertIn("const resultCards = new Map();", self.home_js)
@@ -223,11 +221,20 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("分析流包含无法解析的数据，结果可能不完整", self.home_js)
         self.assertIn("loading.hidden = true;", self.home_js)
 
+    def test_failed_final_analysis_exposes_a_single_checkpoint_recovery_action(self):
+        self.assertIn('video.resumable_stage === "final-analysis"', self.home_js)
+        self.assertIn('video.retry_scope === "model-only"', self.home_js)
+        self.assertIn('"仅重试终审"', self.home_js)
+        self.assertIn("不会重新下载或切镜", self.home_js)
+        self.assertIn("function checkpointExpiryLabel(value)", self.home_js)
+        self.assertIn('/api/tasks/${encodeURIComponent(video.task_id)}/resume', self.home_js)
+        self.assertIn('target.pathname.startsWith("/api/tasks/")', self.cloud_config_js)
+
     def test_failed_video_has_an_in_place_retry_and_runtime_self_recovers(self):
         self.assertIn('class="retry-video-btn"', self.home_js)
         self.assertIn("重试这条视频", self.home_js)
         self.assertIn("async function retryVideo(video, card, button)", self.home_js)
-        self.assertIn('const refresh = video.pipeline_stage === "collection";', self.home_js)
+        self.assertIn('const refresh = !finalOnly && video.pipeline_stage === "collection";', self.home_js)
         self.assertIn("card.replaceWith(replacement);", self.home_js)
         self.assertIn("RUNTIME_RECHECK_MS = 30000", self.home_js)
         self.assertIn('window.setInterval(() => checkRuntime({ silent: true })', self.home_js)
@@ -311,7 +318,8 @@ class FrontendContractTests(unittest.TestCase):
                 self.assertTrue(asset.is_file())
                 self.assertLess(asset.stat().st_size, png.stat().st_size)
                 self.assertIn(asset.name, self.home)
-                self.assertIn(asset.name, self.build_js)
+        self.assertIn("for (const width of [640, 1024])", self.build_js)
+        self.assertIn("`viralx-signal-orbit-${width}.webp`", self.build_js)
 
 
 if __name__ == "__main__":

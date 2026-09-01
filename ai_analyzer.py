@@ -1673,6 +1673,95 @@ class AIAnalyzer:
             **acquisition_details,
         }
 
+    def resume_final_analysis(
+        self,
+        video_data: dict,
+        progress_callback=None,
+        evidence_bundle_path: str = '',
+    ) -> dict:
+        """Retry only evidence-grounded synthesis from a server-owned checkpoint."""
+        def emit(status, label, progress):
+            if progress_callback:
+                progress_callback({
+                    'status': 'progress',
+                    'stage': 'final-analysis',
+                    'stage_status': status,
+                    'stage_label': label,
+                    'stage_progress': progress,
+                })
+
+        evidence_bundle = video_data.get('evidence_bundle') or {}
+        shot_evidence = evidence_bundle.get('shot_evidence') or {}
+        if evidence_bundle.get('schema') != EVIDENCE_BUNDLE_SCHEMA:
+            raise ValueError('检查点中的统一证据包版本无效')
+        shot_error = validate_shot_evidence({'status': 'completed', 'evidence': shot_evidence})
+        if shot_error:
+            raise ValueError(f'检查点中的镜头证据不可用：{shot_error}')
+        if self.model_config_error:
+            raise ValueError(f'模型 API 配置无效：{self.model_config_error}')
+        if not self.model_api_key or not self.model_name or not self.model_analyzer:
+            raise ValueError('最终模型尚未配置完成')
+
+        emit('running', '正在复用已保存证据，仅重试模型终审', 86)
+        try:
+            final_analysis = self.model_analyzer.analyze(video_data, None)
+        except Exception as exc:
+            emit('error', '模型终审连接失败；检查点仍可继续使用', 100)
+            return {
+                **video_data,
+                'ai_analysis': f'最终模型连接失败（{type(exc).__name__}）。已保存证据未受影响，可再次仅重试终审。',
+                'analysis_provider': self.model_provider,
+                'pipeline_stage': 'final-analysis',
+                'pipeline_status': 'error',
+                'evidence_status': 'merged',
+                'model_status': 'error',
+                'model_error_code': type(exc).__name__,
+                'retry_scope': 'model-only',
+            }
+
+        final_analysis = final_analysis if isinstance(final_analysis, str) else ''
+        audit_details = {}
+        try:
+            bundle_path = Path(str(evidence_bundle_path or ''))
+            if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
+                audit_details = _persist_evidence_audit(
+                    str(bundle_path.parent.parent / 'source.mp4'),
+                    evidence_bundle,
+                    str(shot_evidence.get('shot_analysis') or ''),
+                    final_analysis,
+                )
+        except (OSError, ValueError):
+            audit_details = {}
+
+        grounding_error = _grounding_error(final_analysis, video_data)
+        model_failed = '失败' in final_analysis or not final_analysis.strip() or bool(grounding_error)
+        if grounding_error:
+            visible_analysis = (
+                f'最终模型报告已拦截：{grounding_error}。'
+                '原始输出已保存，但不会作为可信分析展示；可再次仅重试终审。'
+            )
+        else:
+            visible_analysis = final_analysis or '模型 API 没有返回最终分析'
+        emit(
+            'error' if model_failed else 'complete',
+            '最终报告缺少证据引用，已拦截' if grounding_error else (
+                '模型终审失败；检查点仍可继续使用' if model_failed else '最终报告已生成'
+            ),
+            100,
+        )
+        return {
+            **video_data,
+            'ai_analysis': visible_analysis,
+            'analysis_provider': self.model_provider,
+            'pipeline_stage': 'final-analysis',
+            'pipeline_status': 'error' if model_failed else 'completed',
+            'evidence_status': 'merged',
+            'model_status': 'error' if model_failed else 'completed',
+            'model_grounding_error': grounding_error,
+            'retry_scope': 'model-only',
+            **audit_details,
+        }
+
     def _analyze_minimax(self, video_data: dict) -> str:
         """MiniMax 纯文本分析"""
         if not self.client:

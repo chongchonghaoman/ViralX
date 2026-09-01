@@ -15,6 +15,7 @@ import threading
 import queue
 from tiktok_viral_analyzer import TikTokSearchChainError, TikTokViralAnalyzer, safe_error_message
 from ai_analyzer import AIAnalyzer
+from checkpoint_store import CheckpointStore
 from libtv_analyzer import LIBTV_CLI_PAGE, LibTVAuthManager
 from model_providers import model_is_ready, normalize_model_config
 from shot_analyzers import ShotLoomCoreAnalyzer, normalize_shot_config
@@ -320,6 +321,37 @@ def build_health_payload(config_override=None, runtime_override=None):
         },
     }
 
+def _create_ai_analyzer(current_config):
+    return AIAnalyzer(
+        api_key=current_config.get('minimax_api_key'),
+        base_url=current_config.get('minimax_base_url'),
+        model=current_config.get('minimax_model'),
+        analysis_mode=current_config.get('analysis_mode', 'pipeline'),
+        model_provider=current_config.get('model_provider', 'openai'),
+        model_protocol=current_config.get('model_protocol', 'openai'),
+        model_api_key=current_config.get('model_api_key', ''),
+        model_base_url=current_config.get('model_base_url', ''),
+        model_name=current_config.get('model_name', ''),
+        video_cache_dir=current_config.get('video_cache_dir', './video_cache'),
+        tk_note_asr_backend=current_config.get('tk_note_asr_backend', 'auto'),
+        tk_note_language=current_config.get('tk_note_language', 'auto'),
+        tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
+        tk_note_proxy=current_config.get('tk_note_proxy', ''),
+        tk_note_timeout=current_config.get('tk_note_timeout', 1800),
+        shot_engine=current_config.get('shot_engine', 'shotloom'),
+        shot_model_source=current_config.get('shot_model_source', 'inherit'),
+        shot_model_api_key=current_config.get('shot_model_api_key', ''),
+        shot_model_base_url=current_config.get('shot_model_base_url', ''),
+        shot_model_name=current_config.get('shot_model_name', ''),
+        shot_scene_threshold=current_config.get('shot_scene_threshold', 27.0),
+    )
+
+
+def _checkpoint_store(current_config):
+    retention = max(1, min(_env_number('VIRALX_RETENTION_HOURS', 24, int), 24 * 30))
+    return CheckpointStore(current_config.get('video_cache_dir', './video_cache'), retention)
+
+
 def build_analyze_response(config_override=None, max_videos=None):
     """
     执行分析 — 流式响应。
@@ -412,29 +444,8 @@ def build_analyze_response(config_override=None, max_videos=None):
                     item['comments_data'] = []
 
             # 创建 AI 分析器
-            ai = AIAnalyzer(
-                api_key=current_config.get('minimax_api_key'),
-                base_url=current_config.get('minimax_base_url'),
-                model=current_config.get('minimax_model'),
-                analysis_mode=current_config.get('analysis_mode', 'pipeline'),
-                model_provider=current_config.get('model_provider', 'openai'),
-                model_protocol=current_config.get('model_protocol', 'openai'),
-                model_api_key=current_config.get('model_api_key', ''),
-                model_base_url=current_config.get('model_base_url', ''),
-                model_name=current_config.get('model_name', ''),
-                video_cache_dir=current_config.get('video_cache_dir', './video_cache'),
-                tk_note_asr_backend=current_config.get('tk_note_asr_backend', 'auto'),
-                tk_note_language=current_config.get('tk_note_language', 'auto'),
-                tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
-                tk_note_proxy=current_config.get('tk_note_proxy', ''),
-                tk_note_timeout=current_config.get('tk_note_timeout', 1800),
-                shot_engine=current_config.get('shot_engine', 'shotloom'),
-                shot_model_source=current_config.get('shot_model_source', 'inherit'),
-                shot_model_api_key=current_config.get('shot_model_api_key', ''),
-                shot_model_base_url=current_config.get('shot_model_base_url', ''),
-                shot_model_name=current_config.get('shot_model_name', ''),
-                shot_scene_threshold=current_config.get('shot_scene_threshold', 27.0),
-            )
+            ai = _create_ai_analyzer(current_config)
+            task_store = _checkpoint_store(current_config)
 
             # Run the local pipeline in a worker so stage callbacks can stream
             # to the browser while collection, shot evidence, and the model are busy.
@@ -468,6 +479,19 @@ def build_analyze_response(config_override=None, max_videos=None):
                 if event_type == 'stage':
                     yield json.dumps(payload, ensure_ascii=False) + '\n'
                 elif event_type == 'video':
+                    if (
+                        payload.get('pipeline_stage') == 'final-analysis'
+                        and payload.get('pipeline_status') != 'completed'
+                        and payload.get('evidence_status') == 'merged'
+                        and payload.get('evidence_bundle')
+                    ):
+                        checkpoint = task_store.create_final_checkpoint(payload)
+                        payload.update({
+                            'task_id': checkpoint['task_id'],
+                            'resumable_stage': checkpoint['resumable_stage'],
+                            'retry_scope': checkpoint['retry_scope'],
+                            'checkpoint_expires_at': checkpoint['expires_at'],
+                        })
                     results.append(payload)
                     result_stage = payload.get('pipeline_stage') or 'final-analysis'
                     result_failed = payload.get('pipeline_status') != 'completed'
@@ -539,10 +563,113 @@ def build_analyze_response(config_override=None, max_videos=None):
     })
 
 
+def build_resume_response(task_id, config_override=None):
+    """Resume only final synthesis from a server-owned evidence checkpoint."""
+    current_config = dict(config_override) if config_override is not None else load_config()
+    store = _checkpoint_store(current_config)
+
+    def generate():
+        try:
+            record = store.load(task_id)
+            if record.get('resumable_stage') != 'final-analysis':
+                raise ValueError('该任务没有可恢复的模型终审检查点')
+            store.update(task_id, status='running')
+            ai = _create_ai_analyzer(current_config)
+            events = queue.Queue()
+
+            def progress_callback(event):
+                events.put(event)
+
+            result_holder = {}
+
+            def run_final():
+                try:
+                    result_holder['video'] = ai.resume_final_analysis(
+                        dict(record.get('video') or {}),
+                        progress_callback=progress_callback,
+                        evidence_bundle_path=(record.get('internal') or {}).get('evidence_bundle_path', ''),
+                    )
+                except Exception as exc:
+                    result_holder['error'] = exc
+                finally:
+                    events.put(None)
+
+            threading.Thread(target=run_final, daemon=True).start()
+            while True:
+                event = events.get()
+                if event is None:
+                    break
+                yield json.dumps(event, ensure_ascii=False) + '\n'
+            if result_holder.get('error'):
+                raise result_holder['error']
+            video = result_holder['video']
+            video.update({
+                'task_id': task_id,
+                'resumable_stage': 'final-analysis',
+                'retry_scope': 'model-only',
+                'checkpoint_expires_at': record.get('expires_at', ''),
+            })
+            public_task = store.update(
+                task_id,
+                status='completed' if video.get('pipeline_status') == 'completed' else 'ready',
+                video=video,
+            )
+            yield json.dumps({
+                'status': 'progress',
+                'stage': 'final-analysis',
+                'stage_status': 'complete' if video.get('pipeline_status') == 'completed' else 'error',
+                'stage_label': '已复用检查点生成最终报告' if video.get('pipeline_status') == 'completed' else '模型终审仍未完成；检查点已保留',
+                'stage_progress': 100,
+                'video': video,
+                'task': public_task,
+                'done': False,
+            }, ensure_ascii=False) + '\n'
+            yield json.dumps({
+                'status': 'success',
+                'total_videos': 1,
+                'failed_videos': 0 if video.get('pipeline_status') == 'completed' else 1,
+                'pending_videos': 0,
+                'videos': [video],
+                'task': public_task,
+                'done': True,
+            }, ensure_ascii=False) + '\n'
+        except (KeyError, ValueError) as exc:
+            yield json.dumps({
+                'status': 'error',
+                'message': '恢复任务不存在、已过期或证据无效。请重新运行这条视频。' if isinstance(exc, KeyError) else str(exc),
+                'done': True,
+            }, ensure_ascii=False) + '\n'
+        except Exception as exc:
+            yield json.dumps({
+                'status': 'error',
+                'message': safe_error_message(exc, (current_config.get('model_api_key'),)),
+                'done': True,
+            }, ensure_ascii=False) + '\n'
+
+    return Response(generate(), mimetype='application/x-ndjson', headers={
+        'X-Accel-Buffering': 'no',
+        'Cache-Control': 'no-cache',
+    })
+
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
     """Execute analysis through the full local Flask runtime."""
     return build_analyze_response()
+
+
+@app.route('/api/tasks/<task_id>', methods=['GET'])
+def task_status(task_id):
+    try:
+        store = _checkpoint_store(load_config())
+        return jsonify(store.public(store.load(task_id)))
+    except (KeyError, ValueError):
+        return jsonify({'status': 'error', 'message': '任务不存在或已过期'}), 404
+
+
+@app.route('/api/tasks/<task_id>/resume', methods=['POST'])
+def resume_task(task_id):
+    return build_resume_response(task_id)
 
 @app.route('/api/keywords', methods=['GET'])
 def get_keywords():

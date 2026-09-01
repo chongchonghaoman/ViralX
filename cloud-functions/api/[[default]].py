@@ -60,7 +60,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-09-01-subscription-recovery-v5"
+VIRALX_RELEASE = "2026-09-01-checkpoint-recovery-v6"
 DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
 PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
 WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
@@ -489,6 +489,20 @@ def keywords():
         if cache_file.exists():
             values.append({"keyword": keyword, "cached": True})
     return jsonify({"keywords": values})
+
+
+@app.get("/tasks/<task_id>")
+def task_status(task_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,96}", str(task_id or "")):
+        return jsonify({"status": "error", "message": "任务 ID 无效"}), 400
+    return _proxy_worker(f"/api/tasks/{task_id}")
+
+
+@app.post("/tasks/<task_id>/resume")
+def resume_task(task_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,96}", str(task_id or "")):
+        return jsonify({"status": "error", "message": "任务 ID 无效"}), 400
+    return _proxy_worker(f"/api/tasks/{task_id}/resume", stream=True)
 
 
 @app.post("/generate_variants")

@@ -24,7 +24,7 @@ from model_providers import normalize_model_config
 import web_app
 
 
-WORKER_VERSION = "1.3.0"
+WORKER_VERSION = "1.4.0"
 WORKER_ID = "viralx-home-worker"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
@@ -281,6 +281,48 @@ def create_worker_app(origin_allowlist: set[str] | None = None) -> Flask:
                 analysis_slots.release()
 
         response.response = guarded_stream()
+        return response
+
+    @app.get("/api/tasks/<task_id>")
+    def task_status(task_id: str):
+        current_config = _request_config()
+        try:
+            store = web_app._checkpoint_store(current_config)
+            return jsonify(store.public(store.load(task_id)))
+        except (KeyError, ValueError):
+            return jsonify({"status": "error", "message": "任务不存在或已过期"}), 404
+
+    @app.post("/api/tasks/<task_id>/resume")
+    def resume_task(task_id: str):
+        if not analysis_slots.acquire(blocking=False):
+            response = jsonify({
+                "status": "error",
+                "message": "ViralX 正在处理另一项任务，请等待后再继续终审。",
+            })
+            response.status_code = 409
+            response.headers["Retry-After"] = "30"
+            return response
+        admitted, retry_after = limiter.admit(_client_key())
+        if not admitted:
+            analysis_slots.release()
+            response = jsonify({"status": "error", "message": "当前体验次数已用完，请稍后再试。"})
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
+        try:
+            response = web_app.build_resume_response(task_id, config_override=_request_config())
+        except Exception:
+            analysis_slots.release()
+            raise
+        original_iterable = response.response
+
+        def guarded_resume_stream():
+            try:
+                yield from original_iterable
+            finally:
+                analysis_slots.release()
+
+        response.response = guarded_resume_stream()
         return response
 
     @app.get("/api/keywords")

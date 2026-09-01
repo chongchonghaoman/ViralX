@@ -143,7 +143,7 @@
     const hosted = document.documentElement.dataset.deployment === "edgeone";
     const workerRoute = hosted
       && ["remote-worker", "same-origin-worker"].includes(config.mode)
-      && REMOTE_WORKER_PATHS.has(target.pathname);
+      && (REMOTE_WORKER_PATHS.has(target.pathname) || target.pathname.startsWith("/api/tasks/"));
     if (!workerRoute || config.mode === "same-origin-worker") {
       return target.origin === window.location.origin ? `${target.pathname}${target.search}` : target.href;
     }

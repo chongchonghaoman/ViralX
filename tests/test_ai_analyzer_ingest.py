@@ -207,6 +207,44 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertIn("避免无证据猜测", result["analysis"])
             self.assertEqual(fake_model.calls, [])
 
+    def test_final_checkpoint_retry_skips_collection_and_shot_analysis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "source.mp4"
+            video.write_bytes(b"video")
+            asset = VideoAsset(
+                provider="tk-note", status="reused", video_file=str(video),
+                video_id="123", source_url="https://www.tiktok.com/@a/video/123",
+                metadata={"video_id": "123", "title": "Picture light"},
+            )
+            collector = FakeCollector(asset)
+            shot_router = FakeShotRouter()
+            analyzer = AIAnalyzer(
+                analysis_mode="pipeline", model_provider="openai",
+                model_api_key="model-key", model_base_url="https://api.openai.com/v1",
+                model_name="gpt-4.1-mini", video_collector=collector,
+                shot_router=shot_router,
+            )
+            analyzer.model_analyzer = FailingModel()
+            failed = analyzer.analyze_video_script_details(
+                {"video_id": "123", "title": "Picture light"}, video_url=asset.source_url,
+            )
+            self.assertEqual(len(collector.calls), 1)
+            self.assertEqual(len(shot_router.paths), 1)
+
+            fake_model = FakeModel()
+            analyzer.model_analyzer = fake_model
+            resumed = analyzer.resume_final_analysis(
+                {"video_id": "123", "title": "Picture light", "evidence_bundle": failed["evidence_bundle"]},
+                evidence_bundle_path=failed["evidence_bundle_path"],
+            )
+
+            self.assertEqual(len(collector.calls), 1)
+            self.assertEqual(len(shot_router.paths), 1)
+            self.assertEqual(len(fake_model.calls), 1)
+            self.assertIsNone(fake_model.calls[0][1])
+            self.assertEqual(resumed["pipeline_status"], "completed")
+            self.assertEqual(resumed["retry_scope"], "model-only")
+
     def test_prompt_and_validator_require_concrete_shot_ids(self):
         analyzer = OpenAICompatibleAnalyzer(
             api_key="key", model="deepseek-v4-flash",

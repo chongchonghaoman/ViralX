@@ -1313,6 +1313,14 @@ h3 {
   font-size: var(--text-sm);
 }
 
+.video-card__checkpoint {
+  max-width: 72ch;
+  margin: var(--space-sm) 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
 .video-card[data-retrying="true"] {
   border-color: var(--color-focus);
 }
