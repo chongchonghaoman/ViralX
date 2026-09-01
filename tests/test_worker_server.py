@@ -1,5 +1,6 @@
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from flask import Response
@@ -8,6 +9,7 @@ import worker_server
 
 
 ORIGIN = "https://viralx.metrolabs.mobi"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkerServerTests(unittest.TestCase):
@@ -33,6 +35,7 @@ class WorkerServerTests(unittest.TestCase):
         serialized = json.dumps(payload)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Access-Control-Allow-Origin"], ORIGIN)
+        self.assertEqual(response.headers["Access-Control-Allow-Private-Network"], "true")
         self.assertEqual(payload["runtime"], "worker")
         self.assertEqual(payload["service"]["id"], worker_server.WORKER_ID)
         self.assertTrue(payload["configured"]["keyword_search"])
@@ -54,14 +57,18 @@ class WorkerServerTests(unittest.TestCase):
         allowed = self.client.options("/api/analyze", headers={
             "Origin": ORIGIN,
             "Access-Control-Request-Headers": "content-type, x-viralx-model-key, x-viralx-rapidapi-key",
+            "Access-Control-Request-Private-Network": "true",
         })
         self.assertEqual(allowed.status_code, 204)
+        self.assertEqual(allowed.headers["Access-Control-Allow-Private-Network"], "true")
 
         denied = self.client.options("/api/analyze", headers={
             "Origin": ORIGIN,
             "Access-Control-Request-Headers": "content-type, x-viralx-tk-proxy",
+            "Access-Control-Request-Private-Network": "true",
         })
         self.assertEqual(denied.status_code, 403)
+        self.assertNotIn("Access-Control-Allow-Private-Network", denied.headers)
 
     def test_browser_overrides_cannot_select_local_proxy_cookie_or_libtv(self):
         with self.app.test_request_context("/api/health", headers={
@@ -120,6 +127,15 @@ class WorkerServerTests(unittest.TestCase):
             )
             self.assertEqual(second.status_code, 409)
             first.close()
+
+    def test_launcher_replaces_project_worker_processes_before_starting(self):
+        launcher = (ROOT / "start-worker.cmd").read_text(encoding="utf-8")
+        stop_script = (ROOT / "scripts" / "stop-viralx-worker.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("stop-viralx-worker.ps1", launcher)
+        self.assertIn("Get-CimInstance Win32_Process", stop_script)
+        self.assertIn("worker_server\\.py", stop_script)
+        self.assertIn("$parentExecutable -ieq $venvPython", stop_script)
 
 
 if __name__ == "__main__":

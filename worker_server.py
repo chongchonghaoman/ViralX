@@ -191,6 +191,12 @@ def create_worker_app(origin_allowlist: set[str] | None = None) -> Flask:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = ", ".join(sorted(ALLOWED_REQUEST_HEADERS))
+            # Tailscale Funnel hostnames resolve inside 100.64.0.0/10. Chromium
+            # therefore performs a Private Network Access preflight even though
+            # the Funnel itself is public HTTPS. Only the existing origin
+            # allowlist may receive this opt-in response.
+            if response.status_code < 400:
+                response.headers["Access-Control-Allow-Private-Network"] = "true"
             response.headers.add("Vary", "Origin")
         response.headers["Cache-Control"] = "no-store"
         response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"

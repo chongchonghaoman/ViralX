@@ -10,11 +10,12 @@ set "VIRALX_RATE_LIMIT_ANALYSES=6"
 set "VIRALX_RATE_WINDOW_SECONDS=3600"
 set "VIRALX_RETENTION_HOURS=24"
 
-for /f "usebackq delims=" %%P in (`powershell.exe -NoProfile -Command "$ErrorActionPreference='SilentlyContinue'; $health=Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/health' -TimeoutSec 2; if ($health.service.id -eq 'viralx-home-worker') { Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 -State Listen ^| Select-Object -ExpandProperty OwningProcess -Unique }"`) do (
-  echo Replacing existing ViralX Worker process %%P...
-  taskkill.exe /PID %%P /T /F >nul 2>nul
-  timeout.exe /t 1 /nobreak >nul
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\stop-viralx-worker.ps1" -ProjectRoot "%~dp0."
+if errorlevel 1 (
+  echo Unable to replace the existing ViralX Worker safely.
+  exit /b 1
 )
+timeout.exe /t 1 /nobreak >nul
 
 if exist "venv\Scripts\python.exe" (
   "venv\Scripts\python.exe" worker_server.py

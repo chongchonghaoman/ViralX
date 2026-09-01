@@ -2,7 +2,9 @@
   "use strict";
 
   const STORAGE_KEY = "viralx.cloud.session.v1";
-  const HEALTH_TIMEOUT_MS = 4500;
+  // EdgeOne Functions may cold-start before relaying to the home Worker.
+  // Keep the UI in its explicit connecting state long enough for that first hop.
+  const HEALTH_TIMEOUT_MS = 15000;
   const ALLOWED_FIELDS = [
     "analysis_mode",
     "min_likes",
@@ -139,7 +141,10 @@
     const target = new URL(url, window.location.origin);
     const config = runtime();
     const hosted = document.documentElement.dataset.deployment === "edgeone";
-    if (!hosted || config.mode !== "remote-worker" || !REMOTE_WORKER_PATHS.has(target.pathname)) {
+    const workerRoute = hosted
+      && ["remote-worker", "same-origin-worker"].includes(config.mode)
+      && REMOTE_WORKER_PATHS.has(target.pathname);
+    if (!workerRoute || config.mode === "same-origin-worker") {
       return target.origin === window.location.origin ? `${target.pathname}${target.search}` : target.href;
     }
     if (!config.apiBaseUrl) throw new Error("实时分析服务尚未配置公网地址");
@@ -150,7 +155,7 @@
     const route = new URL(url, window.location.origin).pathname;
     const config = runtime();
     const remoteWorker = document.documentElement.dataset.deployment === "edgeone"
-      && config.mode === "remote-worker"
+      && ["remote-worker", "same-origin-worker"].includes(config.mode)
       && REMOTE_WORKER_PATHS.has(route);
     const requestHeaders = new Headers(options.headers || {});
     if (runtime().allowSessionOverrides) {

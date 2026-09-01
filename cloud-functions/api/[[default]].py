@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from flask import Flask, Response, has_request_context, jsonify, request
+import requests
+from flask import Flask, Response, has_request_context, jsonify, request, stream_with_context
 
 
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
@@ -60,6 +61,104 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
 VIRALX_RELEASE = "2026-08-31-fixed-evidence-chain-v2"
+DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
+PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
+WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
+WORKER_FORWARD_HEADERS = {
+    "Content-Type",
+    "X-ViralX-Min-Likes",
+    "X-ViralX-RapidAPI-Key",
+    "X-ViralX-Model-Provider",
+    "X-ViralX-Model-Protocol",
+    "X-ViralX-Model-Key",
+    "X-ViralX-Model-Base-URL",
+    "X-ViralX-Model-Name",
+    "X-ViralX-Shot-Threshold",
+}
+
+
+def _worker_base_url():
+    raw = str(os.environ.get("VIRALX_WORKER_BASE_URL") or DEFAULT_WORKER_BASE_URL).strip().rstrip("/")
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return ""
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        return ""
+    return raw
+
+
+WORKER_BASE_URL = _worker_base_url()
+
+
+def _proxy_worker(worker_path, *, stream=False):
+    """Relay the public API to the home Worker without exposing local DNS to browsers."""
+    if not WORKER_PROXY_ENABLED or not WORKER_BASE_URL:
+        return jsonify({
+            "status": "error",
+            "message": "ViralX 实时分析服务尚未配置。",
+        }), 503
+
+    target = f"{WORKER_BASE_URL}{worker_path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('ascii', errors='ignore')}"
+    headers = {
+        "Accept": request.headers.get("Accept", "application/json"),
+        "Origin": PUBLIC_SITE_ORIGIN,
+    }
+    for name in WORKER_FORWARD_HEADERS:
+        value = request.headers.get(name)
+        if value:
+            headers[name] = value
+    if request.remote_addr:
+        headers["X-Forwarded-For"] = request.remote_addr[:96]
+
+    timeout = (10, 3600) if stream else (10, 60)
+    try:
+        upstream = requests.request(
+            request.method,
+            target,
+            data=request.get_data(cache=True) if request.method in {"POST", "PUT", "PATCH"} else None,
+            headers=headers,
+            stream=stream,
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return jsonify({
+            "status": "error",
+            "message": "ViralX 实时分析服务暂时不可达，请稍后重试。",
+        }), 503
+
+    response_headers = {}
+    for name in ("Content-Type", "Cache-Control", "Retry-After", "X-Accel-Buffering"):
+        value = upstream.headers.get(name)
+        if value:
+            response_headers[name] = value
+    response_headers["Cache-Control"] = "no-store"
+
+    if not stream:
+        return Response(upstream.content, status=upstream.status_code, headers=response_headers)
+
+    def generate():
+        try:
+            for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=upstream.status_code,
+        headers=response_headers,
+    )
 
 
 def _number(name, fallback, cast):
@@ -201,6 +300,8 @@ def _configured_state():
 @app.get("/health")
 def health():
     """Readiness without returning any credential values."""
+    if WORKER_PROXY_ENABLED:
+        return _proxy_worker("/api/health")
     config, mode, provider_ready = _configured_state()
     provider = config.get("model_provider", "openai")
     return jsonify({
@@ -249,6 +350,8 @@ def capabilities():
 
 @app.post("/analyze")
 def analyze():
+    if WORKER_PROXY_ENABLED:
+        return _proxy_worker("/api/analyze", stream=True)
     data = request.get_json(silent=True) or {}
     keyword = str(data.get("keyword") or "").strip()
     refresh = bool(data.get("refresh", False))
@@ -376,6 +479,8 @@ def analyze():
 
 @app.get("/keywords")
 def keywords():
+    if WORKER_PROXY_ENABLED:
+        return _proxy_worker("/api/keywords")
     config = load_config()
     values = []
     for keyword in config["search_keywords"]:
@@ -387,6 +492,8 @@ def keywords():
 
 @app.post("/generate_variants")
 def generate_variants():
+    if WORKER_PROXY_ENABLED:
+        return _proxy_worker("/api/generate_variants")
     data = request.get_json(silent=True) or {}
     analysis = str(data.get("analysis") or "")
     if not analysis:

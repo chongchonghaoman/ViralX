@@ -6,13 +6,7 @@ const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(projectRoot, "public");
 const publicStatic = join(publicDir, "static");
 const publicFunctions = join(publicDir, "cloud-functions");
-// This is a public Funnel origin, not a credential. Keep a deploy-safe default so
-// routine EdgeOne releases cannot silently replace the live Worker URL with an
-// empty runtime config. VIRALX_PUBLIC_API_BASE_URL remains the explicit override.
-const DEFAULT_PUBLIC_API_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net";
-const publicApiBaseUrl = String(
-  process.env.VIRALX_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL,
-).trim().replace(/\/+$/, "");
+const publicApiBaseUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
 let publicApiOrigin = "";
 if (publicApiBaseUrl) {
   const parsed = new URL(publicApiBaseUrl);
@@ -67,7 +61,7 @@ await cp(join(projectRoot, "static", "settings.css"), join(publicStatic, "settin
 await writeFile(
   join(publicStatic, "runtime-config.js"),
   `window.ViralXRuntimeConfig=Object.freeze(${JSON.stringify({
-    mode: "remote-worker",
+    mode: publicApiBaseUrl ? "remote-worker" : "same-origin-worker",
     apiBaseUrl: publicApiBaseUrl,
     allowSessionOverrides: true,
   })});\n`,

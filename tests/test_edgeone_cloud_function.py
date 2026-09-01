@@ -3,6 +3,9 @@ import json
 import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import requests
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +18,7 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         cls.env_before = os.environ.copy()
         os.environ["VIRALX_RUNTIME"] = "edgeone"
         os.environ["VIRALX_MAX_ANALYZE_VIDEOS"] = "1"
+        os.environ["VIRALX_WORKER_PROXY_ENABLED"] = "0"
         spec = importlib.util.spec_from_file_location("viralx_edgeone_api", ENTRYPOINT)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -138,6 +142,33 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(payload["content"], "# 报告\n内容")
         self.assertTrue(payload["obsidian_uri"].startswith("obsidian://new?"))
         self.assertNotIn("file_path", payload)
+
+    def test_same_origin_health_proxy_forwards_only_worker_safe_headers(self):
+        upstream = requests.Response()
+        upstream.status_code = 200
+        upstream._content = json.dumps({"status": "ok", "runtime": "worker"}).encode("utf-8")
+        upstream.headers["Content-Type"] = "application/json"
+
+        with patch.object(self.module, "WORKER_PROXY_ENABLED", True), patch.object(
+            self.module.requests,
+            "request",
+            return_value=upstream,
+        ) as request_mock:
+            response = self.client.get(
+                "/health",
+                headers={
+                    "X-ViralX-Model-Key": "session-secret-model",
+                    "X-ViralX-TK-Proxy": "http://127.0.0.1:7890",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["runtime"], "worker")
+        call = request_mock.call_args
+        self.assertEqual(call.args[:2], ("GET", f"{self.module.WORKER_BASE_URL}/api/health"))
+        self.assertEqual(call.kwargs["headers"]["Origin"], "https://viralx.metrolabs.mobi")
+        self.assertEqual(call.kwargs["headers"]["X-ViralX-Model-Key"], "session-secret-model")
+        self.assertNotIn("X-ViralX-TK-Proxy", call.kwargs["headers"])
 
 
 if __name__ == "__main__":
