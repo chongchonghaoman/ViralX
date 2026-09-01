@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import web_app
+from tiktok_viral_analyzer import TikTokSearchChainError
 
 
 class WebAppTests(unittest.TestCase):
@@ -152,6 +153,29 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payload['status'], 'error')
         self.assertIn('多源搜索链', payload['message'])
         self.assertIn('RapidAPI Key', payload['message'])
+
+    def test_all_forbidden_search_sources_return_subscription_recovery_payload(self):
+        config = {**web_app.DEFAULT_CONFIG, 'rapidapi_key': 'test-key'}
+        error = TikTokSearchChainError(
+            'TikTok 多源搜索链均未完成：请订阅至少一个来源后重试。',
+            error_code='rapidapi_subscription_required',
+            provider_errors=[{
+                'provider': 'api6', 'label': 'TikTok API6',
+                'message': 'TikTok API6 尚未订阅或无权访问（HTTP 403）', 'status_code': 403,
+            }],
+            subscription_links=web_app.TikTokViralAnalyzer.provider_subscription_links(['api6']),
+        )
+        with patch.object(web_app, 'load_config', return_value=config), patch.object(
+            web_app.TikTokViralAnalyzer, 'search_viral_videos', side_effect=error,
+        ):
+            response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
+
+        payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+        payload = payloads[-1]
+        self.assertEqual(payload['error_code'], 'rapidapi_subscription_required')
+        self.assertEqual(payload['subscription_links'][0]['provider'], 'api6')
+        self.assertTrue(payload['subscription_links'][0]['url'].startswith('https://rapidapi.com/'))
+        self.assertNotIn('test-key', json.dumps(payload))
 
 
 if __name__ == '__main__':

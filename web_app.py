@@ -13,7 +13,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 import threading
 import queue
-from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message
+from tiktok_viral_analyzer import TikTokSearchChainError, TikTokViralAnalyzer, safe_error_message
 from ai_analyzer import AIAnalyzer
 from libtv_analyzer import LIBTV_CLI_PAGE, LibTVAuthManager
 from model_providers import model_is_ready, normalize_model_config
@@ -514,11 +514,24 @@ def build_analyze_response(config_override=None, max_videos=None):
                 current_config.get('openrouter_api_key'),
                 current_config.get('minimax_api_key'),
             )
-            yield json.dumps({
+            error_payload = {
                 'status': 'error',
                 'message': safe_error_message(e, secrets),
                 'done': True,
-            }, ensure_ascii=False) + '\n'
+            }
+            if isinstance(e, TikTokSearchChainError):
+                error_payload.update({
+                    'error_code': e.error_code,
+                    'provider_errors': [
+                        {
+                            **item,
+                            'message': safe_error_message(item.get('message'), secrets),
+                        }
+                        for item in e.provider_errors
+                    ],
+                    'subscription_links': e.subscription_links,
+                })
+            yield json.dumps(error_payload, ensure_ascii=False) + '\n'
 
     return Response(generate(), mimetype='application/x-ndjson', headers={
         'X-Accel-Buffering': 'no',

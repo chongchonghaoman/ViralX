@@ -226,16 +226,98 @@
     label.textContent = state || (count ? `${count} 条结果` : "等待输入");
   }
 
-  function showInlineError(message) {
+  function rapidApiUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      const safePort = !url.port || url.port === "443";
+      return url.protocol === "https:"
+        && url.hostname === "rapidapi.com"
+        && !url.username
+        && !url.password
+        && safePort
+        ? url.href
+        : "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function renderSubscriptionRecovery(error, message, payload) {
+    const links = Array.isArray(payload?.subscription_links)
+      ? payload.subscription_links.filter((item) => rapidApiUrl(item?.url))
+      : [];
+    if (!links.length) {
+      error.textContent = message;
+      return false;
+    }
+
+    error.classList.add("error--actionable");
+    const title = document.createElement("strong");
+    title.className = "error__title";
+    title.textContent = "先订阅一个搜索源";
+    const copy = document.createElement("p");
+    copy.className = "error__message";
+    copy.textContent = message;
+    const list = document.createElement("ul");
+    list.className = "subscription-link-list";
+
+    links.forEach((item) => {
+      const row = document.createElement("li");
+      row.className = "subscription-link-item";
+      const text = document.createElement("div");
+      text.className = "subscription-link__copy";
+      const label = document.createElement("strong");
+      label.textContent = `${item.label || item.provider || "TikTok 搜索源"}${item.recommended ? " · 推荐" : ""}`;
+      const note = document.createElement("small");
+      note.textContent = item.note || "查看 RapidAPI 订阅方案";
+      const link = document.createElement("a");
+      link.className = "subscription-link";
+      link.href = rapidApiUrl(item.url);
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = item.direct === false ? "查找替代页 ↗" : "查看订阅方案 ↗";
+      link.setAttribute("aria-label", `${link.textContent.replace(" ↗", "")}：${label.textContent}（新标签页）`);
+      text.append(label, note);
+      row.append(text, link);
+      list.append(row);
+    });
+
+    error.append(title, copy, list);
+    const providerErrors = Array.isArray(payload?.provider_errors) ? payload.provider_errors : [];
+    if (providerErrors.length) {
+      const details = document.createElement("details");
+      details.className = "error__details";
+      const summary = document.createElement("summary");
+      summary.textContent = `查看 ${providerErrors.length} 个来源的响应`;
+      const detailList = document.createElement("ul");
+      providerErrors.forEach((item) => {
+        const detail = document.createElement("li");
+        detail.textContent = `${item.label || item.provider || "搜索源"}：${item.message || "未完成"}`;
+        detailList.append(detail);
+      });
+      details.append(summary, detailList);
+      error.append(details);
+    }
+    return true;
+  }
+
+  function showInlineError(message, payload = {}) {
     const error = byId("error");
-    error.textContent = message;
+    error.replaceChildren();
+    error.classList.remove("error--actionable");
+    const actionable = renderSubscriptionRecovery(error, message, payload);
     error.hidden = false;
-    error.focus({ preventScroll: true });
+    error.focus({ preventScroll: !actionable });
+    if (actionable) {
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      error.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+    }
   }
 
   function clearInlineError() {
     const error = byId("error");
-    error.textContent = "";
+    error.replaceChildren();
+    error.classList.remove("error--actionable");
     error.hidden = true;
   }
 
@@ -634,7 +716,7 @@
 
     const handlePayload = (data) => {
       if (data.status === "error") {
-        showInlineError(data.message || "分析没有完成，请检查来源后重试。");
+        showInlineError(data.message || "分析没有完成，请检查来源后重试。", data);
         failActiveStage();
         updateProgress("分析链已中断", data.stage_progress || 0);
         updateResultCount(received, "管线失败");

@@ -4,7 +4,12 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from tiktok_viral_analyzer import Scraper7SearchError, TikTokViralAnalyzer, safe_error_message
+from tiktok_viral_analyzer import (
+    Scraper7SearchError,
+    TikTokSearchChainError,
+    TikTokViralAnalyzer,
+    safe_error_message,
+)
 
 
 class TikTokViralAnalyzerTests(unittest.TestCase):
@@ -530,6 +535,37 @@ class TikTokSearchChainTests(unittest.TestCase):
 
         self.assertEqual(mock_get.call_count, 2)
         self.assertNotIn(self.analyzer.api_key, str(raised.exception))
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_all_forbidden_providers_expose_safe_subscription_links(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraptik")
+        mock_get.side_effect = [
+            self.response({}, status=403),
+            self.response({}, status=403),
+        ]
+
+        with self.assertRaises(TikTokSearchChainError) as raised:
+            self.analyzer.search_viral_videos("camping lamp", min_likes=500, count=10)
+
+        error = raised.exception
+        self.assertEqual(error.error_code, "rapidapi_subscription_required")
+        self.assertEqual([item["provider"] for item in error.subscription_links], ["api6", "scraptik"])
+        self.assertTrue(all(item["url"].startswith("https://rapidapi.com/") for item in error.subscription_links))
+        self.assertTrue(all(item["status_code"] == 403 for item in error.provider_errors))
+        self.assertIn("订阅至少一个来源", str(error))
+
+    def test_subscription_links_require_exact_safe_rapidapi_origin(self):
+        provider = self.analyzer.SEARCH_PROVIDERS["api6"]
+        unsafe_urls = (
+            "http://rapidapi.com/omarmhaimdat/api/tiktok-api6/pricing",
+            "https://rapidapi.com.evil.example/tiktok-api6/pricing",
+            "https://user:password@rapidapi.com/tiktok-api6/pricing",
+            "https://rapidapi.com:444/tiktok-api6/pricing",
+        )
+
+        for unsafe_url in unsafe_urls:
+            with self.subTest(url=unsafe_url), patch.dict(provider, {"subscription_url": unsafe_url}):
+                self.assertEqual(self.analyzer.provider_subscription_links(("api6",)), [])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ class FrontendContractTests(unittest.TestCase):
         cls.home = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
         cls.settings = (ROOT / "templates" / "settings.html").read_text(encoding="utf-8")
         cls.home_js = (ROOT / "static" / "viralx.js").read_text(encoding="utf-8")
+        cls.home_css = (ROOT / "static" / "viralx.css").read_text(encoding="utf-8")
         cls.settings_js = (ROOT / "static" / "settings.js").read_text(encoding="utf-8")
         cls.runtime_config_js = (ROOT / "static" / "runtime-config.js").read_text(encoding="utf-8")
         cls.cloud_config_js = (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8")
@@ -168,6 +169,18 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("if (data.stage) setPipelineStage", self.home_js)
         self.assertIn("TK Note · 采集失败", self.home_js)
         self.assertIn('class="video-card__error"', self.home_js)
+
+    def test_subscription_failures_render_safe_actionable_rapidapi_links(self):
+        self.assertIn("function renderSubscriptionRecovery", self.home_js)
+        self.assertIn("payload?.subscription_links", self.home_js)
+        self.assertIn('url.hostname === "rapidapi.com"', self.home_js)
+        self.assertIn("!url.username", self.home_js)
+        self.assertIn("!url.password", self.home_js)
+        self.assertIn('url.port === "443"', self.home_js)
+        self.assertIn('link.target = "_blank"', self.home_js)
+        self.assertIn('link.rel = "noopener noreferrer"', self.home_js)
+        self.assertIn("subscription-link-list", self.home_css)
+        self.assertIn("min-height: 2.75rem", self.home_css)
 
     def test_analysis_results_are_adjacent_and_revealed_once(self):
         self.assertIn('id="results-zone"', self.home)

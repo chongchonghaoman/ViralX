@@ -29,6 +29,10 @@ def safe_error_message(value: Any, secrets: Iterable[Any] = ()) -> str:
 class RapidAPISearchError(RuntimeError):
     """A provider request or business-response failure in the search chain."""
 
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class API23SearchError(RapidAPISearchError):
     """A TikTok API23 request or business-response failure."""
@@ -40,6 +44,19 @@ class Scraper7SearchError(RapidAPISearchError):
 
 class TikTokSearchChainError(Scraper7SearchError):
     """All attempted providers failed; remains catchable as the legacy fallback error."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str = "search_chain_failed",
+        provider_errors: List[Dict[str, Any]] | None = None,
+        subscription_links: List[Dict[str, Any]] | None = None,
+    ):
+        super().__init__(message)
+        self.error_code = error_code
+        self.provider_errors = list(provider_errors or [])
+        self.subscription_links = list(subscription_links or [])
 
 
 class TikTokViralAnalyzer:
@@ -63,6 +80,8 @@ class TikTokViralAnalyzer:
             "label": "TikTok API6",
             "host": "tiktok-api6.p.rapidapi.com",
             "url": "https://tiktok-api6.p.rapidapi.com/search/general/query",
+            "subscription_url": "https://rapidapi.com/omarmhaimdat/api/tiktok-api6/pricing",
+            "subscription_note": "推荐优先订阅；关键词相关性表现更稳定",
             "params": "api6",
             "items": "root_videos",
             "page_size": 20,
@@ -71,6 +90,8 @@ class TikTokViralAnalyzer:
             "label": "ScrapTik",
             "host": "scraptik.p.rapidapi.com",
             "url": "https://scraptik.p.rapidapi.com/search-posts",
+            "subscription_url": "https://rapidapi.com/scraptik-api-scraptik-api-default/api/scraptik/pricing",
+            "subscription_note": "成熟的 TikTok 搜索与数据来源",
             "params": "mobile",
             "items": "search_items",
             "page_size": 10,
@@ -79,6 +100,8 @@ class TikTokViralAnalyzer:
             "label": "TikTok Scraper7",
             "host": "tiktok-scraper7.p.rapidapi.com",
             "url": "https://tiktok-scraper7.p.rapidapi.com/feed/search",
+            "subscription_url": "https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7/pricing",
+            "subscription_note": "ViralX 的稳定补充搜索源",
             "params": "feed",
             "items": "data_videos",
             "page_size": 30,
@@ -87,6 +110,8 @@ class TikTokViralAnalyzer:
             "label": "TikTok Download5 Search",
             "host": "tiktok-download5.p.rapidapi.com",
             "url": "https://tiktok-download5.p.rapidapi.com/feedSearch",
+            "subscription_url": "https://rapidapi.com/llbbmm/api/tiktok-download5/pricing",
+            "subscription_note": "包含关键词搜索能力，不只用于下载",
             "params": "feed",
             "items": "data_videos",
             "page_size": 10,
@@ -95,6 +120,8 @@ class TikTokViralAnalyzer:
             "label": "TokApi Mobile",
             "host": "tokapi-mobile-version.p.rapidapi.com",
             "url": "https://tokapi-mobile-version.p.rapidapi.com/v1/search/post",
+            "subscription_url": "https://rapidapi.com/Sonjik/api/tokapi-mobile-version/pricing",
+            "subscription_note": "移动端数据结构的补充来源",
             "params": "mobile",
             "items": "search_items",
             "page_size": 10,
@@ -103,6 +130,8 @@ class TikTokViralAnalyzer:
             "label": "TikTok Download Video1 Search",
             "host": "tiktok-download-video1.p.rapidapi.com",
             "url": "https://tiktok-download-video1.p.rapidapi.com/feedSearch",
+            "subscription_url": "https://rapidapi.com/llbbmm/api/tiktok-download-video1/pricing",
+            "subscription_note": "包含 Search 套件的补充来源",
             "params": "feed",
             "items": "data_videos",
             "page_size": 10,
@@ -111,6 +140,8 @@ class TikTokViralAnalyzer:
             "label": "TikTok API15",
             "host": "tiktok-api15.p.rapidapi.com",
             "url": "https://tiktok-api15.p.rapidapi.com/index/Tiktok/searchVideoListByKeywords",
+            "subscription_url": "https://rapidapi.com/search?term=TikTok%20API&sortBy=ByRelevance",
+            "subscription_note": "当前没有公开定价页；在市场中查找可用替代",
             "params": "api15",
             "items": "data_videos",
             "page_size": 10,
@@ -134,6 +165,38 @@ class TikTokViralAnalyzer:
         "download", "download_url", "downloadUrl", "download_addr", "downloadAddr",
         "hdplay", "wmplay", "nowm", "no_watermark",
     )
+
+    @classmethod
+    def provider_subscription_links(cls, provider_ids: Iterable[str]) -> List[Dict[str, Any]]:
+        """Return safe, user-facing RapidAPI subscription destinations in chain order."""
+        links: List[Dict[str, Any]] = []
+        for provider_id in provider_ids:
+            provider = cls.SEARCH_PROVIDERS.get(str(provider_id))
+            if not isinstance(provider, Mapping):
+                continue
+            url = str(provider.get("subscription_url") or "").strip()
+            try:
+                parsed = urlparse(url)
+                safe_port = parsed.port in {None, 443}
+            except ValueError:
+                continue
+            if not (
+                parsed.scheme == "https"
+                and parsed.hostname == "rapidapi.com"
+                and not parsed.username
+                and not parsed.password
+                and safe_port
+            ):
+                continue
+            links.append({
+                "provider": str(provider_id),
+                "label": str(provider.get("label") or provider_id),
+                "url": url,
+                "note": str(provider.get("subscription_note") or "查看 RapidAPI 订阅方案"),
+                "recommended": str(provider_id) == cls.PRIMARY_SEARCH_PROVIDER,
+                "direct": "/pricing" in url,
+            })
+        return links
     MEDIA_HOST_SUFFIXES = (
         "tiktok.com", "tiktokcdn.com", "tiktokv.com", "byteoversea.com",
         "ibytedtos.com", "musical.ly", "tikwm.com",
@@ -796,7 +859,10 @@ class TikTokViralAnalyzer:
                 403: "尚未订阅或无权访问",
                 429: "搜索配额已用完",
             }.get(response.status_code, "暂时不可用")
-            raise RapidAPISearchError(f"{label} {reason}（HTTP {response.status_code}）")
+            raise RapidAPISearchError(
+                f"{label} {reason}（HTTP {response.status_code}）",
+                status_code=response.status_code,
+            )
         try:
             payload = response.json()
         except ValueError as exc:
@@ -1100,6 +1166,7 @@ class TikTokViralAnalyzer:
                 )
             except RapidAPISearchError as exc:
                 diagnostics["error"] = safe_error_message(exc, (self.api_key,))
+                diagnostics["status_code"] = getattr(exc, "status_code", None)
                 print(f"[SEARCH] {provider_id} 未完成，继续下一来源：{diagnostics['error']}")
                 continue
 
@@ -1138,11 +1205,36 @@ class TikTokViralAnalyzer:
             return videos
 
         if attempted and all(providers[provider_id].get("error") for provider_id in attempted):
+            provider_errors = [
+                {
+                    "provider": provider_id,
+                    "label": str(self.SEARCH_PROVIDERS[provider_id].get("label") or provider_id),
+                    "message": str(providers[provider_id]["error"]),
+                    "status_code": providers[provider_id].get("status_code"),
+                }
+                for provider_id in attempted
+            ]
             summary = "；".join(
                 f"{provider_id}: {providers[provider_id]['error']}"
                 for provider_id in attempted
             )
-            raise TikTokSearchChainError(f"TikTok 多源搜索链均未完成：{summary}")
+            forbidden_provider_ids = [
+                item["provider"] for item in provider_errors if item.get("status_code") == 403
+            ]
+            all_forbidden = len(forbidden_provider_ids) == len(provider_errors)
+            if all_forbidden:
+                message = (
+                    "TikTok 多源搜索链均未完成：当前 RapidAPI Key 尚未订阅任何已接入的搜索源。"
+                    "请从下方入口订阅至少一个来源后重试；无需更换 Key。"
+                )
+            else:
+                message = f"TikTok 多源搜索链均未完成：{summary}"
+            raise TikTokSearchChainError(
+                message,
+                error_code="rapidapi_subscription_required" if all_forbidden else "search_chain_failed",
+                provider_errors=provider_errors,
+                subscription_links=self.provider_subscription_links(forbidden_provider_ids),
+            )
         return []
 
     def empty_result_message(self) -> str:

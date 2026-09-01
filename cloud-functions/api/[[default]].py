@@ -46,7 +46,7 @@ def _load_tiktok_analyzer_source():
         module_path = PROJECT_ROOT / "tiktok_viral_analyzer.py"
     source_bytes = module_path.read_bytes()
     namespace = {
-        "__name__": "viralx_tiktok_analyzer_multisource_v4",
+        "__name__": "viralx_tiktok_analyzer_multisource_v5",
         "__file__": str(module_path),
         "__package__": "",
     }
@@ -60,7 +60,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-09-01-multisource-search-v4"
+VIRALX_RELEASE = "2026-09-01-subscription-recovery-v5"
 DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
 PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
 WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
