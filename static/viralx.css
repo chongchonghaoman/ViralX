@@ -1307,13 +1307,25 @@ h3 {
   line-height: 1.55;
 }
 
+.video-card__retry-status {
+  margin: var(--space-sm) 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
+.video-card[data-retrying="true"] {
+  border-color: var(--color-focus);
+}
+
 .card-actions {
   margin-block-start: var(--space-md);
 }
 
 .analysis-btn,
+.retry-video-btn,
 .export-btn,
 .project-link {
+  min-height: 2.75rem;
   padding-inline: var(--space-md);
   border: 1px solid var(--color-rule-strong);
   background: var(--color-paper);
@@ -1323,6 +1335,20 @@ h3 {
 
 .analysis-btn {
   flex: 1 1 auto;
+}
+
+.retry-video-btn {
+  flex: 1 1 12rem;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.retry-video-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .remake-script {
@@ -1550,6 +1576,7 @@ h3 {
   }
 
   .refresh-link:hover,
+  .retry-video-btn:hover,
   .analysis-btn:hover,
   .export-btn:hover,
   .project-link:hover,

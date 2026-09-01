@@ -9,9 +9,11 @@
   let runtimeSearchReady = false;
   let runtimeBlocker = "checking";
   let resultRevealHandled = false;
+  let runtimeCheckPromise = null;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const gsapReady = () => !reduceMotion && typeof window.gsap !== "undefined";
+  const RUNTIME_RECHECK_MS = 30000;
 
   const byId = (id) => document.getElementById(id);
   const PIPELINE_STAGES = ["discovery", "collection", "shot-analysis", "evidence-merge", "final-analysis"];
@@ -305,13 +307,12 @@
     const error = byId("error");
     error.replaceChildren();
     error.classList.remove("error--actionable");
-    const actionable = renderSubscriptionRecovery(error, message, payload);
+    renderSubscriptionRecovery(error, message, payload);
     error.hidden = false;
-    error.focus({ preventScroll: !actionable });
-    if (actionable) {
-      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-      error.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
-    }
+    error.focus({ preventScroll: true });
+    window.requestAnimationFrame(() => {
+      error.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+    });
   }
 
   function clearInlineError() {
@@ -371,65 +372,76 @@
     }
   }
 
-  async function checkRuntime() {
+  async function checkRuntime({ silent = false } = {}) {
+    if (runtimeCheckPromise) return runtimeCheckPromise;
     const chip = byId("runtime-chip");
     const label = byId("runtime-label");
     if (!chip || !label) return;
 
-    chip.dataset.state = "checking";
-    label.textContent = "正在连接分析服务";
-    try {
-      const response = await apiFetch("/api/health", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      runtimeMode = data.runtime || "local";
-      runtimeAnalysisReady = Boolean(data.analysis_ready);
-      runtimeSearchReady = Boolean(data.configured?.keyword_search);
-      if (runtimeMode === "worker") {
-        runtimeBlocker = runtimeAnalysisReady
-          ? (runtimeSearchReady ? "ready" : "search_config_missing")
-          : "server_config_missing";
-        chip.dataset.state = runtimeAnalysisReady && runtimeSearchReady ? "ready" : "warning";
-        label.textContent = runtimeAnalysisReady && runtimeSearchReady
-          ? "完整分析在线 · 关键词搜索 → TK Note → ShotLoom + 视觉模型"
-          : runtimeAnalysisReady
-            ? "直链分析在线 · 关键词搜索 Key 待配置"
-            : runtimeSearchReady
-              ? "关键词搜索在线 · 视觉分析链待配置"
-              : "分析服务在线 · 搜索与视觉模型配置待补齐";
-        syncPrimaryActions();
-        return;
+    runtimeCheckPromise = (async () => {
+      if (!silent) {
+        chip.dataset.state = "checking";
+        label.textContent = "正在连接分析服务";
       }
-      if (runtimeMode === "edgeone") {
+      try {
+        const response = await apiFetch("/api/health", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        runtimeMode = data.runtime || "local";
+        runtimeAnalysisReady = Boolean(data.analysis_ready);
+        runtimeSearchReady = Boolean(data.configured?.keyword_search);
+        if (runtimeMode === "worker") {
+          runtimeBlocker = runtimeAnalysisReady
+            ? (runtimeSearchReady ? "ready" : "search_config_missing")
+            : "server_config_missing";
+          chip.dataset.state = runtimeAnalysisReady && runtimeSearchReady ? "ready" : "warning";
+          label.textContent = runtimeAnalysisReady && runtimeSearchReady
+            ? "完整分析在线 · 关键词搜索 → TK Note → ShotLoom + 视觉模型"
+            : runtimeAnalysisReady
+              ? "直链分析在线 · 关键词搜索 Key 待配置"
+              : runtimeSearchReady
+                ? "关键词搜索在线 · 视觉分析链待配置"
+                : "分析服务在线 · 搜索与视觉模型配置待补齐";
+          syncPrimaryActions();
+          return;
+        }
+        if (runtimeMode === "edgeone") {
+          runtimeAnalysisReady = false;
+          runtimeSearchReady = false;
+          runtimeBlocker = "offline";
+          chip.dataset.state = "offline";
+          label.textContent = "展示站在线 · 实时分析服务暂未接入";
+          syncPrimaryActions();
+          return;
+        }
+        runtimeBlocker = runtimeAnalysisReady ? "ready" : "local_config_missing";
+        if (runtimeAnalysisReady) {
+          chip.dataset.state = runtimeSearchReady ? "ready" : "warning";
+          const shot = data.shot || {};
+          const pipelineLabel = shot.collection_only
+            ? "本地采集链就绪 · 不生成最终报告"
+            : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom + 视觉模型"} → 证据终审`;
+          label.textContent = runtimeSearchReady ? pipelineLabel : `${pipelineLabel} · 关键词搜索 Key 待配置`;
+        } else {
+          chip.dataset.state = "warning";
+          label.textContent = "本地服务在线 · 待补齐 ShotLoom 与视觉模型配置";
+        }
+        syncPrimaryActions();
+      } catch (_) {
+        runtimeMode = "offline";
         runtimeAnalysisReady = false;
         runtimeSearchReady = false;
         runtimeBlocker = "offline";
         chip.dataset.state = "offline";
-        label.textContent = "展示站在线 · 实时分析服务暂未接入";
+        label.textContent = "实时分析暂离线 · 网站内容仍可浏览";
         syncPrimaryActions();
-        return;
       }
-      runtimeBlocker = runtimeAnalysisReady ? "ready" : "local_config_missing";
-      if (runtimeAnalysisReady) {
-        chip.dataset.state = runtimeSearchReady ? "ready" : "warning";
-        const shot = data.shot || {};
-        const pipelineLabel = shot.collection_only
-          ? "本地采集链就绪 · 不生成最终报告"
-          : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom + 视觉模型"} → 证据终审`;
-        label.textContent = runtimeSearchReady ? pipelineLabel : `${pipelineLabel} · 关键词搜索 Key 待配置`;
-      } else {
-        chip.dataset.state = "warning";
-        label.textContent = "本地服务在线 · 待补齐 ShotLoom 与视觉模型配置";
-      }
-      syncPrimaryActions();
-    } catch (_) {
-      runtimeMode = "offline";
-      runtimeAnalysisReady = false;
-      runtimeSearchReady = false;
-      runtimeBlocker = "offline";
-      chip.dataset.state = "offline";
-      label.textContent = "实时分析暂离线 · 网站内容仍可浏览";
-      syncPrimaryActions();
+    })();
+
+    try {
+      return await runtimeCheckPromise;
+    } finally {
+      runtimeCheckPromise = null;
     }
   }
 
@@ -602,8 +614,91 @@
     analyze(refresh);
   }
 
+  function videoSourceUrl(video) {
+    const source = String(video?.source_url || "").trim();
+    if (source) return source;
+    const author = String(video?.author || "").trim();
+    const videoId = String(video?.video_id || "").trim();
+    return author && videoId ? `https://www.tiktok.com/@${author}/video/${videoId}` : "";
+  }
+
+  function stableVideoKey(video) {
+    const videoId = String(video?.video_id || "").trim();
+    if (videoId) return `video:${videoId}`;
+    const source = videoSourceUrl(video);
+    const pathVideoId = source.match(/\/video\/([^/?#]+)/i)?.[1];
+    if (pathVideoId) return `video:${pathVideoId}`;
+    if (source) return `source:${source.toLowerCase()}`;
+    return `fallback:${String(video?.author || "").trim().toLowerCase()}|${String(video?.title || "").trim().toLowerCase()}`;
+  }
+
+  async function consumeAnalysisStream(requestBody, onPayload) {
+    const response = await apiFetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+    if (!response.ok) {
+      const rawError = await response.text();
+      let message = `服务返回 HTTP ${response.status}`;
+      try {
+        const payload = JSON.parse(rawError);
+        if (payload?.message) message = payload.message;
+      } catch (_) {
+        if (rawError.trim()) message = `${message}：${rawError.trim().substring(0, 240)}`;
+      }
+      const responseError = new Error(message);
+      responseError.status = response.status;
+      throw responseError;
+    }
+
+    let terminal = false;
+    let malformedLine = false;
+    const parseLine = (line) => {
+      const cleanLine = line.replace(/\r/g, "").trim();
+      if (!cleanLine) return;
+      let payload;
+      try {
+        payload = JSON.parse(cleanLine);
+      } catch (error) {
+        malformedLine = true;
+        console.warn("NDJSON parse error:", error, cleanLine.substring(0, 120));
+        return;
+      }
+      if (terminal) return;
+      const isTerminal = Boolean(payload.done) || ["success", "error"].includes(payload.status);
+      if (isTerminal) terminal = true;
+      onPayload(payload);
+    };
+
+    if (response.body && response.body.getReader) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      while (true) {
+        const { value, done: readerDone } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !readerDone });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        lines.forEach(parseLine);
+        if (readerDone) break;
+      }
+      parseLine(buffer);
+    } else {
+      const text = await response.text();
+      text.split("\n").forEach(parseLine);
+    }
+
+    if (malformedLine) {
+      throw new Error("分析流包含无法解析的数据，结果可能不完整");
+    }
+    if (!terminal) {
+      throw new Error("分析流提前结束，未收到完成信号");
+    }
+  }
+
   function renderVideoCard(video, index) {
-    const videoUrl = video.source_url || `https://www.tiktok.com/@${video.author}/video/${video.video_id}`;
+    const videoUrl = videoSourceUrl(video);
     const analysisId = `analysis-${Date.now()}-${index}`;
     const remakeId = `remake-${Date.now()}-${index}`;
     const provider = String(video.analysis_provider || "model").toLowerCase();
@@ -667,15 +762,19 @@
       </div>
       ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
       <div class="card-actions">
+        ${pipelineFailed ? '<button class="retry-video-btn" type="button">重试这条视频</button>' : ""}
         <button class="analysis-btn" type="button">${pipelineFailed ? "查看失败详情" : "打开最终分析"}</button>
         ${pipelineFailed ? `<a class="project-link" href="/settings">${recoveryLabel}</a>` : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
+      <p class="video-card__retry-status" role="status" aria-live="polite" hidden></p>
       <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || "")}</div>
     `;
 
     card.querySelector(".video-title").addEventListener("click", () => openExternal(videoUrl));
     card.querySelector(".analysis-btn").addEventListener("click", () => showAnalysis(analysisId, provider));
+    const retryButton = card.querySelector(".retry-video-btn");
+    if (retryButton) retryButton.addEventListener("click", () => retryVideo(video, card, retryButton));
 
     if (video.remake_script) {
       const remake = document.createElement("div");
@@ -691,6 +790,55 @@
 
     animateCard(card);
     return card;
+  }
+
+  async function retryVideo(video, card, button) {
+    const source = videoSourceUrl(video);
+    const retryStatus = card.querySelector(".video-card__retry-status");
+    if (!isDirectVideoSource(source)) {
+      showInlineError("这条结果没有可重试的真实视频直链。请重新运行关键词搜索获取有效来源。");
+      return;
+    }
+
+    const refresh = video.pipeline_stage === "collection";
+    let retriedVideo = null;
+    let terminalError = "";
+    clearInlineError();
+    button.disabled = true;
+    button.textContent = "正在重试";
+    card.dataset.retrying = "true";
+    retryStatus.hidden = false;
+    retryStatus.textContent = refresh ? "正在重新采集原片与字幕证据…" : "正在复用已采集证据并重跑视觉终审…";
+    updateProgress(retryStatus.textContent.replace("…", ""), refresh ? 24 : 48);
+
+    try {
+      await consumeAnalysisStream({
+        keyword: source,
+        refresh,
+        product_name: byId("product-name")?.value || "",
+        product_info: byId("product-info")?.value || "",
+      }, (data) => {
+        if (data.stage) setPipelineStage(data.stage, data.stage_status || "running");
+        if (data.stage_label) updateProgress(data.stage_label, data.stage_progress || 0);
+        if (data.video) retriedVideo = data.video;
+        if (data.status === "error") terminalError = data.message || "单条重试没有完成";
+      });
+      if (terminalError) throw new Error(terminalError);
+      if (!retriedVideo) throw new Error("重试完成但没有返回视频结果");
+
+      const replacement = renderVideoCard(retriedVideo, Date.now());
+      card.replaceWith(replacement);
+      updateProgress("这条视频已完成重试", 100);
+      replacement.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+    } catch (error) {
+      failActiveStage();
+      retryStatus.textContent = `重试失败：${error.message}`;
+      showInlineError(`这条视频没有完成重试：${error.message}。已保留原失败记录，可检查对应设置后再次重试。`);
+      button.disabled = false;
+      button.textContent = "再次重试";
+      delete card.dataset.retrying;
+      checkRuntime({ silent: true });
+    }
   }
 
   async function analyze(refresh = false) {
@@ -721,15 +869,16 @@
     results.appendChild(streamContainer);
     window.requestAnimationFrame(() => revealSection("pipeline-title", "center"));
 
-    let received = 0;
-    let done = false;
+    const resultCards = new Map();
+    let streamFailed = false;
 
     const handlePayload = (data) => {
       if (data.status === "error") {
+        streamFailed = true;
         showInlineError(data.message || "分析没有完成，请检查来源后重试。", data);
         failActiveStage();
         updateProgress("分析链已中断", data.stage_progress || 0);
-        updateResultCount(received, "管线失败");
+        updateResultCount(resultCards.size, "管线失败");
         return;
       }
 
@@ -737,67 +886,33 @@
         if (data.stage) setPipelineStage(data.stage, data.stage_status || "running");
         updateProgress(data.stage_label || "证据链正在运行", data.stage_progress || 0);
         if (data.video) {
-          received += 1;
-          streamContainer.appendChild(renderVideoCard(data.video, received - 1));
-          updateResultCount(received);
+          const key = stableVideoKey(data.video);
+          const previous = resultCards.get(key);
+          const card = renderVideoCard(data.video, resultCards.size);
+          if (previous?.isConnected) previous.replaceWith(card);
+          else streamContainer.appendChild(card);
+          resultCards.set(key, card);
+          updateResultCount(resultCards.size);
           revealFirstResult();
         }
         return;
       }
 
       if (data.done || data.status === "success") {
-        done = true;
         const failed = data.failed_videos || 0;
         const pending = data.pending_videos || 0;
-        const total = data.total_videos || received;
+        const total = data.total_videos || resultCards.size;
         const completed = Math.max(total - failed - pending, 0);
         const summary = failed || pending
           ? `处理结束：${completed} 条完成，${pending} 条处理中，${failed} 条失败`
           : `完整分析完成，共 ${total} 条视频`;
         updateProgress(summary, 100);
-        updateResultCount(received, summary);
-      }
-    };
-
-    const parseLine = (line) => {
-      const cleanLine = line.replace(/\r/g, "").trim();
-      if (!cleanLine) return;
-      try {
-        handlePayload(JSON.parse(cleanLine));
-      } catch (error) {
-        console.warn("NDJSON parse error:", error, cleanLine.substring(0, 120));
+        updateResultCount(resultCards.size, summary);
       }
     };
 
     try {
-      const response = await apiFetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, refresh, product_name: productName, product_info: productInfo }),
-      });
-      if (!response.ok) {
-        const responseError = new Error(`服务返回 HTTP ${response.status}`);
-        responseError.status = response.status;
-        throw responseError;
-      }
-
-      if (response.body && response.body.getReader) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        while (true) {
-          const { value, done: readerDone } = await reader.read();
-          buffer += decoder.decode(value || new Uint8Array(), { stream: !readerDone });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          lines.forEach(parseLine);
-          if (readerDone) break;
-        }
-        parseLine(buffer);
-      } else {
-        const text = await response.text();
-        text.split("\n").forEach(parseLine);
-      }
+      await consumeAnalysisStream({ keyword, refresh, product_name: productName, product_info: productInfo }, handlePayload);
     } catch (error) {
       failActiveStage();
       let hint;
@@ -809,10 +924,12 @@
         hint = "请确认本地服务仍在运行后重试。";
       }
       showInlineError(`分析没有完成：${error.message}。${hint}`);
-      updateResultCount(received, "连接中断");
+      updateResultCount(resultCards.size, "连接中断");
+      checkRuntime({ silent: true });
     } finally {
       setBusy(false);
-      if (done || !byId("error").hidden) loading.hidden = true;
+      loading.hidden = true;
+      if (streamFailed) checkRuntime({ silent: true });
     }
   }
 
@@ -866,6 +983,10 @@
     initMotion();
     syncPrimaryActions();
     checkRuntime();
+    window.setInterval(() => checkRuntime({ silent: true }), RUNTIME_RECHECK_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkRuntime({ silent: true });
+    });
     loadKeywords();
     resetPipelineStages();
     updateProgress("等待视频来源", 0);

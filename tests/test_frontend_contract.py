@@ -191,15 +191,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("min-height: 2.75rem", self.home_css)
 
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
-        self.assertIn("filename='viralx.css', v='1.1.3'", self.home)
-        self.assertIn("filename='runtime-config.js', v='1.1.3'", self.home)
-        self.assertIn("filename='cloud-config.js', v='1.1.3'", self.home)
-        self.assertIn("filename='viralx.js', v='1.1.3'", self.home)
-        self.assertIn("filename='viralx.css', v='1.1.3'", self.settings)
-        self.assertIn("filename='settings.css', v='1.1.3'", self.settings)
-        self.assertIn("filename='runtime-config.js', v='1.1.3'", self.settings)
-        self.assertIn("filename='cloud-config.js', v='1.1.3'", self.settings)
-        self.assertIn("filename='settings.js', v='1.1.3'", self.settings)
+        self.assertIn("filename='viralx.css', v='1.1.4'", self.home)
+        self.assertIn("filename='runtime-config.js', v='1.1.4'", self.home)
+        self.assertIn("filename='cloud-config.js', v='1.1.4'", self.home)
+        self.assertIn("filename='viralx.js', v='1.1.4'", self.home)
+        self.assertIn("filename='viralx.css', v='1.1.4'", self.settings)
+        self.assertIn("filename='settings.css', v='1.1.4'", self.settings)
+        self.assertIn("filename='runtime-config.js', v='1.1.4'", self.settings)
+        self.assertIn("filename='cloud-config.js', v='1.1.4'", self.settings)
+        self.assertIn("filename='settings.js', v='1.1.4'", self.settings)
         self.assertIn("/static/viralx.css?v=${assetVersion}", self.build_js)
         self.assertIn("/static/runtime-config.js?v=${assetVersion}", self.build_js)
         self.assertIn("/static/cloud-config.js?v=${assetVersion}", self.build_js)
@@ -211,6 +211,28 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("responseError.status = response.status", self.home_js)
         self.assertIn("长任务被中转网关提前截断", self.home_js)
         self.assertNotIn("请稍后重试后重试", self.home_js)
+
+    def test_stream_protocol_deduplicates_results_and_requires_a_terminal_event(self):
+        self.assertIn("async function consumeAnalysisStream(requestBody, onPayload)", self.home_js)
+        self.assertIn("if (terminal) return;", self.home_js)
+        self.assertIn("function stableVideoKey(video)", self.home_js)
+        self.assertIn("const resultCards = new Map();", self.home_js)
+        self.assertIn("resultCards.set(key, card);", self.home_js)
+        self.assertNotIn("received += 1", self.home_js)
+        self.assertIn("分析流提前结束，未收到完成信号", self.home_js)
+        self.assertIn("分析流包含无法解析的数据，结果可能不完整", self.home_js)
+        self.assertIn("loading.hidden = true;", self.home_js)
+
+    def test_failed_video_has_an_in_place_retry_and_runtime_self_recovers(self):
+        self.assertIn('class="retry-video-btn"', self.home_js)
+        self.assertIn("重试这条视频", self.home_js)
+        self.assertIn("async function retryVideo(video, card, button)", self.home_js)
+        self.assertIn('const refresh = video.pipeline_stage === "collection";', self.home_js)
+        self.assertIn("card.replaceWith(replacement);", self.home_js)
+        self.assertIn("RUNTIME_RECHECK_MS = 30000", self.home_js)
+        self.assertIn('window.setInterval(() => checkRuntime({ silent: true })', self.home_js)
+        self.assertIn('document.addEventListener("visibilitychange"', self.home_js)
+        self.assertIn(".retry-video-btn", self.home_css)
 
     def test_analysis_results_are_adjacent_and_revealed_once(self):
         self.assertIn('id="results-zone"', self.home)

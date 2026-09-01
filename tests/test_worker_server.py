@@ -130,9 +130,11 @@ class WorkerServerTests(unittest.TestCase):
 
     def test_launcher_replaces_project_worker_processes_before_starting(self):
         launcher = (ROOT / "start-worker.cmd").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts" / "run-worker.ps1").read_text(encoding="utf-8")
         stop_script = (ROOT / "scripts" / "stop-viralx-worker.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("stop-viralx-worker.ps1", launcher)
+        self.assertIn("run-worker.ps1", launcher)
+        self.assertIn("stop-viralx-worker.ps1", runner)
         self.assertIn("Get-CimInstance Win32_Process", stop_script)
         self.assertIn("worker_server\\.py", stop_script)
         self.assertIn("$parentExecutable -ieq $venvPython", stop_script)
