@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 
@@ -41,6 +41,15 @@ class TikTokViralAnalyzer:
     POST_ID_PATTERN = re.compile(r"^\d{15,25}$")
     POST_URL_PATTERN = re.compile(r"/video/(\d{15,25})(?:[/?#]|$)", re.IGNORECASE)
     SOURCE_URL_KEYS = ("share_url", "shareUrl", "web_url", "webUrl", "source_url", "sourceUrl", "url")
+    MEDIA_URL_KEYS = (
+        "play", "play_url", "playUrl", "play_addr", "playAddr",
+        "download", "download_url", "downloadUrl", "download_addr", "downloadAddr",
+        "hdplay", "wmplay", "nowm", "no_watermark",
+    )
+    MEDIA_HOST_SUFFIXES = (
+        "tiktok.com", "tiktokcdn.com", "tiktokv.com", "byteoversea.com",
+        "ibytedtos.com", "musical.ly", "tikwm.com",
+    )
     PICTURE_LIGHT_INTENT = re.compile(
         r"(?i)\bpicture\s+lights?\b|\bpainting\s+lights?\b|照画灯|壁画灯|画框灯"
     )
@@ -114,6 +123,45 @@ class TikTokViralAnalyzer:
                 return post_id, f"https://www.tiktok.com/@{safe_author}/video/{post_id}"
 
         return "", ""
+
+    @classmethod
+    def _safe_media_transport_url(cls, item: Mapping[str, Any]) -> str:
+        """Return one short-lived media URL for in-memory handoff only.
+
+        Scraper7 response variants use several wrappers. The selected URL is
+        never serialized into ViralX results or evidence files; TK Note consumes
+        it as an optional transport hint and still verifies the canonical post ID.
+        """
+        def values(value: Any) -> Iterable[str]:
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, list):
+                for child in value:
+                    if isinstance(child, str):
+                        yield child
+            elif isinstance(value, Mapping):
+                for key in ("url_list", "urlList", "urls", "url", "src"):
+                    yield from values(value.get(key))
+
+        video = cls._mapping(item.get("video"))
+        for container in (item, video):
+            for key in cls.MEDIA_URL_KEYS:
+                for candidate in values(container.get(key)):
+                    candidate = candidate.strip()
+                    try:
+                        parsed = urlparse(candidate)
+                    except ValueError:
+                        continue
+                    host = (parsed.hostname or "").lower()
+                    if (
+                        parsed.scheme in {"http", "https"}
+                        and host
+                        and not parsed.username
+                        and not parsed.password
+                        and any(host == suffix or host.endswith(f".{suffix}") for suffix in cls.MEDIA_HOST_SUFFIXES)
+                    ):
+                        return candidate
+        return ""
 
     @classmethod
     def _search_plan(cls, keyword: str) -> Dict[str, Any]:
@@ -223,6 +271,7 @@ class TikTokViralAnalyzer:
         stats = cls._mapping(item.get("stats"))
         video = cls._mapping(item.get("video"))
         video_id, source_url = cls._post_identity(item)
+        media_transport_url = cls._safe_media_transport_url(item)
         title = str(item.get("title") or item.get("desc") or "")
 
         challenges = item.get("challenges") if isinstance(item.get("challenges"), list) else []
@@ -268,6 +317,9 @@ class TikTokViralAnalyzer:
             "create_time": cls._integer(item.get("create_time", item.get("createTime"))),
             "is_ad": bool(item.get("is_ad", item.get("isAd", False))),
             "search_provider": cls.SEARCH_PROVIDER,
+            # Private, short-lived pipeline field. extract_video_info deliberately
+            # omits it so signed media addresses never reach API/UI output.
+            "_media_transport_url": media_transport_url,
         }
 
     def search_viral_videos(self, keyword: str, min_likes: int = 10000, count: int = 50) -> List[Dict]:

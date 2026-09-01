@@ -134,13 +134,50 @@ class VideoIngestTests(unittest.TestCase):
             self.assertEqual(asset.metadata["like_count"], 42)
             self.assertEqual(asset.progress_events[0]["stage"], "download")
             self.assertIn("--cookies-from-browser", seen["command"])
-            self.assertIn("--force", seen["command"])
+            self.assertIn("--refresh-derived", seen["command"])
+            self.assertNotIn("--force", seen["command"])
             task_log = Path(asset.task_log)
             self.assertTrue(task_log.is_file())
             records = [json.loads(line) for line in task_log.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(records[0]["event"], "collection_started")
             self.assertEqual(records[-1]["event"], "collection_completed")
             self.assertEqual(records[-1]["video_size_bytes"], len(b"video"))
+
+    def test_tk_note_media_transport_uses_child_environment_not_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill = root / "skill"
+            (skill / "scripts").mkdir(parents=True)
+            (skill / "scripts" / "extract_tiktok_text.py").write_text("# fake", encoding="utf-8")
+            video = root / "source.mp4"
+            video.write_bytes(b"video")
+            metadata = root / "metadata.json"
+            metadata.write_text(json.dumps({"video_id": "7480000000000000001"}), encoding="utf-8")
+            payload = {
+                "status": "success",
+                "source_url": "https://www.tiktok.com/@a/video/7480000000000000001",
+                "video_id": "7480000000000000001",
+                "video_file": str(video),
+                "metadata": str(metadata),
+                "transcript": str(root / "transcript.txt"),
+                "asset_manifest": str(root / "assets" / "asset_manifest.json"),
+                "warnings": [],
+                "blocked_stages": [],
+            }
+            completed = subprocess.CompletedProcess(
+                [], 0, stdout=json.dumps(payload) + "\n", stderr="",
+            )
+            signed = "https://v16-webapp-prime.tiktok.com/video/tos/example.mp4?signature=secret"
+            collector = TKNoteCollector(root / "cache", skill_dir=skill)
+
+            with patch("video_ingest.subprocess.run", return_value=completed) as run:
+                collector.collect(payload["source_url"], payload["video_id"], media_url=signed)
+
+            command = run.call_args.args[0]
+            env = run.call_args.kwargs["env"]
+            self.assertNotIn(signed, command)
+            self.assertEqual(env["VIRALX_TK_MEDIA_URL"], signed)
+            self.assertEqual(env["PYTHONUTF8"], "1")
 
     def test_tk_note_failure_is_logged_without_proxy_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -13,8 +13,8 @@ class FakeCollector:
         self.asset = asset
         self.calls = []
 
-    def prepare(self, video_url, video_id, force=False):
-        self.calls.append((video_url, video_id, force))
+    def prepare(self, video_url, video_id, force=False, media_url=None):
+        self.calls.append((video_url, video_id, force, media_url))
         return self.asset
 
 
@@ -103,11 +103,15 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             analyzer.model_analyzer = fake_model
             video_data = {"video_id": "cache-id", "title": "placeholder"}
             result = analyzer.analyze_video_script_details(
-                video_data, video_url=asset.source_url, force_collect=True,
+                video_data,
+                video_url=asset.source_url,
+                force_collect=True,
+                media_url="https://v16-webapp-prime.tiktok.com/video/tos/example.mp4?signature=private",
             )
 
             self.assertEqual(len(collector.calls), 1)
-            self.assertEqual(collector.calls[0][-1], True)
+            self.assertEqual(collector.calls[0][2], True)
+            self.assertIn("tiktok.com", collector.calls[0][3])
             self.assertEqual(shot_router.paths[0][0], str(video))
             self.assertEqual(len(fake_model.calls), 1)
             self.assertIsNone(fake_model.calls[0][1])

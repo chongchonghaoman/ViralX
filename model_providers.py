@@ -7,6 +7,11 @@ import socket
 from urllib.parse import urlparse
 
 
+PROXY_FAKE_IP_NETWORKS = (
+    ipaddress.ip_network("198.18.0.0/15"),
+)
+
+
 MODEL_PROVIDER_PRESETS = {
     "qwen": {
         "label": "Qwen3-VL Flash",
@@ -70,8 +75,10 @@ LEGACY_PROVIDER_FIELDS = {
 
 def _is_public_address(hostname: str) -> bool:
     """Reject literal or DNS-resolved loopback/private/link-local destinations."""
+    literal_address = False
     try:
         addresses = [ipaddress.ip_address(hostname)]
+        literal_address = True
     except ValueError:
         try:
             addresses = {
@@ -80,7 +87,19 @@ def _is_public_address(hostname: str) -> bool:
             }
         except (OSError, ValueError):
             return False
-    return bool(addresses) and all(address.is_global for address in addresses)
+    if not addresses:
+        return False
+
+    # Clash and similar TUN proxies deliberately resolve public hostnames into
+    # RFC 2544's 198.18.0.0/15 benchmark range, then intercept the connection.
+    # Accept that range only when it came from DNS. A user-supplied literal
+    # Fake-IP remains blocked, as do loopback, RFC1918, link-local and CGNAT.
+    def acceptable(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        if address.is_global:
+            return True
+        return not literal_address and any(address in network for network in PROXY_FAKE_IP_NETWORKS)
+
+    return all(acceptable(address) for address in addresses)
 
 
 def validate_custom_base_url(value: str, *, allow_private: bool = False) -> str:

@@ -28,6 +28,25 @@ with mock.patch.dict(sys.modules, {"_common": COMMON}):
 
 
 class SharedWhisperEnvironmentTests(unittest.TestCase):
+    def test_media_transport_rejects_local_hosts_and_accepts_tiktok_cdn(self):
+        signed = "https://v16-web-newkey.tiktokcdn.com/video/tos/example.mp4?signature=secret"
+        self.assertEqual(EXTRACT.safe_media_transport_url(signed), signed)
+        self.assertEqual(EXTRACT.safe_media_transport_url("http://127.0.0.1:8000/private.mp4"), "")
+        self.assertEqual(EXTRACT.safe_media_transport_url("https://example.com/video.mp4"), "")
+
+    def test_invalid_candidate_never_replaces_existing_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            source = out_dir / "source.mp4"
+            candidate = out_dir / "download.transport.mp4"
+            source.write_bytes(b"verified-old-source")
+            candidate.write_bytes(b"bad")
+
+            with self.assertRaises(EXTRACT.TKNoteError):
+                EXTRACT.finalize_download(candidate, out_dir)
+
+            self.assertEqual(source.read_bytes(), b"verified-old-source")
+
     def test_cli_download_uses_browser_impersonation_when_available(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)

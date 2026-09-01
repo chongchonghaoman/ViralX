@@ -1347,7 +1347,15 @@ class AIAnalyzer:
             'model_status': 'error',
         }
 
-    def analyze_video_script_details(self, video_data: dict, video_url: str = None, use_cache: bool = False, force_collect: bool = False, progress_callback=None) -> dict:
+    def analyze_video_script_details(
+        self,
+        video_data: dict,
+        video_url: str = None,
+        use_cache: bool = False,
+        force_collect: bool = False,
+        progress_callback=None,
+        media_url: str = None,
+    ) -> dict:
         """Run collection, auditable shot evidence, evidence merge, then synthesis."""
         video_id = video_data.get('video_id', '')
         expected_video_id = str(video_id or '')
@@ -1399,7 +1407,10 @@ class AIAnalyzer:
 
         emit('collection', 'running', 'TK Note 正在采集原片、字幕与元数据', 24)
         try:
-            asset = self.video_collector.prepare(video_url, video_id, force=force_collect)
+            prepare_kwargs = {'force': force_collect}
+            if media_url:
+                prepare_kwargs['media_url'] = media_url
+            asset = self.video_collector.prepare(video_url, video_id, **prepare_kwargs)
             video_file_path = asset.video_file
             acquisition_details = asset.analysis_details()
             video_data.update(asset.video_fields())
@@ -1627,13 +1638,24 @@ class AIAnalyzer:
         except Exception as e:
             return f"分析失败: {str(e)[:100]}"
 
-    def batch_analyze_streaming(self, videos: list, max_videos: int = 5, video_urls: list = None, product_name: str = '', product_info: str = '', force_collect: bool = False, progress_callback=None):
+    def batch_analyze_streaming(
+        self,
+        videos: list,
+        max_videos: int = 5,
+        video_urls: dict = None,
+        product_name: str = '',
+        product_info: str = '',
+        force_collect: bool = False,
+        progress_callback=None,
+        media_urls: dict = None,
+    ):
         """Analyze videos one at a time through the five-stage evidence pipeline."""
         def hot_score(v):
             return v.get('likes', 0) * 1 + v.get('comments', 0) * 5 + v.get('shares', 0) * 2
 
         sorted_videos = sorted(videos, key=hot_score, reverse=True)[:max_videos]
         urls = video_urls or {}
+        transport_urls = media_urls or {}
 
         # The five evidence stages are intentionally serial per task. This keeps
         # one source file, one evidence bundle, and one final report in lockstep.
@@ -1646,6 +1668,7 @@ class AIAnalyzer:
                     urls.get(v['video_id']),
                     force_collect,
                     progress_callback,
+                    transport_urls.get(v['video_id']),
                 ): v
                 for v in sorted_videos
             }
@@ -1679,7 +1702,14 @@ class AIAnalyzer:
                 except Exception as e:
                     yield {**video, 'ai_analysis': f"分析异常: {str(e)[:50]}", 'remake_script': ''}
 
-    def _analyze_video_only(self, video: dict, video_url: str = None, force_collect: bool = False, progress_callback=None) -> dict:
+    def _analyze_video_only(
+        self,
+        video: dict,
+        video_url: str = None,
+        force_collect: bool = False,
+        progress_callback=None,
+        media_url: str = None,
+    ) -> dict:
         """仅分析视频，不生成复刻脚本"""
         return self.analyze_video_script_details(
             video,
@@ -1687,6 +1717,7 @@ class AIAnalyzer:
             use_cache=False,
             force_collect=force_collect,
             progress_callback=progress_callback,
+            media_url=media_url,
         )
 
     def _generate_remake_with_retry(self, video: dict, analysis: str, product_name: str, product_info: str, max_retries: int = 3) -> str:

@@ -5,6 +5,7 @@ python-dotenv==1.2.3
 google-genai==2.19.0
 yt-dlp==2026.8.19
 curl-cffi==0.16.2
+websockets>=14.2,<16
 scenedetect==0.6.4
 opencv-python-headless>=4.10.0,<5
 waitress>=3.0,<4

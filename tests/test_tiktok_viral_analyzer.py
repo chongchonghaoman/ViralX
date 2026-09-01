@@ -178,6 +178,25 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(video["video_id"], "7591234567890123457")
         self.assertIn("/video/7591234567890123457", video["source_url"])
 
+    def test_scraper7_media_transport_is_private_and_host_limited(self):
+        signed = "https://v16-webapp-prime.tiktok.com/video/tos/example.mp4?signature=secret"
+        normalized = self.analyzer._normalize_scraper7_video({
+            "id": "7591234567890123457",
+            "author": {"unique_id": "creator"},
+            "video": {"play_addr": {"url_list": [signed]}},
+        })
+
+        self.assertEqual(normalized["_media_transport_url"], signed)
+        public = self.analyzer.extract_video_info(normalized)
+        self.assertNotIn("_media_transport_url", public)
+        self.assertNotIn("signature", repr(public))
+
+        rejected = self.analyzer._normalize_scraper7_video({
+            "id": "7591234567890123458",
+            "video": {"play": "http://127.0.0.1:8000/private.mp4"},
+        })
+        self.assertEqual(rejected["_media_transport_url"], "")
+
     @patch("tiktok_viral_analyzer.requests.get")
     def test_missing_key_stops_before_network_request(self, mock_get):
         self.analyzer.api_key = ""

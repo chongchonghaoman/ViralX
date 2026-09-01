@@ -184,9 +184,13 @@ class TKNoteCollector:
         self.timeout = max(float(timeout), 30)
         self._runner = runner
 
-    def _run(self, command: List[str]) -> subprocess.CompletedProcess:
+    def _run(self, command: List[str], extra_env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
         if self._runner:
             return self._runner(command, self.timeout)
+        env = os.environ.copy()
+        env.update({"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
+        if extra_env:
+            env.update(extra_env)
         try:
             return subprocess.run(
                 command,
@@ -195,6 +199,7 @@ class TKNoteCollector:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                env=env,
                 timeout=self.timeout,
                 check=False,
             )
@@ -259,7 +264,13 @@ class TKNoteCollector:
         except (OSError, json.JSONDecodeError):
             return {}
 
-    def collect(self, video_url: str, video_id: str, force: bool = False) -> VideoAsset:
+    def collect(
+        self,
+        video_url: str,
+        video_id: str,
+        force: bool = False,
+        media_url: str = "",
+    ) -> VideoAsset:
         if not self.script.is_file():
             raise VideoIngestError(f"缺少项目内 TK Note 脚本：{self.script}")
         out_dir = self.cache_dir / _safe_cache_key(video_id)
@@ -268,7 +279,8 @@ class TKNoteCollector:
             "event": "collection_started",
             "video_id": str(video_id or ""),
             "source_url": _safe_source_url(video_url),
-            "force": bool(force),
+            "refresh_derived": bool(force),
+            "media_transport_available": bool(media_url),
             "cookie_browser": self.cookies_from_browser or "none",
             "proxy_configured": bool(self.proxy),
             "proxy_source": self.proxy_source,
@@ -289,10 +301,14 @@ class TKNoteCollector:
         if self.proxy:
             command.extend(("--proxy", self.proxy))
         if force:
-            command.append("--force")
+            # The public UI's "refresh evidence" action must never destroy a
+            # valid source video. TK Note refreshes transcript/derived assets;
+            # explicit CLI --force remains the only full redownload operation.
+            command.append("--refresh-derived")
 
         try:
-            completed = self._run(command)
+            child_env = {"VIRALX_TK_MEDIA_URL": media_url} if media_url else None
+            completed = self._run(command, child_env)
             progress = self._parse_progress(completed.stderr)
             self._log_progress(task_log, progress)
             payload = self._parse_result(completed.stdout)
@@ -437,9 +453,17 @@ class VideoAssetCollector:
         with self._locks_guard:
             return self._locks.setdefault(key, threading.Lock())
 
-    def prepare(self, video_url: str, video_id: str, force: bool = False) -> VideoAsset:
+    def prepare(
+        self,
+        video_url: str,
+        video_id: str,
+        force: bool = False,
+        media_url: str = "",
+    ) -> VideoAsset:
         with self._lock_for(video_id):
             if is_tiktok_url(video_url):
+                if media_url:
+                    return self.tk_note.collect(video_url, video_id, force=force, media_url=media_url)
                 return self.tk_note.collect(video_url, video_id, force=force)
             was_cached = self.generic.output_path(video_id).is_file() and not force
             path = self.generic.download(video_url, video_id, force=force)

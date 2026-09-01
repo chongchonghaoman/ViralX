@@ -342,6 +342,7 @@ def build_analyze_response(config_override=None, max_videos=None):
 
             # 支持直接粘贴抖音/TikTok 链接；关键词则保留原有榜单搜索。
             tiktok = None
+            media_urls = {}
             if is_video_url(keyword):
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'skipped',
@@ -364,6 +365,11 @@ def build_analyze_response(config_override=None, max_videos=None):
                 tiktok = TikTokViralAnalyzer(current_config['output_dir'])
                 tiktok.api_key = current_config['rapidapi_key']
                 videos = tiktok.search_viral_videos(keyword, current_config['min_likes'], count=30)
+                media_urls = {
+                    str(v.get('video_id') or ''): str(v.get('_media_transport_url') or '')
+                    for v in videos
+                    if v.get('video_id') and v.get('_media_transport_url')
+                }
                 video_data = [tiktok.extract_video_info(v) for v in videos]
                 video_urls = {
                     v['video_id']: v['source_url']
@@ -439,6 +445,7 @@ def build_analyze_response(config_override=None, max_videos=None):
                         video_data,
                         max_videos=video_limit,
                         video_urls=video_urls,
+                        media_urls=media_urls,
                         product_name=product_name,
                         product_info=product_info,
                         force_collect=bool(refresh),

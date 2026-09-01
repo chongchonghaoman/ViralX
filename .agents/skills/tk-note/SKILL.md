@@ -13,7 +13,8 @@ The default single-video contract is:
 
 ```text
 TikTok URL
-  -> yt-dlp video + safe metadata + available subtitle tracks
+  -> Scraper7 media hint (when available) / yt-dlp / isolated Chrome fallback
+  -> video + safe metadata + available subtitle tracks
   -> local ASR only when no usable subtitle exists
   -> note budget + reusable assets/asset_manifest.json
   -> optional TikTokApi comment sample
@@ -24,7 +25,8 @@ TikTok URL
 
 - Accept international TikTok hosts: `tiktok.com`, `www.tiktok.com`, `m.tiktok.com`, `vt.tiktok.com`, and `vm.tiktok.com`.
 - Do not route `douyin.com` or `v.douyin.com` here; use `dy-note`.
-- Public video download and metadata use local `yt-dlp`; no paid scraping API is required.
+- Public video download first uses an in-memory Scraper7 media hint when keyword discovery supplied one, otherwise local `yt-dlp`; if TikTok serves a webpage challenge, TK Note opens an isolated local Chrome/Edge profile and reads the real player stream. A paid scraping API is not required for direct links.
+- Browser fallback does not export Cookie or persist signed media URLs. The profile stays under the shared local cache and the browser debugging port binds to loopback for that process only.
 - Comments use the optional MIT-licensed `TikTokApi` package. It may need an `ms_token`, Playwright, or a proxy, and TikTok can still block it. Comment failure must never block the downloaded video from continuing to LibTV.
 - Never print, save, or return cookies, `ms_token`, proxy credentials, signed media URLs, or raw request headers.
 
@@ -84,6 +86,7 @@ Useful options:
 - `--proxy URL`: route yt-dlp through a user-provided proxy; credentials are redacted from errors.
 - `--asr-backend none`: download and preserve subtitles/metadata without local ASR. ViralX may use this when the immediate next step is LibTV.
 - `--force`: rerun extraction because source, output, or evidence requirements genuinely changed.
+- `--refresh-derived`: keep the verified `source.mp4` and rebuild transcript/evidence outputs. ViralX's “refresh evidence” action uses this safer mode.
 
 4. For comment insight, collect a bounded sample after the video assets exist:
 
@@ -139,6 +142,8 @@ Successful extraction prints one JSON object containing:
 - `reused_artifacts`.
 
 `partial` is usable when the video exists but subtitles, ASR, or comments are blocked. ViralX may still upload that video to LibTV and must surface the missing evidence instead of calling the whole task a failure.
+
+A forced redownload is transactional: the new candidate must pass video-stream validation before it replaces `source.mp4`. If TikTok blocks the refresh and an identity-matched source file already exists, TK Note keeps the previous evidence and records a stale-reuse warning.
 
 ## Evidence language
 
