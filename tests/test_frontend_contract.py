@@ -127,6 +127,12 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("function workerUrl", self.cloud_config_js)
         self.assertIn("apiBaseUrl", self.build_js)
         self.assertIn('mode: "remote-worker"', self.build_js)
+        self.assertIn("DEFAULT_PUBLIC_API_BASE_URL", self.build_js)
+        self.assertIn("https://desktop-6a71m2q.tail2691cd.ts.net", self.build_js)
+        self.assertIn(
+            "process.env.VIRALX_PUBLIC_API_BASE_URL || DEFAULT_PUBLIC_API_BASE_URL",
+            self.build_js,
+        )
         self.assertNotIn('join(projectRoot, "static", "connector.js")', self.build_js)
         self.assertNotIn("ViralXConnector", self.home_js)
         self.assertIn("const HEALTH_TIMEOUT_MS = 4500;", self.cloud_config_js)
