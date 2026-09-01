@@ -577,6 +577,7 @@ h3 {
 
 .source-tools {
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-sm);
   margin-block-start: var(--space-md);
@@ -1610,8 +1611,37 @@ h3 {
   }
 
   .source-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, auto);
+    grid-template-rows: auto var(--control-height) auto;
+    align-items: center;
+    column-gap: var(--space-md);
+  }
+
+  .source-row .source-field {
+    display: contents;
+  }
+
+  .source-row .source-field label {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+  }
+
+  .source-row .source-field input {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .source-row .source-help {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .source-row > .btn {
+    min-width: 10rem;
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
   }
 
   .remake-grid {

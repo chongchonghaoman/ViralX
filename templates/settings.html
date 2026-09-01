@@ -9,8 +9,8 @@
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.5') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.5') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.6') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.6') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
   <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.5') }}"></script>
   <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.5') }}"></script>
@@ -49,11 +49,6 @@
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
 
     <div class="settings-layout settings-layout--simple">
-      <nav class="category-nav" aria-label="设置分区" data-motion="reveal">
-        <a href="#runtime">快速配置</a>
-        <a href="#advanced" data-server-owner-only>高级设置</a>
-      </nav>
-
       <form class="settings-form" id="settings-form" novalidate>
         <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
 
