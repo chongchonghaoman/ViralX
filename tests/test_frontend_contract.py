@@ -191,19 +191,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("min-height: 2.75rem", self.home_css)
 
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
-        self.assertIn("filename='viralx.css', v='1.1.5'", self.home)
-        self.assertIn("filename='runtime-config.js', v='1.1.5'", self.home)
-        self.assertIn("filename='cloud-config.js', v='1.1.5'", self.home)
-        self.assertIn("filename='viralx.js', v='1.1.5'", self.home)
-        self.assertIn("filename='viralx.css', v='1.1.5'", self.settings)
-        self.assertIn("filename='settings.css', v='1.1.5'", self.settings)
-        self.assertIn("filename='runtime-config.js', v='1.1.5'", self.settings)
-        self.assertIn("filename='cloud-config.js', v='1.1.5'", self.settings)
-        self.assertIn("filename='settings.js', v='1.1.5'", self.settings)
-        self.assertIn('const assetVersion = "1.1.5";', self.build_js)
+        home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
+        settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
+        self.assertEqual(home_versions, {"1.1.6"})
+        self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
-        self.assertIn('`/static/${filename}${version ? `?v=${assetVersion}` : ""}`', self.build_js)
-        self.assertNotIn("filename='viralx.css', v='1.1.4'", self.build_js)
+        self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)
+        self.assertNotIn("const assetVersion", self.build_js)
+
+    def test_edgeone_build_carries_the_evidence_contract_module(self):
+        self.assertIn('"evidence_contract.py",', self.build_js)
 
     def test_gateway_timeout_explains_recovery_path(self):
         self.assertIn("responseError.status = response.status", self.home_js)

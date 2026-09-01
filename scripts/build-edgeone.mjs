@@ -6,10 +6,9 @@ const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(projectRoot, "public");
 const publicStatic = join(publicDir, "static");
 const publicFunctions = join(publicDir, "cloud-functions");
-const assetVersion = "1.1.6";
 const renderStaticUrls = (source) => source.replace(
   /\{\{\s*url_for\('static',\s*filename='([^']+)'(?:,\s*v='([^']+)')?\)\s*\}\}/g,
-  (_match, filename, version) => `/static/${filename}${version ? `?v=${assetVersion}` : ""}`,
+  (_match, filename, version) => `/static/${filename}${version ? `?v=${version}` : ""}`,
 );
 const publicApiBaseUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
 let publicApiOrigin = "";
@@ -85,6 +84,7 @@ await cp(join(projectRoot, "static", "viralx.js"), join(publicStatic, "viralx.js
 await cp(join(projectRoot, "cloud-functions"), publicFunctions, { recursive: true });
 for (const moduleName of [
   "ai_analyzer.py",
+  "evidence_contract.py",
   "model_providers.py",
   "video_ingest.py",
   "libtv_analyzer.py",
