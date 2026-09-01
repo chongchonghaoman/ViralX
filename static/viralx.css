@@ -225,7 +225,7 @@ h3 {
   display: grid;
   justify-items: center;
   min-height: 100dvh;
-  padding: calc(var(--nav-height) + var(--space-2xl)) var(--page-gutter) var(--space-5xl);
+  padding: calc(var(--nav-height) + var(--space-2xl)) var(--page-gutter) var(--space-2xl);
   overflow: clip;
 }
 
@@ -1012,7 +1012,7 @@ h3 {
 }
 
 .results-zone {
-  padding-block-end: var(--space-4xl);
+  padding-block: var(--space-2xl) var(--space-4xl);
 }
 
 .results-heading {

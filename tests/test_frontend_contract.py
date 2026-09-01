@@ -164,6 +164,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("TK Note · 采集失败", self.home_js)
         self.assertIn('class="video-card__error"', self.home_js)
 
+    def test_analysis_results_are_adjacent_and_revealed_once(self):
+        self.assertIn('id="results-zone"', self.home)
+        self.assertLess(self.home.index('id="results-zone"'), self.home.index('class="signal-strip"'))
+        self.assertIn('id="results" aria-busy="false"', self.home)
+        self.assertIn("let resultRevealHandled = false;", self.home_js)
+        self.assertIn('function revealFirstResult()', self.home_js)
+        self.assertIn('revealSection("results-zone")', self.home_js)
+        self.assertIn('byId("results")?.setAttribute("aria-busy"', self.home_js)
+
     def test_tk_note_network_controls_remain_available_to_local_owner(self):
         cookie_field = self.settings.split('id="tk_note_cookies_from_browser"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]
         proxy_field = self.settings.split('id="tk_note_proxy"', 1)[0].rsplit('<div class="settings-field"', 1)[-1]

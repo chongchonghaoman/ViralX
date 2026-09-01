@@ -8,6 +8,7 @@
   let runtimeAnalysisReady = false;
   let runtimeSearchReady = false;
   let runtimeBlocker = "checking";
+  let resultRevealHandled = false;
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const gsapReady = () => !reduceMotion && typeof window.gsap !== "undefined";
@@ -236,6 +237,18 @@
     const error = byId("error");
     error.textContent = "";
     error.hidden = true;
+  }
+
+  function revealSection(id, block = "start") {
+    const section = byId(id);
+    if (!section) return;
+    section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block });
+  }
+
+  function revealFirstResult() {
+    if (resultRevealHandled) return;
+    resultRevealHandled = true;
+    window.requestAnimationFrame(() => revealSection("results-zone"));
   }
 
   function isDirectVideoSource(value) {
@@ -486,6 +499,7 @@
     refreshButton.disabled = isBusy;
     analyzeButton.setAttribute("aria-busy", String(isBusy));
     analyzeButton.textContent = isBusy ? "正在拉片" : primaryActionLabel(false);
+    byId("results")?.setAttribute("aria-busy", String(isBusy));
   }
 
   function handleAnalyzeAction(refresh = false) {
@@ -604,6 +618,7 @@
     setBusy(true);
     loading.hidden = false;
     results.replaceChildren();
+    resultRevealHandled = false;
     resetPipelineStages();
     updateResultCount(0, "管线运行中");
     updateProgress("正在启动完整证据链", 2);
@@ -612,6 +627,7 @@
     streamContainer.id = "stream-results";
     streamContainer.className = "results-list";
     results.appendChild(streamContainer);
+    window.requestAnimationFrame(() => revealSection("pipeline-title", "center"));
 
     let received = 0;
     let done = false;
@@ -632,6 +648,7 @@
           received += 1;
           streamContainer.appendChild(renderVideoCard(data.video, received - 1));
           updateResultCount(received);
+          revealFirstResult();
         }
         return;
       }

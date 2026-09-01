@@ -74,6 +74,7 @@ class FakeModel:
         return (
             "## 最终分析\n"
             "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "## 用户反馈与受众\n"
             "评论正文未采集，无法判断真实用户诉求 [META:comments]\n"
             "产品居中 [SHOT:S001]\n手部触发变化 [SHOT:S002]"
         )
@@ -196,6 +197,27 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 video_data,
             ),
         )
+
+    def test_feedback_headings_and_missing_data_disclosures_are_not_false_claims(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+        )
+        video_data = {
+            "evidence_bundle": {
+                "platform_evidence": {"comments_data": []},
+                "shot_evidence": {"shot_count": 2},
+            }
+        }
+        report = (
+            "## 证据覆盖\n标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "## 用户反馈与受众\n"
+            "评论正文未采集，无法判断真实用户反馈 [META:comments]\n"
+            "标签受众归类并非直接用户反馈，只是待验证推断 [META:hashtags]\n"
+            "产品出现 [SHOT:S001]\n产品点亮 [SHOT:S002]"
+        )
+
+        self.assertEqual(analyzer.grounding_error(report, video_data), "")
 
 
 if __name__ == "__main__":

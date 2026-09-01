@@ -164,6 +164,30 @@ def _libtv_evidence_error(details: dict) -> str:
     return ''
 
 
+_USER_FEEDBACK_CLAIM_RE = re.compile(
+    r"评论(?:显示|反映|指出|认为|提到|表示|反馈)|"
+    r"用户(?:表示|认为|反馈|提到|指出|评价|评论称)"
+)
+_USER_FEEDBACK_DISCLOSURE_RE = re.compile(
+    r"未采集|无法判断|不可用|无(?:具体)?评论|没有评论|缺少评论|"
+    r"不得推断|不能判断|非直接用户反馈|待验证|仅能.{0,12}推断"
+)
+
+
+def _claims_unverified_user_feedback(report: str) -> bool:
+    """Distinguish affirmative feedback claims from headings and disclosures."""
+    for raw_line in str(report or '').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if not _USER_FEEDBACK_CLAIM_RE.search(line):
+            continue
+        if _USER_FEEDBACK_DISCLOSURE_RE.search(line):
+            continue
+        return True
+    return False
+
+
 def _grounding_error(report: str, video_data: dict | None = None) -> str:
     """Require traceable citations before a model report can be shown as completed."""
     text = str(report or '').strip()
@@ -182,7 +206,7 @@ def _grounding_error(report: str, video_data: dict | None = None) -> str:
         return "报告的证据引用不足，无法区分事实与推断"
     platform = ((video_data or {}).get('evidence_bundle') or {}).get('platform_evidence') or {}
     if not (platform.get('comments_data') or []):
-        if re.search(r"评论(?:显示|反映|指出|认为)|用户(?:表示|认为|反馈)", text):
+        if _claims_unverified_user_feedback(text):
             return "未采集评论正文，但报告仍声称存在真实用户反馈"
         if not re.search(r"评论.{0,16}未采集|未采集.{0,16}评论", text):
             return "报告没有披露评论正文未采集"
