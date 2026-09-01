@@ -765,7 +765,11 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword, refresh, product_name: productName, product_info: productInfo }),
       });
-      if (!response.ok) throw new Error(`服务返回 HTTP ${response.status}`);
+      if (!response.ok) {
+        const responseError = new Error(`服务返回 HTTP ${response.status}`);
+        responseError.status = response.status;
+        throw responseError;
+      }
 
       if (response.body && response.body.getReader) {
         const reader = response.body.getReader();
@@ -786,10 +790,15 @@
       }
     } catch (error) {
       failActiveStage();
-      const hint = runtimeMode === "worker"
-        ? "实时分析服务可能刚刚离线，请稍后重试"
-        : "确认本地服务仍在运行";
-      showInlineError(`分析没有完成：${error.message}。${hint}后重试。`);
+      let hint;
+      if (error.status === 504) {
+        hint = "长任务被中转网关提前截断。请刷新页面切换到直连分析服务后重新开始；Worker 本身可能仍在继续运行。";
+      } else if (runtimeMode === "worker") {
+        hint = "实时分析服务可能刚刚离线，请稍后重试。";
+      } else {
+        hint = "请确认本地服务仍在运行后重试。";
+      }
+      showInlineError(`分析没有完成：${error.message}。${hint}`);
       updateResultCount(received, "连接中断");
     } finally {
       setBusy(false);

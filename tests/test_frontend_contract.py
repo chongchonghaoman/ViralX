@@ -183,11 +183,26 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("min-height: 2.75rem", self.home_css)
 
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
-        self.assertIn("filename='viralx.css', v='1.1.1'", self.home)
-        self.assertIn("filename='viralx.js', v='1.1.1'", self.home)
-        self.assertIn("filename='viralx.css', v='1.1.1'", self.settings)
+        self.assertIn("filename='viralx.css', v='1.1.2'", self.home)
+        self.assertIn("filename='runtime-config.js', v='1.1.2'", self.home)
+        self.assertIn("filename='cloud-config.js', v='1.1.2'", self.home)
+        self.assertIn("filename='viralx.js', v='1.1.2'", self.home)
+        self.assertIn("filename='viralx.css', v='1.1.2'", self.settings)
+        self.assertIn("filename='settings.css', v='1.1.2'", self.settings)
+        self.assertIn("filename='runtime-config.js', v='1.1.2'", self.settings)
+        self.assertIn("filename='cloud-config.js', v='1.1.2'", self.settings)
+        self.assertIn("filename='settings.js', v='1.1.2'", self.settings)
         self.assertIn("/static/viralx.css?v=${assetVersion}", self.build_js)
+        self.assertIn("/static/runtime-config.js?v=${assetVersion}", self.build_js)
+        self.assertIn("/static/cloud-config.js?v=${assetVersion}", self.build_js)
         self.assertIn("/static/viralx.js?v=${assetVersion}", self.build_js)
+        self.assertIn("/static/settings.css?v=${assetVersion}", self.build_js)
+        self.assertIn("/static/settings.js?v=${assetVersion}", self.build_js)
+
+    def test_gateway_timeout_explains_recovery_path(self):
+        self.assertIn("responseError.status = response.status", self.home_js)
+        self.assertIn("长任务被中转网关提前截断", self.home_js)
+        self.assertNotIn("请稍后重试后重试", self.home_js)
 
     def test_analysis_results_are_adjacent_and_revealed_once(self):
         self.assertIn('id="results-zone"', self.home)
