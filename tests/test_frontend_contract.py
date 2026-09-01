@@ -17,6 +17,8 @@ class FrontendContractTests(unittest.TestCase):
         cls.runtime_config_js = (ROOT / "static" / "runtime-config.js").read_text(encoding="utf-8")
         cls.cloud_config_js = (ROOT / "static" / "cloud-config.js").read_text(encoding="utf-8")
         cls.build_js = (ROOT / "scripts" / "build-edgeone.mjs").read_text(encoding="utf-8")
+        cls.deploy_guard_js = (ROOT / "scripts" / "require-public-worker.mjs").read_text(encoding="utf-8")
+        cls.package_json = (ROOT / "package.json").read_text(encoding="utf-8")
 
     def assert_named_control(self, html, control_id, name):
         pattern = rf'<(?:input|select|textarea)\b[^>]*\bid="{re.escape(control_id)}"[^>]*\bname="{re.escape(name)}"'
@@ -201,6 +203,11 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_edgeone_build_carries_the_evidence_contract_module(self):
         self.assertIn('"evidence_contract.py",', self.build_js)
+
+    def test_production_deploy_cannot_silently_fall_back_to_edgeone_proxying(self):
+        self.assertIn("VIRALX_PUBLIC_API_BASE_URL", self.deploy_guard_js)
+        self.assertIn("if (!rawUrl)", self.deploy_guard_js)
+        self.assertIn("node scripts/require-public-worker.mjs", self.package_json)
 
     def test_gateway_timeout_explains_recovery_path(self):
         self.assertIn("responseError.status = response.status", self.home_js)
