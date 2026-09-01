@@ -1,8 +1,6 @@
 flowchart LR
-    K[搜索主题] --> A[01a API23<br/>优先发现候选]
-    A -->|有效候选| T[02 TK Note / yt-dlp<br/>原片与平台证据]
-    A -->|异常或无有效候选| S[01b Scraper7<br/>自动回退]
-    S --> T
+    K[搜索主题] --> A[01 多源无感搜索<br/>自动切换 · 合并 · 去重]
+    A -->|达到目标候选数| T[02 TK Note / yt-dlp<br/>原片与平台证据]
     U[视频直链] -->|跳过关键词搜索| T
     T --> F[03a ShotLoom Core<br/>切镜与关键帧采样]
     F --> V[03b 上方视觉模型<br/>识别逐镜事实]
@@ -34,6 +32,5 @@ flowchart LR
 
     subgraph Services[外部服务]
         A
-        S
         M
     end

@@ -513,7 +513,7 @@
       return;
     }
     if (!isDirectVideoSource(source) && !runtimeSearchReady) {
-      showInlineError("直链分析已经就绪；关键词发现还缺少 RapidAPI Key。同一把 Key 用于 API23 与 Scraper7，你也可以先粘贴视频直链。");
+      showInlineError("直链分析已经就绪；关键词发现还缺少 RapidAPI Key。同一把 Key 用于已订阅的多源搜索链，你也可以先粘贴视频直链。");
       byId("keyword")?.focus();
       return;
     }

@@ -15,7 +15,7 @@ if errorlevel 1 (
   echo Unable to replace the existing ViralX Worker safely.
   exit /b 1
 )
-timeout.exe /t 1 /nobreak >nul
+"%SystemRoot%\System32\timeout.exe" /t 1 /nobreak >nul
 
 if exist "venv\Scripts\python.exe" (
   "venv\Scripts\python.exe" worker_server.py

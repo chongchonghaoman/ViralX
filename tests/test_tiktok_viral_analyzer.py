@@ -12,13 +12,11 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.analyzer = TikTokViralAnalyzer(self.temp_dir.name)
         self.analyzer.api_key = "test-scraper7-secret"
-        # These tests exercise the legacy Scraper7 adapter in isolation. The
-        # chain-level API23-first behavior is covered separately below.
-        self.api23_patcher = patch.object(TikTokViralAnalyzer, "_search_api23", return_value=[])
-        self.api23_patcher.start()
+        # These tests exercise one provider adapter in isolation. Multi-source
+        # continuation, merge and deduplication are covered separately below.
+        self.analyzer.search_provider_chain = ("scraper7",)
 
     def tearDown(self):
-        self.api23_patcher.stop()
         self.temp_dir.cleanup()
 
     @patch("tiktok_viral_analyzer.requests.get")
@@ -70,6 +68,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             "https://tiktok-scraper7.p.rapidapi.com/feed/search",
             headers={
                 "Content-Type": "application/json",
+                "User-Agent": "ViralX-Keyword-Search/2.0",
                 "x-rapidapi-host": "tiktok-scraper7.p.rapidapi.com",
                 "x-rapidapi-key": "test-scraper7-secret",
             },
@@ -206,7 +205,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
     def test_missing_key_stops_before_network_request(self, mock_get):
         self.analyzer.api_key = ""
 
-        with self.assertRaisesRegex(RuntimeError, "RAPIDAPI_KEY.*API23.*Scraper7"):
+        with self.assertRaisesRegex(RuntimeError, "RAPIDAPI_KEY.*多源搜索链"):
             self.analyzer.search_viral_videos("camping light")
 
         mock_get.assert_not_called()
@@ -227,43 +226,36 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             self.analyzer.search_viral_videos("picture light")
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_scraper7_pagination_uses_nested_cursor(self, mock_get):
-        first = Mock(status_code=200)
-        first.json.return_value = {
+    def test_scraper7_reads_one_page_before_the_chain_continues(self, mock_get):
+        mock_get.return_value = Mock(status_code=200)
+        mock_get.return_value.json.return_value = {
             "code": 0,
             "data": {
                 "has_more": 1,
                 "cursor": 12,
-                "videos": [{"aweme_id": "7480000000000000001", "digg_count": 100}],
+                "videos": [
+                    {"aweme_id": "7480000000000000001", "digg_count": 100},
+                    {"aweme_id": "7480000000000000002", "digg_count": 200},
+                ],
             },
         }
-        second = Mock(status_code=200)
-        second.json.return_value = {
-            "code": 0,
-            "data": {
-                "has_more": 0,
-                "cursor": 24,
-                "videos": [{"aweme_id": "7480000000000000002", "digg_count": 200}],
-            },
-        }
-        mock_get.side_effect = [first, second]
 
         videos = self.analyzer.search_viral_videos("camping light", min_likes=0, count=2)
 
         self.assertEqual(
             [video["video_id"] for video in videos],
-            ["7480000000000000001", "7480000000000000002"],
+            ["7480000000000000002", "7480000000000000001"],
         )
-        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_count, 1)
         self.assertEqual(mock_get.call_args_list[0].kwargs["params"]["cursor"], 0)
-        self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["cursor"], 12)
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_legacy_search_url_and_host_overrides_still_control_scraper7(self, mock_get):
+    def test_provider_registry_override_controls_scraper7(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": 0, "data": {"videos": []}}
-        self.analyzer.SEARCH_URL = "https://mock.example.test/feed/search"
-        self.analyzer.SEARCH_HOST = "mock.example.test"
+        provider = dict(self.analyzer.SEARCH_PROVIDERS["scraper7"])
+        provider.update({"url": "https://mock.example.test/feed/search", "host": "mock.example.test"})
+        self.analyzer.SEARCH_PROVIDERS = {**self.analyzer.SEARCH_PROVIDERS, "scraper7": provider}
 
         self.analyzer.search_viral_videos("camping lamp", min_likes=0, count=1)
 
@@ -278,7 +270,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         videos = self.analyzer.search_viral_videos("picture light", min_likes=0)
 
         self.assertEqual(videos, [])
-        self.assertIn("响应结构可能已经更新", self.analyzer.empty_result_message())
+        self.assertIn("接口结构可能已经更新", self.analyzer.empty_result_message())
 
     @patch("tiktok_viral_analyzer.requests.get")
     def test_empty_data_videos_is_distinguished_from_like_filtering(self, mock_get):
@@ -289,7 +281,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(videos, [])
         message = self.analyzer.empty_result_message()
-        self.assertIn("item_list / data.videos", message)
+        self.assertIn("所有可用搜索源", message)
         self.assertIn("没有返回视频候选", message)
         self.assertIn("与最低点赞数无关", message)
 
@@ -390,188 +382,150 @@ class TikTokSearchChainTests(unittest.TestCase):
         return result
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_api23_is_primary_and_uses_the_shared_key(self, mock_get):
+    def test_api6_is_primary_and_normalizes_statistics(self, mock_get):
         mock_get.return_value = self.response({
-            "status_code": 0,
-            "cursor": 12,
-            "has_more": 0,
-            "item_list": [{
+            "videos": [{
                 "id": "7591234567890123456",
-                "desc": "Rechargeable picture light above framed wall artwork #homedecor",
-                "author": {"uniqueId": "gallerylamp"},
-                "stats": {"diggCount": 6200, "commentCount": 42, "playCount": 98000},
-                "video": {
-                    "duration": 18000,
-                    "cover": {"url_list": ["https://example.com/api23-cover.jpg"]},
+                "description": "Rechargeable picture light above framed wall artwork #homedecor",
+                "author": "gallerylamp",
+                "statistics": {
+                    "number_of_hearts": 6200,
+                    "number_of_comments": 42,
+                    "number_of_plays": 98000,
                 },
             }],
         })
 
-        videos = self.analyzer.search_viral_videos("picture light", min_likes=500, count=10)
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=500, count=1)
 
         self.assertEqual(len(videos), 1)
-        self.assertEqual(videos[0]["search_provider"], "api23")
+        self.assertEqual(videos[0]["search_provider"], "api6")
         self.assertEqual(videos[0]["digg_count"], 6200)
-        self.assertEqual(videos[0]["cover"], "https://example.com/api23-cover.jpg")
+        self.assertEqual(videos[0]["author"]["unique_id"], "gallerylamp")
+        self.assertIn("@gallerylamp/video/", videos[0]["source_url"])
         self.assertFalse(self.analyzer.last_search_diagnostics["fallback_used"])
         mock_get.assert_called_once_with(
-            "https://tiktok-api23.p.rapidapi.com/api/search/video",
+            "https://tiktok-api6.p.rapidapi.com/search/general/query",
             headers={
                 "Content-Type": "application/json",
-                "x-rapidapi-host": "tiktok-api23.p.rapidapi.com",
+                "User-Agent": "ViralX-Keyword-Search/2.0",
+                "x-rapidapi-host": "tiktok-api6.p.rapidapi.com",
                 "x-rapidapi-key": "test-shared-rapidapi-key",
             },
             params={
-                "keyword": "picture light wall mounted artwork lamp",
+                "query": "picture light wall mounted artwork lamp",
                 "cursor": 0,
-                "search_id": 0,
+                "sort_type": 1,
             },
             timeout=20,
         )
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_api23_business_error_falls_back_to_scraper7_without_interrupting(self, mock_get):
+    def test_empty_primary_falls_through_to_scraptik_without_interrupting(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
-            self.response({"status_code": 4, "status_msg": "Server is currently unavailable"}),
-            self.response({
-                "code": 0,
-                "data": {"videos": [{
-                    "id": "7591234567890123457",
-                    "title": "Wireless picture light for gallery wall",
-                    "author": {"unique_id": "fallbackcreator"},
-                    "digg_count": 7100,
-                }]},
-            }),
+            self.response({"videos": []}),
+            self.response({"search_item_list": [{"aweme_info": {
+                "aweme_id": "7591234567890123457",
+                "desc": "Wireless picture light for gallery wall",
+                "author": {"unique_id": "fallbackcreator"},
+                "statistics": {"digg_count": 7100},
+            }}]}),
         ]
 
-        videos = self.analyzer.search_viral_videos("picture lights", min_likes=500, count=10)
+        videos = self.analyzer.search_viral_videos("picture lights", min_likes=500, count=1)
 
-        self.assertEqual([video["search_provider"] for video in videos], ["scraper7"])
+        self.assertEqual([video["search_provider"] for video in videos], ["scraptik"])
         self.assertTrue(self.analyzer.last_search_diagnostics["fallback_used"])
-        self.assertEqual(self.analyzer.last_search_diagnostics["fallback_reason"], "provider_error")
-        self.assertIn("业务状态 4", self.analyzer.last_search_diagnostics["providers"]["api23"]["error"])
+        self.assertEqual(self.analyzer.last_search_diagnostics["attempted_providers"], ["api6", "scraptik"])
         self.assertEqual(mock_get.call_count, 2)
         self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-key"], "test-shared-rapidapi-key")
-        self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-host"], "tiktok-scraper7.p.rapidapi.com")
+        self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-host"], "scraptik.p.rapidapi.com")
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_api23_empty_or_invalid_candidates_fall_back_to_scraper7(self, mock_get):
-        for api23_payload, expected_reason in (
-            ({"status_code": 0, "item_list": []}, "no_candidates"),
-            ({
-                "status_code": 0,
-                "item_list": [{"aweme_id": "v26044gc0000opaque", "digg_count": 9000}],
-            }, "no_valid_candidates"),
-        ):
-            with self.subTest(expected_reason=expected_reason):
-                mock_get.reset_mock()
-                mock_get.side_effect = [
-                    self.response(api23_payload),
-                    self.response({
-                        "code": 0,
-                        "data": {"videos": [{
-                            "id": "7591234567890123458",
-                            "title": "Picture light wall mounted fixture",
-                            "digg_count": 8000,
-                        }]},
-                    }),
-                ]
-                videos = self.analyzer.search_viral_videos("picture light", min_likes=500, count=10)
-                self.assertEqual(videos[0]["search_provider"], "scraper7")
-                self.assertEqual(self.analyzer.last_search_diagnostics["fallback_reason"], expected_reason)
-                self.assertEqual(mock_get.call_count, 2)
-
-    @patch("tiktok_viral_analyzer.requests.get")
-    def test_api23_mixed_root_and_data_pagination_fields_are_followed(self, mock_get):
+    def test_chain_merges_and_deduplicates_until_target(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraptik", "scraper7")
         mock_get.side_effect = [
-            self.response({
-                "status_code": 0,
-                "has_more": 1,
-                "cursor": 12,
-                "data": {
-                    "search_id": "search-session-1",
-                    "item_list": [{
-                        "id": "7591234567890123460",
-                        "desc": "Camping lantern one",
-                        "stats": {"diggCount": 1000},
-                    }],
-                },
-            }),
-            self.response({
-                "status_code": 0,
-                "has_more": 0,
-                "cursor": 24,
-                "data": {"item_list": [{
-                    "id": "7591234567890123461",
-                    "desc": "Camping lantern two",
-                    "stats": {"diggCount": 2000},
-                }]},
-            }),
+            self.response({"videos": [
+                {"id": "7591234567890123460", "description": "Camping lamp one", "statistics": {"number_of_hearts": 1000}},
+                {"id": "7591234567890123461", "description": "Camping lamp two", "statistics": {"number_of_hearts": 2000}},
+            ]}),
+            self.response({"search_item_list": [
+                {"aweme_info": {"id": "7591234567890123461", "desc": "Duplicate lamp", "stats": {"diggCount": 2000}}},
+                {"aweme_info": {"id": "7591234567890123462", "desc": "Camping lamp three", "stats": {"diggCount": 3000}}},
+            ]}),
         ]
 
-        videos = self.analyzer.search_viral_videos("camping lantern", min_likes=0, count=2)
+        videos = self.analyzer.search_viral_videos("camping lamp", min_likes=0, count=3)
 
         self.assertEqual([video["video_id"] for video in videos], [
-            "7591234567890123460", "7591234567890123461",
+            "7591234567890123462", "7591234567890123461", "7591234567890123460",
         ])
         self.assertEqual(mock_get.call_count, 2)
-        self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["cursor"], 12)
-        self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["search_id"], "search-session-1")
+        self.assertEqual(self.analyzer.last_search_diagnostics["selected_provider"], "multi")
+        self.assertEqual(self.analyzer.last_search_diagnostics["selected_items"], 3)
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_api23_does_not_treat_generic_items_as_video_results(self, mock_get):
+    def test_provider_http_failure_is_invisible_when_next_source_works(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "download5")
         mock_get.side_effect = [
-            self.response({
-                "status_code": 0,
-                "items": [{"id": "7591234567890123462", "title": "search suggestion"}],
-            }),
-            self.response({
-                "code": 0,
-                "data": {"videos": [{
-                    "id": "7591234567890123463",
-                    "title": "Camping light review",
-                    "digg_count": 1500,
-                }]},
-            }),
+            self.response({}, status=429),
+            self.response({"code": 0, "data": {"videos": [{
+                "id": "7591234567890123463",
+                "title": "Camping light review",
+                "digg_count": 1500,
+            }]}}),
         ]
 
         videos = self.analyzer.search_viral_videos("camping light", min_likes=0, count=1)
 
-        self.assertEqual(videos[0]["video_id"], "7591234567890123463")
-        self.assertEqual(videos[0]["search_provider"], "scraper7")
-        self.assertEqual(self.analyzer.last_search_diagnostics["providers"]["api23"]["raw_items"], 0)
+        self.assertEqual(videos[0]["search_provider"], "download5")
+        self.assertIn("HTTP 429", self.analyzer.last_search_diagnostics["providers"]["api6"]["error"])
+        self.assertNotIn(self.analyzer.api_key, repr(self.analyzer.last_search_diagnostics))
 
-    def test_api23_business_status_is_case_insensitive_and_checks_nested_data(self):
-        self.assertEqual(self.analyzer._api23_business_error({"status": "SUCCESS"}), "")
-        self.assertIn(
-            "业务状态 4",
-            self.analyzer._api23_business_error({
-                "data": {"status_code": 4, "status_msg": "temporarily unavailable"},
-            }),
-        )
+    def test_provider_parameter_adapters_cover_all_seven_sources(self):
+        expected_modes = {
+            "api6": ("query", 0),
+            "scraptik": ("keyword", 10),
+            "scraper7": ("keywords", 30),
+            "download5": ("keywords", 10),
+            "tokapi": ("keyword", 10),
+            "download1": ("keywords", 10),
+            "api15": ("keywords", 10),
+        }
+        for provider_id, (keyword_field, expected_count) in expected_modes.items():
+            with self.subTest(provider=provider_id):
+                params = self.analyzer._provider_params(
+                    self.analyzer.SEARCH_PROVIDERS[provider_id], "picture light", 50,
+                )
+                self.assertEqual(params[keyword_field], "picture light")
+                if provider_id != "api6":
+                    self.assertEqual(params["count"], expected_count)
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_both_empty_returns_one_combined_actionable_message(self, mock_get):
+    def test_all_empty_returns_one_provider_agnostic_message(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
-            self.response({"status_code": 0, "item_list": []}),
-            self.response({"code": 0, "data": {"videos": []}}),
+            self.response({"videos": []}),
+            self.response({"search_item_list": []}),
         ]
 
         videos = self.analyzer.search_viral_videos("camping lamp", min_likes=500, count=10)
 
         self.assertEqual(videos, [])
         message = self.analyzer.empty_result_message()
-        self.assertIn("API23 已自动回退到 TikTok Scraper7", message)
+        self.assertIn("所有可用搜索源", message)
         self.assertIn("与最低点赞数无关", message)
 
     @patch("tiktok_viral_analyzer.requests.get")
-    def test_both_provider_failures_raise_only_after_fallback_and_redact_key(self, mock_get):
+    def test_all_provider_failures_raise_only_after_chain_and_redact_key(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
             self.response({}, status=403),
             self.response({}, status=429),
         ]
 
-        with self.assertRaisesRegex(Scraper7SearchError, "API23 与 TikTok Scraper7 均未完成搜索") as raised:
+        with self.assertRaisesRegex(Scraper7SearchError, "TikTok 多源搜索链均未完成") as raised:
             self.analyzer.search_viral_videos("camping lamp", min_likes=500, count=10)
 
         self.assertEqual(mock_get.call_count, 2)

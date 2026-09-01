@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940" role="img" aria-labelledby="title desc">
   <title id="title">ViralX 证据优先串联分析流程</title>
-  <desc id="desc">关键词先通过 TikTok API23 发现候选，异常或没有有效候选时自动回退 Scraper7；视频直链跳过搜索。ViralX Worker 固定使用 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，再由上方视觉模型识别逐镜事实并基于合并证据终审。</desc>
+  <desc id="desc">关键词通过多个 TikTok 搜索源自动切换、合并和去重；视频直链跳过搜索。ViralX Worker 固定使用 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，再由上方视觉模型识别逐镜事实并基于合并证据终审。</desc>
   <defs>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
       <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F0F0F" flood-opacity="0.08"/>
@@ -60,12 +60,12 @@
     </g>
 
     <text x="94" y="438" class="label" fill="#656565">01 · SEARCH</text>
-    <text x="94" y="485" font-size="27" font-weight="700" fill="#0F0F0F">API23 → Scraper7</text>
+    <text x="94" y="485" font-size="25" font-weight="700" fill="#0F0F0F">多源无感搜索</text>
     <text x="94" y="517" font-size="21" font-weight="700" fill="#0F0F0F">发现候选视频</text>
     <line x1="94" y1="548" x2="304" y2="548" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="94" y="583" class="body muted">API23 优先发现</text>
-    <text x="94" y="614" class="body muted">失败 / 无候选自动回退</text>
-    <text x="94" y="645" class="body muted">统一 URL、热度与平台数据</text>
+    <text x="94" y="583" class="body muted">故障 / 空结果自动换源</text>
+    <text x="94" y="614" class="body muted">跨源补足并按帖子去重</text>
+    <text x="94" y="645" class="body muted">统一身份、热度与平台数据</text>
 
     <text x="392" y="438" class="label" fill="#656565">02 · COLLECT</text>
     <text x="392" y="485" font-size="29" font-weight="700" fill="#0F0F0F">TK Note</text>
@@ -105,7 +105,7 @@
     <path d="M1206 540 H1234" class="line"/>
 
     <rect x="70" y="756" width="260" height="54" rx="27" fill="#E9D352"/>
-    <text x="94" y="790" class="small" fill="#0F0F0F">双链路只负责搜索发现</text>
+    <text x="94" y="790" class="small" fill="#0F0F0F">多源链只负责搜索发现</text>
     <text x="366" y="789" class="small muted">全程返回 NDJSON 五阶段真实进度</text>
     <path d="M1388 682 V736" class="line"/>
 

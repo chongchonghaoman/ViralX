@@ -288,7 +288,7 @@ def build_health_payload(config_override=None, runtime_override=None):
         'status': 'ok',
         'runtime': runtime,
         'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
-        'keyword_search_strategy': 'api23-first-scraper7-fallback',
+        'keyword_search_strategy': TikTokViralAnalyzer.SEARCH_STRATEGY,
         'analysis_provider': provider,
         'analysis_ready': readiness.get(mode, False),
         'configuration_issues': {
@@ -354,12 +354,12 @@ def build_analyze_response(config_override=None, max_videos=None):
             else:
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'running',
-                    'stage_label': 'API23 正在搜索候选视频；无结果时自动回退 Scraper7', 'stage_progress': 6,
+                    'stage_label': '正在从多个搜索源发现候选；空结果或故障会自动切换', 'stage_progress': 6,
                 }, ensure_ascii=False) + '\n'
                 if not current_config.get('rapidapi_key'):
                     yield json.dumps({
                         'status': 'error',
-                        'message': 'TikTok 关键词搜索尚未配置 RAPIDAPI_KEY；同一 Key 用于 API23 与 Scraper7，也可以直接粘贴视频链接',
+                        'message': 'TikTok 关键词发现尚未配置 RapidAPI Key；同一 Key 用于已订阅的多源搜索链，也可以直接粘贴视频链接',
                         'done': True,
                     }, ensure_ascii=False) + '\n'
                     return
@@ -380,9 +380,8 @@ def build_analyze_response(config_override=None, max_videos=None):
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'complete',
                     'stage_label': (
-                        f"Scraper7 自动回退已找到并筛选 {len(video_data)} 条候选视频"
-                        if tiktok.last_search_diagnostics.get('selected_provider') == 'scraper7'
-                        else f"API23 已找到并筛选 {len(video_data)} 条候选视频"
+                        f"多源搜索已从 {len(set(tiktok.last_search_diagnostics.get('result_providers') or [])) or 1} 个来源"
+                        f"合并并筛选 {len(video_data)} 条候选视频"
                     ),
                     'stage_progress': 18,
                 }, ensure_ascii=False) + '\n'

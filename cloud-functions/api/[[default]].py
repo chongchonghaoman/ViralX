@@ -46,7 +46,7 @@ def _load_tiktok_analyzer_source():
         module_path = PROJECT_ROOT / "tiktok_viral_analyzer.py"
     source_bytes = module_path.read_bytes()
     namespace = {
-        "__name__": "viralx_tiktok_analyzer_api23_first_v3",
+        "__name__": "viralx_tiktok_analyzer_multisource_v4",
         "__file__": str(module_path),
         "__package__": "",
     }
@@ -60,7 +60,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-09-01-api23-first-search-v3"
+VIRALX_RELEASE = "2026-09-01-multisource-search-v4"
 DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
 PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
 WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
@@ -309,7 +309,7 @@ def health():
         "release": VIRALX_RELEASE,
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
-        "keyword_search_strategy": "api23-first-scraper7-fallback",
+        "keyword_search_strategy": TikTokViralAnalyzer.SEARCH_STRATEGY,
         "keyword_search_source": TIKTOK_ANALYZER_SOURCE_SHA,
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
@@ -385,7 +385,7 @@ def analyze():
                 if not config["rapidapi_key"]:
                     yield json.dumps({
                         "status": "error",
-                        "message": "TikTok 关键词搜索尚未配置 RAPIDAPI_KEY；同一 Key 用于 API23 与 Scraper7，也可以直接粘贴视频链接",
+                        "message": "TikTok 关键词发现尚未配置 RapidAPI Key；同一 Key 用于已订阅的多源搜索链，也可以直接粘贴视频链接",
                         "done": True,
                     }, ensure_ascii=False) + "\n"
                     return

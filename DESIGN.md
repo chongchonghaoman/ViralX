@@ -112,7 +112,7 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
   connection performs frame-fact recognition and final evidence synthesis. A separate shot model,
   `auto` fallback, LibTV-only, and collection-only remain expert troubleshooting choices.
 - The first settings viewport asks for an outcome and two credentials: one shared RapidAPI Key for
-  API23-first keyword discovery with automatic Scraper7 fallback, then a complete final-model
+  provider-neutral multi-source keyword discovery, then a complete final-model
   connection with Base URL, API Key and model ID.
   Qwen3-VL Flash is the recommended default and the capability note requires a video-capable model.
   Direct-video ingestion remains a compatibility path, not the product's primary information architecture.
@@ -174,6 +174,8 @@ change this sequence.
 - static/cloud-config.js: session-only overrides plus endpoint routing to the public Worker.
 - static/assets/viralx-title-shuei-wide.svg: exact one-line outlined homepage claim.
 - static/assets/viralx-title-shuei-stacked.svg: exact two-line outlined mobile claim.
+- static/assets/viralx-title-shuei-stacked.webp: lossless mobile raster fallback generated from the exact
+  outlined claim, used to avoid narrow-screen external-SVG rendering gaps.
 - static/assets/viralx-signal-orbit-640.webp: mobile and compact-display hero source.
 - static/assets/viralx-signal-orbit-1024.webp: desktop and high-density hero source.
 
@@ -183,11 +185,11 @@ change this sequence.
   analysis studio and distinguishes Worker online, owner configuration incomplete, and Worker offline.
   An offline primary action explains that static cases remain available; it never sends visitors to
   Connector setup. Search readiness and analysis readiness are reported separately: keyword input needs
-  the API23-first / Scraper7-fallback chain plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
+  the multi-source search chain plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
   needs the analysis path. A missing search Key must never block a valid direct-video analysis.
-- The dual search chain is explained at the source field: video URLs bypass it, while keyword discovery
+- The multi-source search chain is explained at the source field: video URLs bypass it, while keyword discovery
   needs one RapidAPI Key. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `TikTok API23 -> Scraper7 fallback -> TK Note -> ShotLoom cut/frame ->
+- The settings page presents the fixed contract `TikTok multi-source discovery -> TK Note -> ShotLoom cut/frame ->
   configured visual model -> evidence merge -> same model final synthesis`. TK Note is marked required,
   ShotLoom + inherit is the default, LibTV is an explicit fallback, and collection-only states plainly
   that it will not generate a final report.
@@ -264,16 +266,19 @@ change this sequence.
 ## Source-aware readiness record — 2026-08-31
 
 - Split public readiness into two capabilities instead of one misleading master switch. Keyword discovery
-  requires the API23 / Scraper7 search chain and the complete evidence pipeline; direct HTTP(S) video input bypasses only discovery.
+  requires the multi-source search chain and the complete evidence pipeline; direct HTTP(S) video input bypasses only discovery.
 
-## Search fallback record — 2026-09-01
+## Seamless multi-source search record — 2026-09-01
 
-- Added API23 as the primary keyword-discovery provider without adding a second credential field.
-- Business errors, HTTP failures, empty responses, invalid post identities, semantic mismatches and
-  threshold-empty results automatically continue through Scraper7 inside the same analysis action.
-- Both adapters normalize into one video contract before TK Note, so collection, shot evidence and final
-  analysis do not branch by search provider. The interface reports the selected source only as concise
-  progress text; it asks for recovery only when both providers fail.
+- Replaced the two-provider fallback with seven active keyword-search adapters in a quality-ordered chain:
+  API6, ScrapTik, Scraper7, Download5 Search, TokApi, Download1 Search and API15. API23 remains a compatibility
+  adapter but is not in the production default after repeated successful responses containing zero candidates.
+- HTTP failures, quota limits, business errors, empty responses, invalid post identities, semantic mismatches
+  and threshold-empty results continue through the next source inside the same user action.
+- Every source normalizes into one video contract before TK Note. Results are merged across providers, deduplicated
+  by verified numeric post ID, globally ranked, and stop consuming sources as soon as the requested target is met.
+- The settings page exposes one “TikTok multi-source discovery” credential instead of provider selection. The
+  analysis page reports one search stage and a merged result count; provider diagnostics remain audit-only.
 - Added a short health-check timeout so an unreachable home Worker resolves to an honest offline state
   instead of leaving the interface stuck on “正在连接服务”. Long-running analysis streams remain unbounded by
   that probe timeout.

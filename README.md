@@ -31,17 +31,16 @@
 ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作台和 Agent-native Skill。它不会把视频链接直接丢给模型并让模型凭印象作答，而是先确认帖子身份、下载真实原片、生成可核验的视觉与文本证据，再进行综合分析。
 
 ```text
-关键词 ─→ TikTok API23 ─成功────────┐
-                  └失败 / 无候选─→ Scraper7 ─┤
-视频直链 ─────────────────────────────┤
-                                      ├→ TK Note 下载真实原片与平台证据
-                                      │   搜索媒体提示 → yt-dlp → 隔离 Chrome 兜底
-                                  ↓ 同一份本地原片
-                         ShotLoom Core 切镜与抽帧
-                                  ↓ 上方视觉模型识别逐镜事实
-                         统一证据包 + 质量门禁
-                                  ↓ 同一模型基于完整证据终审
-                         最终报告与可执行复刻脚本
+关键词 ─→ 多源无感搜索 ── 自动切换 / 合并 / 去重 ─┐
+视频直链 ─────────────────────────────────────────┤
+                                                  ├→ TK Note 下载真实原片与平台证据
+                                                  │   搜索媒体提示 → yt-dlp → 隔离 Chrome 兜底
+                                              ↓ 同一份本地原片
+                                     ShotLoom Core 切镜与抽帧
+                                              ↓ 上方视觉模型识别逐镜事实
+                                     统一证据包 + 质量门禁
+                                              ↓ 同一模型基于完整证据终审
+                                     最终报告与可执行复刻脚本
 ```
 
 面向人的产品界面是 Web；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的能力由站点所有者运行的 ViralX Worker 执行，网页访客无需安装 Connector。仓库同时提供 Agent-native Skill，让 Codex 等 Agent 直接运行同一套证据方法，不需要第二套客户端界面。
@@ -50,7 +49,9 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 
 这次重构首先解决四个问题：找的是不是目标视频、下载的是不是同一条原片、模型实际看到了什么、证据失败后系统是否会停止。
 
-- **搜索自动容灾**：关键词先调用 TikTok API23；服务异常、业务状态非零、空结果、帖子 ID 无效、品类不匹配或点赞筛选后无候选时，同一次任务自动转到 Scraper7。两项服务共用一个 `RAPIDAPI_KEY` 配置位。
+- **七路无感搜索链**：关键词按 `API6 → ScrapTik → Scraper7 → Download5 Search → TokApi → Download1 Search → API15` 自动发现候选；任一路服务异常、配额受限、空结果或候选不足时，同一次任务无感换源。
+- **跨源合并与去重**：所有来源先归一化成同一个帖子合同，再按真实数字帖子 ID 去重、语义相关性和互动数据排序；达到目标数量立即停止，避免无意义消耗配额。
+- **一把搜索 Key**：已订阅的关键词搜索源共用一个 `RAPIDAPI_KEY` 配置位。API23 保留兼容代码，但因实测持续返回空候选，不进入默认生产链。
 - **TK Note 是固定采集阶段**：搜索链找到的每个候选都会进入 TK Note，下载对应 `source.mp4`、帖子元数据、字幕 / ASR 与评论证据；失败就阻断后续步骤。
 - **采集不再单押 yt-dlp**：搜索响应若含真实媒体地址只在内存中交给 TK Note；网页挑战出现时自动使用隔离的本机 Chrome / Edge 播放器兜底，不导出 Cookie，也不保存签名地址。
 - **刷新不会破坏有效原片**：网页上的“刷新证据”保留已校验 `source.mp4`，只重建字幕、ASR 与派生证据；显式重下也必须先校验临时文件，再原子替换旧原片。
@@ -66,7 +67,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 - **Agent-native Skill**：`$viralx-agent` 使用 TK Note、FFmpeg 和当前 Codex 模型完成取证与分析，不要求用户额外购买模型 API。
 - **网页改为集中式 Worker**：Edge 前端通过受限 HTTPS API 调用同一套证据链；访客不再连接自己的 `127.0.0.1`，离线时仍可浏览产品方法与界面内容。
 
-原有能力继续保留：TikTok API23 + Scraper7 关键词发现、品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、Obsidian 导出、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
+原有能力继续保留：品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、Obsidian 导出、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
 
 ![ViralX 网页设置](docs/assets/viralx-settings.png)
 
@@ -78,7 +79,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 
 | 阶段 | 责任 | 成功条件 | 失败后的行为 |
 | --- | --- | --- | --- |
-| 01 · 发现视频 | API23 优先；失败或无有效候选自动回退 Scraper7；直链跳过 | 可打开的真实帖子 URL 与平台指标 | 两条链路都无候选才停止 |
+| 01 · 发现视频 | 七个搜索源按质量顺序自动切换、合并和去重；直链跳过 | 可打开的真实帖子 URL 与平台指标 | 所有可用来源都无候选才停止 |
 | 02 · TK Note 采集 | 缓存优先；搜索媒体提示、yt-dlp、隔离 Chrome 依次采集原片，再生成元数据、字幕 / ASR 与资产清单 | 原片非空、可解码；帖子 ID 一致 | 保留旧证据；无可用原片才阻断 |
 | 03 · 镜头取证 | ShotLoom 切镜、抽帧；上方视觉模型识别逐镜事实 | 完整时间线、镜头 ID、视觉事实、原片哈希 | 阻断；仅显式配置时回退 LibTV |
 | 04 · 合并证据 | 合并平台、TK Note 与镜头证据 | `viralx.evidence_bundle.v1` | 保存部分证据并阻断最终模型 |
@@ -86,7 +87,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 
 三个角色不能混淆：
 
-- TikTok API23 与 Scraper7 组成**关键词发现链**，不是原片下载器；API23 是主链路，Scraper7 是自动回退。视频直链不需要 RapidAPI。
+- 多个 RapidAPI 搜索源组成**关键词发现链**，不是原片下载器；ViralX 自动切换、补足和去重，页面不要求用户选择供应商。视频直链不需要 RapidAPI。
 - TK Note 是**固定的原片和平台证据采集器**，每个候选都必须经过；它会复用已验证缓存，并在 yt-dlp 受阻时使用隔离浏览器兜底，后续分析始终读取同一份 `source.mp4`。
 - ShotLoom Core 是**切镜与关键帧编排器**，不是另一个模型；关键帧事实由上方配置的视觉模型识别。
 - 上方视觉模型同时承担**逐镜事实识别与最终证据综合**，但任何上游失败都不能靠模型猜测兜底。
@@ -96,7 +97,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 | 使用方式 | 必需项 | 可选项 |
 | --- | --- | --- |
 | 粘贴单条 TikTok / 抖音链接 | ViralX Worker、TK Note、ShotLoom、可用视觉模型 API | LibTV 故障回退；RapidAPI 不需要 |
-| 输入关键词搜索并分析 | 上述配置 + API23 / Scraper7 共用的 `RAPIDAPI_KEY` | LibTV 备用 |
+| 输入关键词搜索并分析 | 上述配置 + 已订阅搜索源共用的 `RAPIDAPI_KEY` | LibTV 备用 |
 | `只采集` 模式 | ViralX Worker + TK Note | 不调用镜头模型和最终模型 |
 | Codex 中使用 `$viralx-agent` | Codex 当前模型、Python、FFmpeg；直链再需要 TK Note | **不需要独立模型 API**；关键词发现服务另算 |
 
@@ -106,7 +107,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 
 | 能力 | 实际行为 |
 | --- | --- |
-| TikTok 双链路搜索 | 先调用 API23 `/api/search/video`；无可用候选时自动调用 Scraper7 `/feed/search`，统一归一化帖子 ID、链接、互动数据与语义相关性 |
+| TikTok 多源无感搜索 | 七个可用搜索源自动切换、补足和去重，统一归一化帖子 ID、链接、互动数据与语义相关性；任一单点故障不会中断任务 |
 | 品类消歧 | 区分 `picture light` 与 `light painting` 等相邻但不同的内容 |
 | TK Note 采集 | 缓存优先，按搜索媒体提示 → yt-dlp → 隔离 Chrome 兜底；保存原片、元数据、字幕 / ASR、资产清单和警告 |
 | ShotLoom Core | 本地切镜与关键帧采样；把帧交给上方视觉模型并检查时间线质量 |
@@ -189,7 +190,7 @@ Browser
 ├── 可选会话级 BYOK
 ├── 流式进度、报告与导出
 └── HTTPS → owner-operated ViralX Worker
-    ├── TikTok API23 → Scraper7（关键词发现与自动回退）
+    ├── TikTok multi-source search（关键词发现、自动切换、合并与去重）
     ├── TK Note（缓存 / 搜索媒体提示 / yt-dlp / 隔离 Chrome）
     ├── ShotLoom Core（默认镜头证据）
     ├── official LibTV CLI（可选回退）

@@ -40,8 +40,8 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload['runtime'], 'local')
-        self.assertEqual(payload['keyword_search_provider'], 'api23+scraper7')
-        self.assertEqual(payload['keyword_search_strategy'], 'api23-first-scraper7-fallback')
+        self.assertEqual(payload['keyword_search_provider'], 'rapidapi-multisource')
+        self.assertEqual(payload['keyword_search_strategy'], 'api6-scraptik-scraper7-download5-tokapi-download1-api15')
         self.assertIsInstance(payload['analysis_ready'], bool)
         self.assertTrue(all(isinstance(value, bool) for value in payload['configured'].values()))
         self.assertEqual(payload['libtv']['auth'], 'web')
@@ -150,8 +150,8 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payloads[0]['stage'], 'discovery')
         payload = payloads[-1]
         self.assertEqual(payload['status'], 'error')
-        self.assertIn('API23 与 Scraper7', payload['message'])
-        self.assertIn('RAPIDAPI_KEY', payload['message'])
+        self.assertIn('多源搜索链', payload['message'])
+        self.assertIn('RapidAPI Key', payload['message'])
 
 
 if __name__ == '__main__':

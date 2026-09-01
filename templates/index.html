@@ -58,7 +58,7 @@
         <h1 id="hero-title">
           <picture class="hero-title-art" aria-hidden="true">
             <source media="(min-width: 40rem)" srcset="{{ url_for('static', filename='assets/viralx-title-shuei-wide.svg') }}">
-            <img src="{{ url_for('static', filename='assets/viralx-title-shuei-stacked.svg') }}" width="5069" height="2070" alt="" fetchpriority="high">
+            <img src="{{ url_for('static', filename='assets/viralx-title-shuei-stacked.webp') }}" width="1014" height="414" alt="" fetchpriority="high">
           </picture>
           <span class="visually-hidden">把爆款拆到每一秒</span>
         </h1>
@@ -79,7 +79,7 @@
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
             <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
-            <small class="source-help" id="source-help">搜索主题先由 API23 找视频，失败或无候选时自动转 Scraper7；随后 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，上方视觉模型基于证据识别与终审。视频直链只跳过第一步。</small>
+            <small class="source-help" id="source-help">搜索主题由多源搜索链自动发现、补足并去重；随后 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，上方视觉模型基于证据识别与终审。视频直链只跳过第一步。</small>
           </div>
           <button class="btn btn-primary" id="analyze-btn" type="button">检查运行环境</button>
         </div>
@@ -198,7 +198,7 @@
         <h2 id="workflow-title">从来源，<br>一路走到执行。</h2>
       </header>
       <div class="workflow-list">
-        <article><span>01</span><h3>发现视频</h3><p>API23 优先，失败或无候选时自动转 Scraper7；视频直链直接进入采集。</p></article>
+        <article><span>01</span><h3>发现视频</h3><p>多源搜索自动切换、补足并去重；视频直链直接进入采集。</p></article>
         <article><span>02</span><h3>TK Note 采集</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
         <article><span>03</span><h3>镜头取证</h3><p>ShotLoom Core 为每段画面生成时间线、镜头 ID 和可核验视觉事实；LibTV 仅作备用。</p></article>
         <article><span>04</span><h3>合并与终审</h3><p>平台、转写与镜头证据进入所选模型；缺一环就阻断，不输出猜测报告。</p></article>

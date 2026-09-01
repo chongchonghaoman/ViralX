@@ -27,7 +27,7 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | Environment variable | Purpose |
 | --- | --- |
 | `VIRALX_BASE_URL` | Override the default `https://viralx.metrolabs.mobi` server |
-| `RAPIDAPI_KEY` | Shared key for API23-first keyword discovery and automatic Scraper7 fallback; not used for direct URLs |
+| `RAPIDAPI_KEY` | Shared key for the subscribed multi-source keyword-discovery chain; not used for direct URLs |
 | `ANALYSIS_MODE` | Fixed value `pipeline`; legacy mode values are migrated |
 | `MODEL_PROVIDER` | `openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom` |
 | `MODEL_API_KEY`, `MODEL_NAME` | Key and model ID for the selected provider |

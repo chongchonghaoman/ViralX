@@ -457,7 +457,7 @@ def download_video(url: str, out_dir: Path, args: argparse.Namespace) -> tuple[d
     clean_download_workfiles(out_dir)
     failures: list[str] = []
 
-    # API23 or Scraper7 may supply a real, short-lived media transport URL with
+    # A keyword-search provider may supply a real, short-lived media transport URL with
     # the search result. Consume it only in memory and never persist it.
     media_hint = str(os.environ.get("VIRALX_TK_MEDIA_URL") or "").strip()
     if media_hint:

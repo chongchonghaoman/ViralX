@@ -93,8 +93,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('SettingsValidationError("rapidapi_key"', self.settings_js)
         self.assertNotIn("可选 · 视频直链不需要搜索 Key", self.settings)
         self.assertEqual(self.settings.count('id="rapidapi_key"'), 1)
-        self.assertIn("API23 优先", self.settings)
-        self.assertIn("自动转到 Scraper7", self.settings)
+        self.assertIn("TikTok 多源发现", self.settings)
+        self.assertIn("自动换源", self.settings)
 
     def test_settings_explains_the_fixed_collection_and_visual_evidence_contract(self):
         self.assertIn("TK Note 采集故障处理", self.settings)

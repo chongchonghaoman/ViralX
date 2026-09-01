@@ -39,15 +39,83 @@ class Scraper7SearchError(RapidAPISearchError):
 
 
 class TikTokSearchChainError(Scraper7SearchError):
-    """Both providers failed; remains catchable as the legacy fallback error."""
+    """All attempted providers failed; remains catchable as the legacy fallback error."""
 
 
 class TikTokViralAnalyzer:
-    """Discover TikTok videos through API23 with an automatic Scraper7 fallback."""
+    """Discover TikTok videos through a quota-aware multi-provider search chain."""
 
-    SEARCH_PROVIDER = "api23+scraper7"
-    PRIMARY_SEARCH_PROVIDER = "api23"
+    SEARCH_PROVIDER = "rapidapi-multisource"
+    SEARCH_STRATEGY = "api6-scraptik-scraper7-download5-tokapi-download1-api15"
+    PRIMARY_SEARCH_PROVIDER = "api6"
     FALLBACK_SEARCH_PROVIDER = "scraper7"
+    DEFAULT_SEARCH_PROVIDER_CHAIN = (
+        "api6",
+        "scraptik",
+        "scraper7",
+        "download5",
+        "tokapi",
+        "download1",
+        "api15",
+    )
+    SEARCH_PROVIDERS = {
+        "api6": {
+            "label": "TikTok API6",
+            "host": "tiktok-api6.p.rapidapi.com",
+            "url": "https://tiktok-api6.p.rapidapi.com/search/general/query",
+            "params": "api6",
+            "items": "root_videos",
+            "page_size": 20,
+        },
+        "scraptik": {
+            "label": "ScrapTik",
+            "host": "scraptik.p.rapidapi.com",
+            "url": "https://scraptik.p.rapidapi.com/search-posts",
+            "params": "mobile",
+            "items": "search_items",
+            "page_size": 10,
+        },
+        "scraper7": {
+            "label": "TikTok Scraper7",
+            "host": "tiktok-scraper7.p.rapidapi.com",
+            "url": "https://tiktok-scraper7.p.rapidapi.com/feed/search",
+            "params": "feed",
+            "items": "data_videos",
+            "page_size": 30,
+        },
+        "download5": {
+            "label": "TikTok Download5 Search",
+            "host": "tiktok-download5.p.rapidapi.com",
+            "url": "https://tiktok-download5.p.rapidapi.com/feedSearch",
+            "params": "feed",
+            "items": "data_videos",
+            "page_size": 10,
+        },
+        "tokapi": {
+            "label": "TokApi Mobile",
+            "host": "tokapi-mobile-version.p.rapidapi.com",
+            "url": "https://tokapi-mobile-version.p.rapidapi.com/v1/search/post",
+            "params": "mobile",
+            "items": "search_items",
+            "page_size": 10,
+        },
+        "download1": {
+            "label": "TikTok Download Video1 Search",
+            "host": "tiktok-download-video1.p.rapidapi.com",
+            "url": "https://tiktok-download-video1.p.rapidapi.com/feedSearch",
+            "params": "feed",
+            "items": "data_videos",
+            "page_size": 10,
+        },
+        "api15": {
+            "label": "TikTok API15",
+            "host": "tiktok-api15.p.rapidapi.com",
+            "url": "https://tiktok-api15.p.rapidapi.com/index/Tiktok/searchVideoListByKeywords",
+            "params": "api15",
+            "items": "data_videos",
+            "page_size": 10,
+        },
+    }
     API23_SEARCH_HOST = "tiktok-api23.p.rapidapi.com"
     API23_SEARCH_URL = f"https://{API23_SEARCH_HOST}/api/search/video"
     SCRAPER7_SEARCH_HOST = "tiktok-scraper7.p.rapidapi.com"
@@ -84,6 +152,7 @@ class TikTokViralAnalyzer:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.api_key = ""  # RapidAPI key; only used for keyword discovery.
+        self.search_provider_chain = tuple(self.DEFAULT_SEARCH_PROVIDER_CHAIN)
         self.last_search_diagnostics: Dict[str, Any] = {}
 
     @staticmethod
@@ -132,11 +201,15 @@ class TikTokViralAnalyzer:
         ):
             post_id = cls._post_id_from_value(value)
             if post_id:
-                author = cls._mapping(item.get("author"))
+                author_value = item.get("author")
+                author = cls._mapping(author_value)
                 unique_id = str(
                     author.get("unique_id")
                     or author.get("uniqueId")
                     or author.get("sec_uid")
+                    or (author_value if isinstance(author_value, str) else "")
+                    or item.get("author_name")
+                    or item.get("unique_id")
                     or "tiktok"
                 ).strip().lstrip("@")
                 safe_author = quote(unique_id or "tiktok", safe="._-")
@@ -262,14 +335,32 @@ class TikTokViralAnalyzer:
         selected_provider: str = "",
         fallback_used: bool = False,
         fallback_reason: str = "",
+        attempted_providers: Iterable[str] = (),
+        result_providers: Iterable[str] = (),
+        selected_items: int = 0,
     ) -> None:
-        active = providers.get(selected_provider) or providers.get(self.FALLBACK_SEARCH_PROVIDER) or {}
+        provider_values = [value for value in providers.values() if isinstance(value, Mapping)]
+        active = providers.get(selected_provider) or (provider_values[0] if provider_values else {})
         self.last_search_diagnostics = {
             **active,
             "provider": self.SEARCH_PROVIDER,
             "selected_provider": selected_provider,
             "fallback_used": fallback_used,
             "fallback_reason": fallback_reason,
+            "strategy": self.SEARCH_STRATEGY,
+            "attempted_providers": list(attempted_providers),
+            "result_providers": list(dict.fromkeys(result_providers)),
+            "selected_items": selected_items,
+            "raw_items": sum(self._integer(item.get("raw_items")) for item in provider_values),
+            "valid_post_ids": sum(self._integer(item.get("valid_post_ids")) for item in provider_values),
+            "normalized_items": sum(self._integer(item.get("normalized_items")) for item in provider_values),
+            "filtered_by_likes": sum(self._integer(item.get("filtered_by_likes")) for item in provider_values),
+            "invalid_post_ids": sum(self._integer(item.get("invalid_post_ids")) for item in provider_values),
+            "rejected_irrelevant": sum(self._integer(item.get("rejected_irrelevant")) for item in provider_values),
+            "max_likes": max((self._integer(item.get("max_likes")) for item in provider_values), default=0),
+            "responses": sum(self._integer(item.get("responses")) for item in provider_values),
+            "recognized_lists": sum(self._integer(item.get("recognized_lists")) for item in provider_values),
+            "requests": sum(self._integer(item.get("requests")) for item in provider_values),
             "providers": dict(providers),
         }
 
@@ -297,10 +388,28 @@ class TikTokViralAnalyzer:
         author = cls._mapping(author_value)
         stats = cls._mapping(item.get("stats"))
         stats_v2 = cls._mapping(item.get("statsV2") or item.get("stats_v2"))
+        statistics = cls._mapping(item.get("statistics") or item.get("statistics_v2"))
         video = cls._mapping(item.get("video"))
         video_id, source_url = cls._post_identity(item)
         media_transport_url = cls._safe_media_transport_url(item)
-        title = str(item.get("title") or item.get("desc") or item.get("description") or "")
+
+        def text_value(value: Any) -> str:
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, list):
+                return " ".join(filter(None, (text_value(child) for child in value))).strip()
+            if isinstance(value, Mapping):
+                for key in ("text", "title", "desc", "description"):
+                    result = text_value(value.get(key))
+                    if result:
+                        return result
+            return ""
+
+        title = ""
+        for value in (item.get("title"), item.get("desc"), item.get("description"), item.get("content_desc")):
+            title = text_value(value)
+            if title:
+                break
 
         challenges = item.get("challenges") if isinstance(item.get("challenges"), list) else []
         hashtags = [
@@ -327,7 +436,7 @@ class TikTokViralAnalyzer:
             hashtags = list(dict.fromkeys(re.findall(r"(?<!\w)#([\w-]+)", title)))
 
         def metric(*keys: str) -> int:
-            for container in (item, stats, stats_v2):
+            for container in (item, stats, stats_v2, statistics):
                 for key in keys:
                     if key in container and container.get(key) not in (None, ""):
                         return cls._integer(container.get(key))
@@ -349,6 +458,8 @@ class TikTokViralAnalyzer:
             or author.get("sec_uid")
             or author.get("id")
             or (author_value if isinstance(author_value, str) else "")
+            or item.get("author_name")
+            or item.get("unique_id")
             or ""
         )
         return {
@@ -356,11 +467,11 @@ class TikTokViralAnalyzer:
             "source_url": source_url,
             "title": title,
             "author": {"unique_id": unique_id},
-            "digg_count": metric("digg_count", "diggCount"),
-            "comment_count": metric("comment_count", "commentCount"),
-            "share_count": metric("share_count", "shareCount"),
-            "play_count": metric("play_count", "playCount"),
-            "collect_count": metric("collect_count", "collectCount"),
+            "digg_count": metric("digg_count", "diggCount", "like_count", "likes", "number_of_hearts"),
+            "comment_count": metric("comment_count", "commentCount", "comments", "number_of_comments"),
+            "share_count": metric("share_count", "shareCount", "shares", "number_of_reposts"),
+            "play_count": metric("play_count", "playCount", "view_count", "views", "number_of_plays"),
+            "collect_count": metric("collect_count", "collectCount", "saves", "number_of_saves"),
             "cover": cover,
             "duration": cls._integer(item.get("duration", video.get("duration"))),
             "hashtags": list(dict.fromkeys(hashtags)),
@@ -544,12 +655,181 @@ class TikTokViralAnalyzer:
 
     @classmethod
     def _normalize_api23_video(cls, item: Dict) -> Dict:
-        return cls._normalize_video(item, cls.PRIMARY_SEARCH_PROVIDER)
+        return cls._normalize_video(item, "api23")
 
     @classmethod
     def _normalize_scraper7_video(cls, item: Dict) -> Dict:
         """Normalize Scraper7's VideoInfo object to ViralX's stable schema."""
         return cls._normalize_video(item, cls.FALLBACK_SEARCH_PROVIDER)
+
+    @classmethod
+    def _provider_items(cls, payload: Any, item_mode: str) -> List[Dict]:
+        root = cls._mapping(payload)
+        if item_mode == "root_videos":
+            value = root.get("videos")
+            return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+        if item_mode == "search_items":
+            value = root.get("search_item_list") or root.get("aweme_list")
+            if not isinstance(value, list):
+                return []
+            items: List[Dict] = []
+            for item in value:
+                if not isinstance(item, Mapping):
+                    continue
+                candidate = item.get("aweme_info") or item.get("awemeInfo") or item
+                if isinstance(candidate, Mapping):
+                    items.append(dict(candidate))
+            return items
+        return cls._scraper7_items(payload)
+
+    @classmethod
+    def _provider_has_video_list(cls, payload: Any, item_mode: str) -> bool:
+        root = cls._mapping(payload)
+        if item_mode == "root_videos":
+            return isinstance(root.get("videos"), list)
+        if item_mode == "search_items":
+            return isinstance(root.get("search_item_list"), list) or isinstance(root.get("aweme_list"), list)
+        return cls._scraper7_has_video_list(payload)
+
+    @classmethod
+    def _provider_response_shape(cls, payload: Any, item_mode: str) -> Dict[str, Any]:
+        root = cls._mapping(payload)
+        nested = cls._mapping(root.get("data"))
+        list_keys: List[str] = []
+        for prefix, container in (("", root), ("data.", nested)):
+            for key in ("videos", "search_item_list", "aweme_list", "items", "video_list", "videoList"):
+                value = container.get(key)
+                if isinstance(value, list):
+                    list_keys.append(f"{prefix}{key}={len(value)}")
+        return {
+            "keys": sorted(str(key) for key in root.keys())[:12],
+            "data_keys": sorted(str(key) for key in nested.keys())[:12],
+            "lists": list_keys,
+            "adapter": item_mode,
+        }
+
+    @classmethod
+    def _provider_business_error(cls, payload: Any) -> str:
+        root = cls._mapping(payload)
+        if "status_code" in root or "status" in root:
+            return cls._api23_business_error(payload)
+        return cls._scraper7_business_error(payload)
+
+    @classmethod
+    def _provider_params(
+        cls,
+        provider: Mapping[str, Any],
+        query: str,
+        limit: int,
+    ) -> Dict[str, Any]:
+        page_size = min(max(cls._integer(provider.get("page_size"), 10), 1), 30)
+        param_mode = str(provider.get("params") or "feed")
+        if param_mode == "api6":
+            return {"query": query, "cursor": 0, "sort_type": 1}
+        if param_mode == "mobile":
+            if str(provider.get("host") or "") == "scraptik.p.rapidapi.com":
+                return {
+                    "keyword": query,
+                    "count": page_size,
+                    "offset": 0,
+                    "use_filters": 0,
+                    "publish_time": 0,
+                    "sort_type": 0,
+                    "region": "US",
+                    "compact": 0,
+                }
+            return {"keyword": query, "count": page_size, "offset": 0, "region": "US"}
+        if param_mode == "api15":
+            return {"keywords": query, "count": page_size, "cursor": 0}
+        return {
+            "keywords": query,
+            "count": page_size,
+            "cursor": 0,
+            "region": "US",
+            "publish_time": 0,
+            "sort_type": 0,
+        }
+
+    def _search_provider_once(
+        self,
+        provider_id: str,
+        search_plan: Mapping[str, Any],
+        threshold: int,
+        limit: int,
+        diagnostics: Dict[str, Any],
+        seen_video_ids: set,
+        videos: List[Dict],
+    ) -> None:
+        provider = self.SEARCH_PROVIDERS.get(provider_id)
+        if not isinstance(provider, Mapping):
+            raise RapidAPISearchError(f"未知搜索来源：{provider_id}")
+        label = str(provider.get("label") or provider_id)
+        host = str(provider.get("host") or "")
+        url = str(provider.get("url") or "")
+        item_mode = str(provider.get("items") or "data_videos")
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "ViralX-Keyword-Search/2.0",
+            "x-rapidapi-host": host,
+            "x-rapidapi-key": self.api_key,
+        }
+        params = self._provider_params(
+            provider,
+            str(search_plan.get("query") or ""),
+            limit,
+        )
+        diagnostics["requests"] += 1
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=self.SEARCH_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            detail = safe_error_message(exc, (self.api_key,))
+            raise RapidAPISearchError(f"{label} 搜索请求失败：{detail}") from exc
+
+        if response.status_code != 200:
+            reason = {
+                401: "拒绝了当前 RapidAPI Key",
+                403: "尚未订阅或无权访问",
+                429: "搜索配额已用完",
+            }.get(response.status_code, "暂时不可用")
+            raise RapidAPISearchError(f"{label} {reason}（HTTP {response.status_code}）")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise RapidAPISearchError(f"{label} 返回了无法解析的响应") from exc
+
+        business_error = self._provider_business_error(payload)
+        if business_error:
+            detail = safe_error_message(business_error, (self.api_key,))
+            raise RapidAPISearchError(f"{label} 搜索失败：{detail}")
+
+        diagnostics["responses"] += 1
+        shape = self._provider_response_shape(payload, item_mode)
+        if shape not in diagnostics["response_shapes"]:
+            diagnostics["response_shapes"].append(shape)
+        if self._provider_has_video_list(payload, item_mode):
+            diagnostics["recognized_lists"] += 1
+        before = len(videos)
+        self._select_provider_items(
+            self._provider_items(payload, item_mode),
+            provider_id,
+            search_plan,
+            threshold,
+            limit,
+            diagnostics,
+            seen_video_ids,
+            videos,
+        )
+        diagnostics["selected_items"] = len(videos) - before
+        print(
+            f"[{provider_id.upper()}] 候选 {diagnostics['raw_items']}，"
+            f"可识别 {diagnostics['normalized_items']}，新增 {diagnostics['selected_items']}，"
+            f"语义错配 {diagnostics['rejected_irrelevant']}，无效帖子 ID {diagnostics['invalid_post_ids']}"
+        )
 
     def _search_api23(
         self,
@@ -777,7 +1057,7 @@ class TikTokViralAnalyzer:
         return "no_usable_candidates"
 
     def search_viral_videos(self, keyword: str, min_likes: int = 10000, count: int = 50) -> List[Dict]:
-        """Use API23 first and continue through Scraper7 when it yields no usable candidates."""
+        """Merge providers until the target is met; failures and empty lists stay invisible to users."""
         clean_keyword = str(keyword or "").strip()
         search_plan = self._search_plan(clean_keyword)
         threshold = max(0, self._integer(min_likes))
@@ -786,65 +1066,87 @@ class TikTokViralAnalyzer:
             self.last_search_diagnostics = {}
             return []
         if not str(self.api_key or "").strip():
-            raise RuntimeError("TikTok 关键词搜索尚未配置 RAPIDAPI_KEY（同一 Key 用于 API23 与 Scraper7）")
+            raise RuntimeError("TikTok 关键词发现尚未配置 RAPIDAPI_KEY；一把 Key 用于已订阅的多源搜索链")
 
-        primary = self._new_provider_diagnostics(
-            self.PRIMARY_SEARCH_PROVIDER, clean_keyword, search_plan, threshold,
-        )
-        fallback = self._new_provider_diagnostics(
-            self.FALLBACK_SEARCH_PROVIDER, clean_keyword, search_plan, threshold,
-        )
+        provider_ids = [
+            provider_id
+            for provider_id in self.search_provider_chain
+            if provider_id in self.SEARCH_PROVIDERS
+        ]
         providers = {
-            self.PRIMARY_SEARCH_PROVIDER: primary,
-            self.FALLBACK_SEARCH_PROVIDER: fallback,
+            provider_id: self._new_provider_diagnostics(
+                provider_id, clean_keyword, search_plan, threshold,
+            )
+            for provider_id in provider_ids
         }
-        primary_error = ""
-        try:
-            videos = self._search_api23(search_plan, threshold, limit, primary)
-        except API23SearchError as exc:
-            primary_error = safe_error_message(exc, (self.api_key,))
-            primary["error"] = primary_error
-            videos = []
+        attempted: List[str] = []
+        videos: List[Dict] = []
+        seen_video_ids: set = set()
 
-        if videos:
-            self._set_chain_diagnostics(providers, selected_provider=self.PRIMARY_SEARCH_PROVIDER)
-            return videos
+        for provider_id in provider_ids:
+            if len(videos) >= limit:
+                break
+            attempted.append(provider_id)
+            diagnostics = providers[provider_id]
+            try:
+                self._search_provider_once(
+                    provider_id,
+                    search_plan,
+                    threshold,
+                    limit,
+                    diagnostics,
+                    seen_video_ids,
+                    videos,
+                )
+            except RapidAPISearchError as exc:
+                diagnostics["error"] = safe_error_message(exc, (self.api_key,))
+                print(f"[SEARCH] {provider_id} 未完成，继续下一来源：{diagnostics['error']}")
+                continue
 
-        fallback_reason = self._fallback_reason(primary, primary_error)
-        print(f"[SEARCH] API23 未产生可用候选（{fallback_reason}），自动回退 Scraper7")
-        try:
-            videos = self._search_scraper7(search_plan, threshold, limit, fallback)
-        except Scraper7SearchError as exc:
-            fallback_error = safe_error_message(exc, (self.api_key,))
-            fallback["error"] = fallback_error
-            self._set_chain_diagnostics(
-                providers,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-            )
-            api23_summary = primary_error or "未返回可用候选"
-            raise TikTokSearchChainError(
-                f"API23 与 TikTok Scraper7 均未完成搜索：API23 {api23_summary}；{fallback_error}"
-            ) from exc
+            if len(videos) < limit:
+                reason = self._fallback_reason(diagnostics)
+                print(f"[SEARCH] {provider_id} 当前累计 {len(videos)}/{limit}（{reason}），继续补足")
 
-        if videos:
-            self._set_chain_diagnostics(
-                providers,
-                selected_provider=self.FALLBACK_SEARCH_PROVIDER,
-                fallback_used=True,
-                fallback_reason=fallback_reason,
-            )
-            return videos
-
+        videos.sort(
+            key=lambda video: (
+                self._integer(video.get("search_relevance")) * 1_000_000_000,
+                self._integer(video.get("digg_count")),
+                self._integer(video.get("comment_count")) * 5,
+                self._integer(video.get("share_count")) * 2,
+                self._integer(video.get("play_count")),
+            ),
+            reverse=True,
+        )
+        videos = videos[:limit]
+        result_providers = [str(video.get("search_provider") or "") for video in videos]
+        unique_result_providers = list(dict.fromkeys(filter(None, result_providers)))
+        selected_provider = (
+            unique_result_providers[0]
+            if len(unique_result_providers) == 1
+            else "multi" if unique_result_providers else ""
+        )
         self._set_chain_diagnostics(
             providers,
-            fallback_used=True,
-            fallback_reason=fallback_reason,
+            selected_provider=selected_provider,
+            fallback_used=len(attempted) > 1,
+            fallback_reason="target_not_met" if len(attempted) > 1 else "",
+            attempted_providers=attempted,
+            result_providers=result_providers,
+            selected_items=len(videos),
         )
+        if videos:
+            return videos
+
+        if attempted and all(providers[provider_id].get("error") for provider_id in attempted):
+            summary = "；".join(
+                f"{provider_id}: {providers[provider_id]['error']}"
+                for provider_id in attempted
+            )
+            raise TikTokSearchChainError(f"TikTok 多源搜索链均未完成：{summary}")
         return []
 
     def empty_result_message(self) -> str:
-        """Explain an empty dual-provider result without exposing credentials or payloads."""
+        """Explain an empty multi-provider result without exposing credentials or payloads."""
         diagnostics = self.last_search_diagnostics or {}
         provider_map = diagnostics.get("providers") if isinstance(diagnostics.get("providers"), Mapping) else {}
         provider_diagnostics = [value for value in provider_map.values() if isinstance(value, Mapping)] or [diagnostics]
@@ -860,31 +1162,31 @@ class TikTokViralAnalyzer:
 
         if raw_items == 0:
             if responses and recognized_lists == 0:
-                return "API23 与 TikTok Scraper7 已响应，但没有可识别的视频列表；接口响应结构可能已经更新。"
+                return "多源搜索链已响应，但没有可识别的视频列表；上游接口结构可能已经更新。"
             if responses:
                 return (
-                    "API23 已自动回退到 TikTok Scraper7，但 item_list / data.videos 都没有返回视频候选。"
-                    "没有候选可供点赞筛选，这与最低点赞数无关；请在 RapidAPI Playground 核对同一关键词。"
+                    "已自动尝试所有可用搜索源，但它们都没有返回视频候选。"
+                    "没有候选可供点赞筛选，这与最低点赞数无关；请稍后重试或换一个更具体的关键词。"
                 )
-            return "API23 与 TikTok Scraper7 都没有完成搜索请求；请检查网络、两项订阅和 RapidAPI Key。"
+            return "多源搜索链没有完成任何请求；请检查网络、RapidAPI 订阅和统一搜索 Key。"
         if normalized_items == 0:
             if rejected_irrelevant:
                 return (
-                    f"API23 与 TikTok Scraper7 共返回 {raw_items} 条候选，但其中 {rejected_irrelevant} 条与“{intent_label}”"
+                    f"多源搜索共返回 {raw_items} 条候选，但其中 {rejected_irrelevant} 条与“{intent_label}”"
                     "不是同一产品品类，已在进入 TK Note 前剔除。请换一个更具体的产品描述后重试。"
                 )
             if invalid_post_ids:
                 return (
-                    f"API23 与 TikTok Scraper7 共返回 {raw_items} 条候选，但没有可识别的数字帖子 ID。"
+                    f"多源搜索共返回 {raw_items} 条候选，但没有可识别的数字帖子 ID。"
                     "接口返回的 v… 标识是媒体资源 ID，不能拼成 TikTok 页面链接；ViralX 已停止生成假链接。"
                 )
-            return "API23 已自动回退到 TikTok Scraper7，但两条链路都没有产生可用视频。"
+            return "多源搜索链已完成自动切换，但没有产生可用视频。"
         if threshold > 0 and max_likes < threshold:
             return (
-                f"API23 与 TikTok Scraper7 共返回 {normalized_items} 条视频，但最高点赞为 {max_likes:,}，"
+                f"多源搜索共返回 {normalized_items} 条视频，但最高点赞为 {max_likes:,}，"
                 f"全部低于当前阈值 {threshold:,}；请降低最低点赞数后重试。"
             )
-        return f"API23 已自动回退到 TikTok Scraper7；两条链路共返回 {normalized_items} 条候选，但没有可用于分析的视频。"
+        return f"多源搜索链共返回 {normalized_items} 条候选，但没有可用于分析的视频。"
 
     def get_video_comments(self, video_id: str, max_count: int = 20) -> List[Dict]:
         """使用本地 TikTok API 抓取评论。"""
@@ -972,8 +1274,6 @@ class TikTokViralAnalyzer:
 
 if __name__ == "__main__":
     analyzer = TikTokViralAnalyzer()
-    print("请先配置一把 RapidAPI Key（API23 优先，Scraper7 自动回退）")
-    print("API23: https://rapidapi.com/Lundehund/api/tiktok-api23")
-    print("Scraper7: https://rapidapi.com/tikwm-tikwm-default/api/tiktok-scraper7")
+    print("请先配置一把 RapidAPI Key（ViralX 会在已订阅的关键词搜索源之间自动切换）")
     # analyzer.api_key = "YOUR_API_KEY"
     # analyzer.run_analysis("picture light", min_likes=100)

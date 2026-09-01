@@ -288,7 +288,7 @@
     settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
     if (!settings.rapidapi_key && !serverConfigured.keyword_search) {
-      throw new SettingsValidationError("rapidapi_key", "关键词发现需要填写 RapidAPI Key；同一 Key 用于 API23 与 Scraper7");
+      throw new SettingsValidationError("rapidapi_key", "关键词发现需要填写 RapidAPI Key；同一 Key 用于已订阅的多源搜索链");
     }
     if (settings.tk_note_proxy) {
       let proxy;
@@ -400,10 +400,10 @@
     const configured = health.configured || {};
     const provider = String(settings.model_provider || health.analysis_provider || "qwen");
     const providerLabel = PROVIDERS[provider]?.name || provider;
-    const searchProviderValue = String(health.keyword_search_provider || "api23+scraper7").toLowerCase();
-    const searchProvider = searchProviderValue === "api23+scraper7"
-      ? "API23 → Scraper7"
-      : searchProviderValue === "scraper7" ? "TikTok Scraper7" : searchProviderValue;
+    const searchProviderValue = String(health.keyword_search_provider || "rapidapi-multisource").toLowerCase();
+    const searchProvider = searchProviderValue === "rapidapi-multisource"
+      ? "TikTok 多源搜索"
+      : `${searchProviderValue} 搜索`;
     const connecting = health.runtime === "connecting";
     note.replaceChildren();
     const copy = document.createElement("div");
@@ -422,7 +422,7 @@
     badges.className = "runtime-badges";
     const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
     const workerLabel = health.runtime === "worker" ? "在线" : connecting ? "连接中" : "离线";
-    [["实时 Worker", workerLabel], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [`${searchProvider} 搜索`, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
+    [["实时 Worker", workerLabel], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [searchProvider, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
       .forEach(([label, value]) => {
         const badge = document.createElement("span");
         badge.textContent = `${label} · ${value}`;
@@ -444,7 +444,7 @@
     byId("reset-btn").textContent = "恢复会话值";
     byId("clear-session-btn").hidden = false;
     const rapidNote = byId("rapidapi-key-note");
-    if (rapidNote) rapidNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖 API23 与 Scraper7 共用的搜索 Key。";
+    if (rapidNote) rapidNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖多源搜索链共用的 RapidAPI Key。";
     const modelNote = byId("model-key-note");
     if (modelNote) modelNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖视觉模型 Key。";
     byId("tk_note_timeout").min = "120";
