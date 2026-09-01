@@ -1427,6 +1427,8 @@ class AIAnalyzer:
                 'pipeline_stage': 'collection',
                 'pipeline_status': 'error',
                 'tk_note_status': 'error',
+                'shot_status': 'not_run',
+                'model_status': 'not_run',
             }
 
         emit('collection', 'running', 'TK Note 正在采集原片、字幕与元数据', 24)
@@ -1439,6 +1441,7 @@ class AIAnalyzer:
             acquisition_details = asset.analysis_details()
             video_data.update(asset.video_fields())
         except VideoIngestError as exc:
+            emit('collection', 'error', 'TK Note 证据采集失败，后续步骤未运行', 40)
             return {
                 'analysis': f'TK Note 证据采集失败：{exc}',
                 'analysis_provider': 'pipeline',
@@ -1448,6 +1451,10 @@ class AIAnalyzer:
                 'acquisition_error_code': getattr(exc, 'code', 'collection_failed'),
                 'tk_note_task_log': getattr(exc, 'task_log', ''),
                 ('tk_note_status' if acquisition_provider == 'tk-note' else 'video_ingest_status'): 'error',
+                'shot_provider': self.shot_config['engine'],
+                'shot_status': 'not_run',
+                'evidence_status': 'missing',
+                'model_status': 'not_run',
             }
 
         expected_numeric_id = _tiktok_numeric_id(expected_video_id) or _tiktok_numeric_id(video_url)
@@ -1595,7 +1602,31 @@ class AIAnalyzer:
         emit('final-analysis', 'running', f'{self.model_provider} 正在进行最终综合分析', 86)
         # The final model is evidence-only. It never receives the original file
         # and therefore cannot silently re-interpret frames outside the shot log.
-        final_analysis = self.model_analyzer.analyze(video_data, None)
+        try:
+            final_analysis = self.model_analyzer.analyze(video_data, None)
+        except Exception as exc:
+            emit('final-analysis', 'error', '最终模型连接失败；已保留此前证据', 100)
+            return {
+                'analysis': f'最终模型连接失败（{type(exc).__name__}）。平台、TK Note 与镜头证据已保存，可稍后直接重试终审。',
+                'analysis_provider': self.model_provider,
+                'pipeline_stage': 'final-analysis',
+                'pipeline_status': 'error',
+                'evidence_status': 'merged',
+                'evidence_bundle': evidence_bundle,
+                'shot_provider': shot_details.get('provider'),
+                'shot_model': shot_details.get('model'),
+                'shot_status': shot_details.get('status', 'completed'),
+                'shot_evidence_quality': (shot_details.get('evidence') or {}).get('quality', {}),
+                'shot_block_reason': '',
+                'fallback_used': bool(shot_details.get('fallback_used')),
+                'fallback_chain': shot_details.get('fallback_chain', []),
+                'model_status': 'error',
+                'model_error_code': type(exc).__name__,
+                **audit_details,
+                **acquisition_details,
+            }
+        if not isinstance(final_analysis, str):
+            final_analysis = ''
         audit_details.update(_persist_evidence_audit(
             video_file_path,
             evidence_bundle,

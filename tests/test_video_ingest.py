@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,57 @@ class FakeTKCollector:
 
 
 class VideoIngestTests(unittest.TestCase):
+    def test_video_fields_preserve_search_metrics_when_collector_returns_zero(self):
+        asset = VideoAsset(
+            "tk-note", "success", "source.mp4", "123", "https://www.tiktok.com/@a/video/123",
+            metadata={
+                "video_id": "123", "title": "Real title", "duration": 12,
+                "view_count": 0, "like_count": 0, "comment_count": 0, "share_count": 0,
+            },
+        )
+        self.assertEqual(asset.video_fields(), {
+            "video_id": "123", "title": "Real title", "duration": 12,
+        })
+
+    def test_video_fields_accept_metric_aliases_only_when_positive(self):
+        asset = VideoAsset(
+            "tk-note", "success", "source.mp4", "123", "https://www.tiktok.com/@a/video/123",
+            metadata={
+                "author": {"unique_id": "creator"}, "playCount": 1200,
+                "digg_count": 88, "comments": 9, "number_of_reposts": 3,
+            },
+        )
+        self.assertEqual(asset.video_fields(), {
+            "author": "creator", "views": 1200, "likes": 88, "comments": 9, "shares": 3,
+        })
+
+    def test_tk_note_reuses_legacy_cache_when_exact_post_id_matches(self):
+        script = Path(__file__).parents[1] / ".agents" / "skills" / "tk-note" / "scripts" / "extract_tiktok_text.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "7480000000000000001"
+            (out_dir / "assets").mkdir(parents=True)
+            (out_dir / "source.mp4").write_bytes(b"verified-video")
+            (out_dir / "metadata.json").write_text(
+                json.dumps({"video_id": "7480000000000000001", "title": "legacy"}),
+                encoding="utf-8",
+            )
+            (out_dir / "transcript.txt").write_text("text", encoding="utf-8")
+            (out_dir / "segments.json").write_text("[]", encoding="utf-8")
+            (out_dir / "note_budget.json").write_text("{}", encoding="utf-8")
+            (out_dir / "assets" / "asset_manifest.json").write_text("{}", encoding="utf-8")
+            url = "https://www.tiktok.com/@creator/video/7480000000000000001"
+
+            completed = subprocess.run(
+                [sys.executable, str(script), url, "--out-dir", str(out_dir), "--asr-backend", "none"],
+                capture_output=True, text=True, encoding="utf-8", timeout=30, check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(json.loads(completed.stdout.splitlines()[-1])["status"], "reused")
+            metadata = json.loads((out_dir / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["source_url"], url)
+            self.assertEqual((out_dir / "source.mp4").read_bytes(), b"verified-video")
+
     def test_platform_routing(self):
         self.assertTrue(is_tiktok_url("https://www.tiktok.com/@creator/video/123"))
         self.assertTrue(is_tiktok_url("https://vt.tiktok.com/abc"))

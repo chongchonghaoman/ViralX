@@ -137,15 +137,30 @@ class VideoAsset:
     def video_fields(self) -> Dict[str, object]:
         if not self.metadata:
             return {}
+        def first(*names: str) -> object:
+            return next((self.metadata.get(name) for name in names if self.metadata.get(name) not in (None, "")), None)
+
+        def positive(*names: str) -> object:
+            value = first(*names)
+            try:
+                return value if not isinstance(value, bool) and float(value) > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        author = first("author", "author_name", "unique_id")
+        if isinstance(author, dict):
+            author = author.get("unique_id") or author.get("uniqueId") or author.get("nickname")
         fields = {
-            "video_id": self.metadata.get("video_id"),
-            "title": self.metadata.get("title"),
-            "author": self.metadata.get("author"),
-            "duration": self.metadata.get("duration"),
-            "views": self.metadata.get("view_count"),
-            "likes": self.metadata.get("like_count"),
-            "comments": self.metadata.get("comment_count"),
-            "shares": self.metadata.get("share_count"),
+            "video_id": first("video_id", "id"),
+            "title": first("title", "description", "desc"),
+            "author": author,
+            "duration": positive("duration"),
+            # Zero is commonly a fallback collector placeholder. Keep the
+            # already verified search metric unless acquisition has a real count.
+            "views": positive("view_count", "play_count", "playCount", "views", "number_of_plays"),
+            "likes": positive("like_count", "digg_count", "diggCount", "likes", "number_of_hearts"),
+            "comments": positive("comment_count", "commentCount", "comments", "number_of_comments"),
+            "shares": positive("share_count", "shareCount", "shares", "number_of_reposts"),
         }
         return {key: value for key, value in fields.items() if value not in (None, "")}
 

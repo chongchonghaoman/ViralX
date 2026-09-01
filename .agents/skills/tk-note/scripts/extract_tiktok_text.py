@@ -344,13 +344,47 @@ def reusable(out_dir: Path, source_url: str | None = None) -> bool:
     complete = video.is_file() and video.stat().st_size > 0 and all((out_dir / name).exists() for name in CORE_FILES[1:])
     if not complete or not source_url:
         return complete
-    metadata = read_json(out_dir / "metadata.json", {}) or {}
-    return metadata.get("source_url") == source_url
+    return cached_source_matches(out_dir, source_url)
 
 
 def source_identity(out_dir: Path) -> str:
     metadata = read_json(out_dir / "metadata.json", {}) or {}
     return str(metadata.get("source_url") or "")
+
+
+def tiktok_post_id(value: str | None) -> str:
+    text = str(value or "").strip()
+    if text.isdigit():
+        return text
+    match = re.search(r"/video/(\d+)(?:[/?#]|$)", text)
+    return match.group(1) if match else ""
+
+
+def cached_source_matches(out_dir: Path, source_url: str) -> bool:
+    """Match legacy evidence by an exact TikTok post id, never by folder presence alone."""
+    metadata = read_json(out_dir / "metadata.json", {}) or {}
+    stored_url = str(metadata.get("source_url") or "").strip()
+    target_id = tiktok_post_id(source_url)
+    if stored_url:
+        if stored_url == source_url:
+            return True
+        stored_url_id = tiktok_post_id(stored_url)
+        return bool(target_id and stored_url_id and target_id == stored_url_id)
+
+    stored_id = tiktok_post_id(str(metadata.get("video_id") or ""))
+    folder_id = out_dir.name if out_dir.name.isdigit() else ""
+    return bool(target_id and target_id in {stored_id, folder_id})
+
+
+def backfill_source_identity(out_dir: Path, source_url: str) -> None:
+    """Upgrade a verified legacy cache without replacing its original video."""
+    metadata_path = out_dir / "metadata.json"
+    metadata = read_json(metadata_path, {}) or {}
+    if metadata.get("source_url") or not cached_source_matches(out_dir, source_url):
+        return
+    metadata["source_url"] = source_url
+    metadata.setdefault("video_id", tiktok_post_id(source_url))
+    write_json(metadata_path, metadata)
 
 
 def clean_download_workfiles(out_dir: Path) -> None:
@@ -658,19 +692,21 @@ def main(argv: list[str] | None = None) -> int:
     try:
         url = validate_tiktok_url(args.source)
         args.out_dir.mkdir(parents=True, exist_ok=True)
-        existing_url = source_identity(args.out_dir)
         has_existing_video = (args.out_dir / "source.mp4").is_file() and (args.out_dir / "source.mp4").stat().st_size > 0
+        same_source = cached_source_matches(args.out_dir, url) if has_existing_video else False
+        if same_source:
+            backfill_source_identity(args.out_dir, url)
         if reusable(args.out_dir, url) and not args.force and not args.refresh_derived:
             emit_progress("inspect", "reused", message="核心资产完整，跳过下载和 ASR")
             print(json.dumps(existing_result(args.out_dir), ensure_ascii=False))
             return 0
 
-        if has_existing_video and existing_url and existing_url != url and not args.force:
+        if has_existing_video and not same_source and not args.force:
             raise TKNoteError("输出目录已属于另一条 TikTok 来源；请更换目录，或明确使用 --force 覆盖")
 
         reused_artifacts: list[str] = []
         acquisition_warnings: list[str] = []
-        if has_existing_video and existing_url == url and not args.force:
+        if has_existing_video and same_source and not args.force:
             video = args.out_dir / "source.mp4"
             metadata = read_json(args.out_dir / "metadata.json", {}) or {}
             reused_artifacts.extend(("source.mp4", "metadata.json"))
@@ -688,7 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             except TKNoteError as exc:
                 # A forced refresh is transactional: never destroy a previously
                 # verified source file because TikTok changed its challenge.
-                if has_existing_video and existing_url == url:
+                if has_existing_video and same_source:
                     video = args.out_dir / "source.mp4"
                     metadata = read_json(args.out_dir / "metadata.json", {}) or {}
                     acquisition_warnings.append("原片刷新受阻，已继续复用此前校验通过的本地证据")

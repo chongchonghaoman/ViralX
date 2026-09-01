@@ -24,7 +24,7 @@ from model_providers import normalize_model_config
 import web_app
 
 
-WORKER_VERSION = "1.1.1"
+WORKER_VERSION = "1.2.0"
 WORKER_ID = "viralx-home-worker"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer
 from shot_analyzers import ShotAnalysisResult
-from video_ingest import VideoAsset
+from video_ingest import VideoAsset, VideoIngestError
 
 
 class FakeCollector:
@@ -80,7 +80,60 @@ class FakeModel:
         )
 
 
+class FailingCollector:
+    def prepare(self, *_args, **_kwargs):
+        raise VideoIngestError("download blocked", code="download_failed", task_log="task.jsonl")
+
+
+class FailingModel:
+    def analyze(self, *_args, **_kwargs):
+        raise ConnectionError("upstream closed with secret URL")
+
+
 class AIAnalyzerIngestTests(unittest.TestCase):
+    def test_collection_failure_marks_downstream_stages_not_run(self):
+        events = []
+        analyzer = AIAnalyzer(
+            analysis_mode="pipeline", model_provider="openai",
+            model_api_key="model-key", model_base_url="https://api.openai.com/v1",
+            model_name="gpt-4.1-mini", video_collector=FailingCollector(),
+            shot_router=FakeShotRouter(),
+        )
+        result = analyzer.analyze_video_script_details(
+            {"video_id": "123"},
+            video_url="https://www.tiktok.com/@a/video/123",
+            progress_callback=events.append,
+        )
+        self.assertEqual(result["tk_note_status"], "error")
+        self.assertEqual(result["shot_status"], "not_run")
+        self.assertEqual(result["model_status"], "not_run")
+        self.assertEqual(events[-1]["stage_status"], "error")
+
+    def test_final_model_exception_returns_structured_failure_and_keeps_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "source.mp4"
+            video.write_bytes(b"video")
+            asset = VideoAsset(
+                provider="tk-note", status="success", video_file=str(video),
+                video_id="123", source_url="https://www.tiktok.com/@a/video/123",
+                metadata={"video_id": "123"},
+            )
+            analyzer = AIAnalyzer(
+                analysis_mode="pipeline", model_provider="openai",
+                model_api_key="model-key", model_base_url="https://api.openai.com/v1",
+                model_name="gpt-4.1-mini", video_collector=FakeCollector(asset),
+                shot_router=FakeShotRouter(),
+            )
+            analyzer.model_analyzer = FailingModel()
+            result = analyzer.analyze_video_script_details(
+                {"video_id": "123"}, video_url=asset.source_url,
+            )
+            self.assertEqual(result["pipeline_status"], "error")
+            self.assertEqual(result["model_status"], "error")
+            self.assertEqual(result["evidence_status"], "merged")
+            self.assertIn("已保存", result["analysis"])
+            self.assertNotIn("secret URL", result["analysis"])
+
     def test_tk_note_and_shot_evidence_are_handed_to_final_model_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             video = Path(tmp) / "source.mp4"

@@ -1,14 +1,41 @@
 import unittest
+from unittest.mock import patch
 
 import requests
 
 from shot_analyzers import (
     ShotAnalysisResult,
+    ShotAnalyzerError,
     ShotAnalyzerRouter,
+    ShotAnalyzerTransportError,
+    ShotBoundary,
+    ShotLoomCoreAnalyzer,
     merge_short_boundaries,
     normalize_shot_config,
     validate_shot_evidence,
 )
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, payload=None):
+        self.status_code = status_code
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+
+class SequenceSession:
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = 0
+
+    def post(self, *_args, **_kwargs):
+        self.calls += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
 
 
 def valid_result(provider="shotloom"):
@@ -58,6 +85,52 @@ class NetworkFailingProvider(FakeProvider):
 
 
 class ShotAnalyzerTests(unittest.TestCase):
+    @staticmethod
+    def shotloom(session):
+        return ShotLoomCoreAnalyzer({
+            "shot_engine": "shotloom", "shot_model_source": "custom",
+            "shot_model_api_key": "key", "shot_model_base_url": "https://api.example.com/v1",
+            "shot_model_name": "vision",
+        }, session=session)
+
+    def test_shotloom_retries_transient_connection_failure(self):
+        session = SequenceSession([requests.ConnectionError("closed"), FakeResponse(200)])
+        analyzer = self.shotloom(session)
+        with patch("shot_analyzers.time.sleep"):
+            response = analyzer._post_with_retry({"model": "vision"}, {"Authorization": "Bearer key"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(session.calls, 2)
+
+    def test_shotloom_does_not_retry_non_transient_auth_failure(self):
+        session = SequenceSession([FakeResponse(401)])
+        analyzer = self.shotloom(session)
+        response = analyzer._post_with_retry({}, {})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(session.calls, 1)
+
+    def test_shotloom_splits_a_batch_after_retry_exhaustion(self):
+        analyzer = self.shotloom(SequenceSession([]))
+        calls = []
+
+        def request(_video_path, shots):
+            calls.append([shot.shot_id for shot in shots])
+            if len(shots) > 1:
+                raise ShotAnalyzerTransportError("upstream closed")
+            return [{"shot_id": shots[0].shot_id}]
+
+        analyzer._request_batch = request
+        shots = [ShotBoundary(index=i, start_time=float(i), end_time=float(i + 1), duration=1.0) for i in range(4)]
+        records = analyzer._request_batch_resilient("source.mp4", shots)
+        self.assertEqual([item["shot_id"] for item in records], ["S001", "S002", "S003", "S004"])
+        self.assertGreater(len(calls), 4)
+
+    def test_quality_gate_rejects_malformed_coverage_without_raising(self):
+        result = valid_result()
+        result.evidence["quality"]["timeline_coverage"] = "unknown"
+        self.assertIn("有效数值", validate_shot_evidence(result))
+        result.evidence["quality"]["timeline_coverage"] = float("nan")
+        self.assertIn("有限数值", validate_shot_evidence(result))
+
     def test_default_shot_config_uses_shotloom_and_inherits_the_final_visual_model(self):
         config = normalize_shot_config({})
         self.assertEqual(config["engine"], "shotloom")

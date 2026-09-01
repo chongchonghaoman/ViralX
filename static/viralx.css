@@ -1270,12 +1270,31 @@ h3 {
 
 .provider-badge.pending,
 .provider-badge.timeout,
+.provider-badge.partial,
 .provider-badge.blocked {
   color: var(--color-warning);
 }
 
-.provider-badge.error {
+.provider-badge.error,
+.provider-badge.failed {
   color: var(--color-error);
+}
+
+.provider-badge.completed,
+.provider-badge.complete,
+.provider-badge.success,
+.provider-badge.reused {
+  color: var(--color-success);
+}
+
+.provider-badge.running {
+  color: var(--color-focus);
+}
+
+.provider-badge.not_run,
+.provider-badge.not_used,
+.provider-badge.skipped {
+  color: var(--color-muted);
 }
 
 .video-card__error {

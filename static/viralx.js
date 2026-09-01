@@ -611,12 +611,19 @@
     const modelStatus = video.model_status || "";
     const acquisitionProvider = video.acquisition_provider || "";
     const acquisitionStatus = video.tk_note_status || video.video_ingest_status || "";
-    const acquisitionFailed = ["error", "blocked"].includes(acquisitionStatus);
-    const acquisitionLabel = acquisitionProvider === "tk-note"
-      ? acquisitionFailed ? "TK Note · 采集失败" : "TK Note · 已采集"
-      : acquisitionProvider
-        ? `${acquisitionProvider} · ${acquisitionFailed ? "采集失败" : "已采集"}`
-        : "";
+    const lifecycleLabel = (value, labels) => {
+      const normalized = String(value || "").toLowerCase();
+      if (["completed", "complete", "success", "reused"].includes(normalized)) return labels.completed;
+      if (normalized === "partial") return labels.partial || labels.completed;
+      if (["running", "pending", "timeout"].includes(normalized)) return labels.running;
+      if (["error", "blocked", "failed"].includes(normalized)) return labels.failed;
+      if (["not_run", "not_used", "skipped", ""].includes(normalized)) return labels.notRun;
+      return labels.unknown;
+    };
+    const acquisitionName = acquisitionProvider === "tk-note" ? "TK Note" : acquisitionProvider || "视频采集";
+    const acquisitionLabel = `${acquisitionName} · ${lifecycleLabel(acquisitionStatus, {
+      completed: "已采集", partial: "部分采集", running: "采集中", failed: "采集失败", notRun: "未运行", unknown: "状态未知",
+    })}`;
     const providerName = {
       openai: "OpenAI",
       anthropic: "Claude",
@@ -626,17 +633,20 @@
       custom: "自定义模型",
     }[provider] || provider;
     const shotProvider = video.shot_provider === "libtv" ? "LibTV" : video.shot_provider === "shotloom" ? "ShotLoom" : "镜头证据";
-    const shotLabel = ["error", "blocked"].includes(status)
-      ? `${shotProvider} · 已阻断`
-      : status === "timeout" || status === "pending"
-        ? `${shotProvider} · 处理中`
-        : `${shotProvider} · 已完成`;
-    const providerLabel = ["error", "blocked"].includes(modelStatus)
-      ? `${providerName} · 分析失败`
-      : `${providerName} · 最终分析`;
+    const shotLabel = `${shotProvider} · ${lifecycleLabel(status, {
+      completed: "已完成", running: "处理中", failed: "已阻断", notRun: "未运行", unknown: "状态未知",
+    })}`;
+    const providerLabel = `${providerName} · ${lifecycleLabel(modelStatus, {
+      completed: "最终分析", running: "分析中", failed: "分析失败", notRun: "未运行", unknown: "状态未知",
+    })}`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
     const pipelineFailed = video.pipeline_status && video.pipeline_status !== "completed";
     const failureMessage = pipelineFailed ? String(video.ai_analysis || "分析链没有完成") : "";
+    const recoveryLabel = video.pipeline_stage === "collection"
+      ? "检查采集设置"
+      : video.pipeline_stage === "final-analysis"
+        ? "检查模型设置"
+        : "检查视觉模型";
 
     const card = document.createElement("article");
     card.className = "video-card";
@@ -651,14 +661,14 @@
         <div class="stat"><div class="stat-label">分享</div><div class="stat-value">${compactCount(video.shares)}</div></div>
       </div>
       <div class="provider-row">
-        ${acquisitionLabel ? `<span class="provider-badge ${escapeHtml(acquisitionStatus)}">${escapeHtml(acquisitionLabel)}</span>` : ""}
-        <span class="provider-badge ${escapeHtml(status)}">${escapeHtml(shotLabel)}</span>
-        <span class="provider-badge ${escapeHtml(modelStatus)}">${escapeHtml(providerLabel)}</span>
+        <span class="provider-badge ${escapeHtml(acquisitionStatus || "not_run")}">${escapeHtml(acquisitionLabel)}</span>
+        <span class="provider-badge ${escapeHtml(status || "not_run")}">${escapeHtml(shotLabel)}</span>
+        <span class="provider-badge ${escapeHtml(modelStatus || "not_run")}">${escapeHtml(providerLabel)}</span>
       </div>
       ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
       <div class="card-actions">
-        <button class="analysis-btn" type="button">打开最终分析</button>
-        ${["error", "blocked"].includes(status) ? runtimeMode === "edgeone" ? '<span class="project-link">镜头证据未就绪</span>' : '<a class="project-link" href="/settings">检查镜头取证设置</a>' : ""}
+        <button class="analysis-btn" type="button">${pipelineFailed ? "查看失败详情" : "打开最终分析"}</button>
+        ${pipelineFailed ? `<a class="project-link" href="/settings">${recoveryLabel}</a>` : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
       <div id="${analysisId}" hidden>${escapeHtml(video.ai_analysis || "")}</div>

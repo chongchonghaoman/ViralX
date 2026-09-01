@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -38,6 +39,14 @@ DEFAULT_QWEN_MODEL = "qwen3-vl-flash"
 
 class ShotAnalyzerError(RuntimeError):
     """A safe error at the shot-evidence boundary."""
+
+
+class ShotAnalyzerTransportError(ShotAnalyzerError):
+    """A retry-exhausted upstream error that may be recoverable with a smaller batch."""
+
+    def __init__(self, message: str, *, degradable: bool = True):
+        super().__init__(message)
+        self.degradable = degradable
 
 
 @dataclass
@@ -310,6 +319,34 @@ class ShotLoomCoreAnalyzer:
         finally:
             capture.release()
 
+    def _post_with_retry(self, payload: dict[str, Any], headers: dict[str, str]):
+        transient_statuses = {408, 425, 429, 500, 502, 503, 504}
+        last_reason = "连接异常"
+        for attempt in range(3):
+            try:
+                response = self.session.post(
+                    f"{self.config['base_url']}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=180,
+                )
+            except (requests.RequestException, ConnectionError, TimeoutError, OSError) as exc:
+                last_reason = type(exc).__name__
+            else:
+                if response.status_code == 413:
+                    raise ShotAnalyzerTransportError("镜头视觉请求体过大", degradable=True)
+                if response.status_code not in transient_statuses:
+                    return response
+                last_reason = f"HTTP {response.status_code}"
+                if response.status_code == 429 and attempt == 2:
+                    raise ShotAnalyzerTransportError(
+                        "镜头视觉模型限流，已重试 3 次",
+                        degradable=False,
+                    )
+            if attempt < 2:
+                time.sleep(0.75 * (2 ** attempt))
+        raise ShotAnalyzerTransportError(f"镜头视觉模型连接不稳定，已重试 3 次（{last_reason}）")
+
     def _request_batch(self, video_path: str, shots: list[ShotBoundary]) -> list[dict[str, Any]]:
         content: list[dict[str, Any]] = [{
             "type": "text",
@@ -347,23 +384,13 @@ class ShotLoomCoreAnalyzer:
             "HTTP-Referer": "https://viralx.metrolabs.mobi",
             "X-Title": "ViralX Shot Evidence",
         }
-        response = self.session.post(
-            f"{self.config['base_url']}/chat/completions",
-            headers=request_headers,
-            json=request_payload,
-            timeout=180,
-        )
+        response = self._post_with_retry(request_payload, request_headers)
         # Several otherwise compatible vision endpoints do not implement
         # response_format. Retry the same evidence request without that optional
         # hint; do not change providers or weaken the JSON parser.
         if response.status_code in {400, 404, 422}:
             request_payload.pop("response_format", None)
-            response = self.session.post(
-                f"{self.config['base_url']}/chat/completions",
-                headers=request_headers,
-                json=request_payload,
-                timeout=180,
-            )
+            response = self._post_with_retry(request_payload, request_headers)
         if response.status_code != 200:
             raise ShotAnalyzerError(f"镜头视觉模型返回 HTTP {response.status_code}")
         try:
@@ -374,7 +401,24 @@ class ShotLoomCoreAnalyzer:
         items = payload.get("shots")
         if not isinstance(items, list):
             raise ShotAnalyzerError("镜头视觉模型缺少 shots 数组")
-        return [item for item in items if isinstance(item, dict)]
+        records = [item for item in items if isinstance(item, dict)]
+        requested_ids = [shot.shot_id for shot in shots]
+        returned_ids = [str(item.get("shot_id") or "").strip().upper() for item in records]
+        if len(returned_ids) != len(set(returned_ids)) or set(returned_ids) != set(requested_ids):
+            raise ShotAnalyzerError("镜头视觉模型返回的镜头编号与请求批次不一致")
+        return records
+
+    def _request_batch_resilient(self, video_path: str, shots: list[ShotBoundary]) -> list[dict[str, Any]]:
+        try:
+            return self._request_batch(video_path, shots)
+        except ShotAnalyzerTransportError as exc:
+            if not exc.degradable or len(shots) <= 1:
+                raise
+            midpoint = max(1, len(shots) // 2)
+            return [
+                *self._request_batch_resilient(video_path, shots[:midpoint]),
+                *self._request_batch_resilient(video_path, shots[midpoint:]),
+            ]
 
     def analyze(self, video_path: str, user_request: str = "") -> ShotAnalysisResult:
         state = self.status()
@@ -390,7 +434,7 @@ class ShotLoomCoreAnalyzer:
 
         records_by_id: dict[str, dict[str, Any]] = {}
         for start in range(0, len(shots), 5):
-            for item in self._request_batch(str(source), shots[start:start + 5]):
+            for item in self._request_batch_resilient(str(source), shots[start:start + 5]):
                 shot_id = str(item.get("shot_id") or "").strip().upper()
                 if re.fullmatch(r"S\d{3}", shot_id):
                     records_by_id[shot_id] = item
@@ -588,9 +632,16 @@ def validate_shot_evidence(details: ShotAnalysisResult | dict[str, Any]) -> str:
     if len(ids) != len(shots) or len(set(ids)) != len(ids) or any(not re.fullmatch(r"S\d{3}", item) for item in ids):
         return "镜头 ID 缺失、重复或格式无效"
     quality = evidence.get("quality") or {}
-    if float(quality.get("timeline_coverage") or 0) < 0.98:
+    try:
+        timeline_coverage = float(quality.get("timeline_coverage") or 0)
+        analyzed_coverage = float(quality.get("analyzed_coverage") or 0)
+    except (TypeError, ValueError):
+        return "镜头证据质量字段不是有效数值"
+    if not math.isfinite(timeline_coverage) or not math.isfinite(analyzed_coverage):
+        return "镜头证据质量字段不是有限数值"
+    if timeline_coverage < 0.98:
         return "镜头时间线覆盖率低于 98%"
-    if float(quality.get("analyzed_coverage") or 0) < 0.90:
+    if analyzed_coverage < 0.90:
         return "已分析镜头覆盖率低于 90%"
     if any(not (item.get("visual_facts") or []) for item in shots):
         return "至少一个镜头缺少可核验视觉事实"
