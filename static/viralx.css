@@ -1,8 +1,8 @@
 /* Hallmark · design-system: DESIGN.md · genre: playful-product-editorial · tone: assured, tactile, evidence-led
  * macrostructure: Centered Marquee + Embedded Studio · theme: studied-DNA (source: https://www.butter.video/)
  * components: split floating pill nav · nav-safe illustration lane · outlined Shuei Mincho hero claim · dark editor surface · five-stage evidence flow · index footer
- * knob deltas: hero title=exact DNP Shuei Mincho outlines · desktop hero start=nav-clearance · wide illustration=39rem→32rem
- * pre-emit critique: P5 H5 E5 S5 R5 V5 · contrast: pass (40–41) · nav: N5 · footer: Ft4 · slop: pass (42–45)
+ * knob deltas: hero title=exact DNP Shuei Mincho outlines · desktop hero start=nav-clearance · evidence stage=wide editorial spread
+ * pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41) · nav: N5 · footer: Ft4 · slop: pass (42–45)
  * honest: pass (46) · chrome: pass (47) · tokens: pass (48) · responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57)
  */
 
@@ -931,6 +931,18 @@ h3 {
 .evidence-stage {
   display: grid;
   gap: var(--space-2xl);
+  width: 100%;
+  max-width: none;
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.stage-intro .section-label {
+  color: var(--color-paper-4);
+}
+
+.stage-intro h2 {
+  color: var(--color-paper);
 }
 
 .stage-intro h2,
@@ -941,8 +953,9 @@ h3 {
 .evidence-demo {
   min-width: 0;
   padding: var(--space-lg);
+  border: 1px solid var(--color-rule-dark);
   border-radius: var(--radius-lg);
-  background: var(--color-ink);
+  background: var(--color-ink-2);
   color: var(--color-paper);
   box-shadow: none;
 }
@@ -1004,9 +1017,23 @@ h3 {
 }
 
 .frame--ink {
-  border: 1px solid var(--color-ink-2);
-  background: var(--color-ink-2);
+  border: 1px solid var(--color-rule-dark);
+  background: var(--color-ink);
   color: var(--color-paper);
+}
+
+.frame--ink::before {
+  inset: 30% 18%;
+  border-radius: var(--radius-pill);
+}
+
+.frame--ink::after {
+  inset: 50% auto auto 32%;
+  width: 36%;
+  height: 2px;
+  border: 0;
+  background: currentColor;
+  box-shadow: 0 -1rem 0 currentColor, 0 1rem 0 currentColor;
 }
 
 .frame--coral {
@@ -1014,8 +1041,30 @@ h3 {
   color: var(--color-coral-ink);
 }
 
+.frame--coral::before {
+  inset: 23% 24%;
+  border-radius: 42% 58% 52% 48%;
+  transform: rotate(12deg);
+}
+
+.frame--coral::after {
+  inset: 40% auto auto 42%;
+  transform: rotate(12deg);
+}
+
 .frame--cream {
   background: var(--color-yellow);
+}
+
+.frame--cream::before {
+  inset: 25% 23%;
+  border-radius: 50% 50% 16% 50%;
+  transform: rotate(-12deg);
+}
+
+.frame--cream::after {
+  inset: 42% auto auto 45%;
+  transform: rotate(-12deg);
 }
 
 .waveform {
@@ -1811,14 +1860,21 @@ h3 {
   }
 
   .evidence-stage {
-    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-    align-items: start;
-    gap: var(--space-3xl);
+    grid-template-columns: minmax(20rem, 0.78fr) minmax(0, 1.42fr);
+    align-items: center;
+    gap: clamp(var(--space-2xl), 6vw, 7rem);
+    padding-inline: max(var(--page-gutter), calc((100vw - var(--content-max)) / 2));
   }
 
   .stage-intro {
     position: sticky;
     inset-block-start: calc(var(--nav-height) + var(--space-xl));
+  }
+
+  .stage-intro h2 {
+    max-width: 7em;
+    font-size: clamp(3.6rem, 5vw, 5.8rem);
+    line-height: 0.96;
   }
 
   .workflow {
@@ -1880,6 +1936,33 @@ h3 {
 
   .frame {
     min-height: 13rem;
+  }
+}
+
+@media (min-width: 100rem) {
+  .evidence-stage {
+    grid-template-columns: minmax(36rem, 0.76fr) minmax(64rem, 1.34fr);
+    gap: clamp(6rem, 6vw, 9rem);
+    padding-block: 6rem;
+    padding-inline: max(var(--page-gutter), calc((100vw - 124rem) / 2));
+  }
+
+  .stage-intro h2 {
+    max-width: 7em;
+    font-size: clamp(4.8rem, 3.4vw, 5.8rem);
+  }
+
+  .evidence-demo {
+    padding: var(--space-xl);
+  }
+
+  .frame-row {
+    grid-template-columns: 1.08fr 0.92fr 1fr 0.96fr;
+    gap: var(--space-sm);
+  }
+
+  .frame {
+    min-height: 17rem;
   }
 }
 
