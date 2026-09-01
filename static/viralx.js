@@ -513,7 +513,7 @@
       return;
     }
     if (!isDirectVideoSource(source) && !runtimeSearchReady) {
-      showInlineError("直链分析已经就绪；关键词发现还缺少 TikTok Scraper7 RapidAPI Key。你可以先粘贴视频直链，或由站点所有者补齐搜索配置。");
+      showInlineError("直链分析已经就绪；关键词发现还缺少 RapidAPI Key。同一把 Key 用于 API23 与 Scraper7，你也可以先粘贴视频直链。");
       byId("keyword")?.focus();
       return;
     }

@@ -457,22 +457,22 @@ def download_video(url: str, out_dir: Path, args: argparse.Namespace) -> tuple[d
     clean_download_workfiles(out_dir)
     failures: list[str] = []
 
-    # Scraper7 sometimes supplies a real, short-lived media transport URL with
+    # API23 or Scraper7 may supply a real, short-lived media transport URL with
     # the search result. Consume it only in memory and never persist it.
     media_hint = str(os.environ.get("VIRALX_TK_MEDIA_URL") or "").strip()
     if media_hint:
         try:
-            candidate = download_media_transport(media_hint, url, out_dir, args, label="Scraper7 媒体地址")
+            candidate = download_media_transport(media_hint, url, out_dir, args, label="搜索媒体地址")
             final_path = finalize_download(candidate, out_dir)
-            info = fallback_info(url, extractor="Scraper7 transport")
+            info = fallback_info(url, extractor="search provider transport")
             emit_progress(
                 "download", "completed", video_file=str(final_path),
-                size_bytes=final_path.stat().st_size, acquisition_route="scraper7-media",
+                size_bytes=final_path.stat().st_size, acquisition_route="search-provider-media",
             )
             return info, final_path
         except TKNoteError:
-            failures.append("Scraper7 临时媒体地址不可用")
-            emit_progress("download", "warning", message="Scraper7 临时媒体地址不可用，正在尝试 TK Note 解析")
+            failures.append("搜索服务临时媒体地址不可用")
+            emit_progress("download", "warning", message="搜索服务临时媒体地址不可用，正在尝试 TK Note 解析")
 
     try:
         import yt_dlp

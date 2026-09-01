@@ -10,17 +10,17 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 4. 只有需要临时覆盖站点默认搜索或视觉模型配置时，才进入[网页设置](https://viralx.metrolabs.mobi/settings.html)填写会话级 Key。
 5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
 
-公开网站不会把站点所有者的第三方 Key 写入前端。默认 Key 由 ViralX Worker 保存在服务器环境；会话级模型 / TikTok Scraper7 覆盖值只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只由 Worker 所有者在运行服务的电脑上管理。
+公开网站不会把站点所有者的第三方 Key 写入前端。默认 Key 由 ViralX Worker 保存在服务器环境；会话级模型 / RapidAPI 搜索覆盖值只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只由 Worker 所有者在运行服务的电脑上管理。
 
 ## API 依赖边界
 
 | 输入方式 | 调用链 | 必要凭据 |
 | --- | --- | --- |
 | 网页 TikTok / 抖音视频链接 | ViralX Worker → TK Note → ShotLoom 切镜 → 上方视觉模型识别 → 证据合并 → 同模型终审 | Worker + TK Note + ShotLoom + 视觉模型 API |
-| 网页 TikTok 搜索主题 | TikTok Scraper7 → ViralX Worker → TK Note → ShotLoom 切镜 → 上方视觉模型识别 → 证据合并 → 同模型终审 | 上述配置 + `RAPIDAPI_KEY` |
+| 网页 TikTok 搜索主题 | API23 → 失败或无候选时 Scraper7 → ViralX Worker → TK Note → ShotLoom 切镜 → 上方视觉模型识别 → 证据合并 → 同模型终审 | 上述配置 + 一把共用的 `RAPIDAPI_KEY` |
 | 只采集 | ViralX Worker → TK Note → 保存部分证据 | Worker；不需要镜头或最终模型 API |
 
-RapidAPI 只承载 TikTok Scraper7 关键词发现，不解析已知视频链接。TK Note 固定负责真实原片与平台证据；ShotLoom Core 只切镜与抽帧，上方配置的视觉模型负责逐镜事实识别。证据质量检查通过后，同一模型再完成终审。LibTV 只在显式故障回退或显式选择时调用，不使用 Access Key；生产网页通过 HTTPS 调用由站点所有者运行的受限 Worker。
+RapidAPI 只承载 TikTok 关键词发现：API23 优先，异常或没有有效候选时自动转 Scraper7；两者使用同一个 Key 配置位，但 RapidAPI 账户需要分别订阅两项服务。它们不解析已知视频链接。TK Note 固定负责真实原片与平台证据；ShotLoom Core 只切镜与抽帧，上方配置的视觉模型负责逐镜事实识别。证据质量检查通过后，同一模型再完成终审。LibTV 只在显式故障回退或显式选择时调用，不使用 Access Key；生产网页通过 HTTPS 调用由站点所有者运行的受限 Worker。
 
 ## 运行公开 ViralX Worker
 
@@ -65,7 +65,7 @@ python web_app.py
   "model_api_key": "YOUR_MODEL_API_KEY",
   "model_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
   "model_name": "qwen3-vl-flash",
-  "rapidapi_key": "YOUR_SCRAPER7_RAPIDAPI_KEY_FOR_SEARCH"
+  "rapidapi_key": "YOUR_SHARED_RAPIDAPI_KEY_FOR_SEARCH"
 }
 ```
 

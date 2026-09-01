@@ -9,7 +9,7 @@
   "spacing": "shared named four-point scale with detached navigation, explicit hero-nav clearance, centred marquee and wide chapter intervals",
   "preserve": [
     "Flask and EdgeOne route and streaming contracts",
-    "TK Note, LibTV and TikTok Scraper7 workflow",
+    "TK Note, LibTV and API23-to-Scraper7 search workflow",
     "Obsidian export",
     "legacy MiniMax generate_variants endpoint"
   ],

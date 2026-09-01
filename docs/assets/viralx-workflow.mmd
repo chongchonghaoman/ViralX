@@ -1,7 +1,9 @@
 flowchart LR
-    K[搜索主题] --> A[01 Scraper7<br/>发现候选视频]
-    U[视频直链] -->|跳过 Scraper7| T
-    A --> T[02 TK Note / yt-dlp<br/>原片与平台证据]
+    K[搜索主题] --> A[01a API23<br/>优先发现候选]
+    A -->|有效候选| T[02 TK Note / yt-dlp<br/>原片与平台证据]
+    A -->|异常或无有效候选| S[01b Scraper7<br/>自动回退]
+    S --> T
+    U[视频直链] -->|跳过关键词搜索| T
     T --> F[03a ShotLoom Core<br/>切镜与关键帧采样]
     F --> V[03b 上方视觉模型<br/>识别逐镜事实]
     V -. 仅显式开启失败回退 .-> L[LibTV 备用<br/>官方 CLI 拉片]
@@ -32,5 +34,6 @@ flowchart LR
 
     subgraph Services[外部服务]
         A
+        S
         M
     end

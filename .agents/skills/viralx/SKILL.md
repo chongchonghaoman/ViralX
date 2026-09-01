@@ -9,9 +9,9 @@ Use ViralX through its web API contract. The installed skill can probe the publi
 
 ## Route the request
 
-- For a TikTok or Douyin URL, call `analyze` directly. TikTok Scraper7 is not involved.
-- For a search topic, call `analyze` with the topic. This requires `RAPIDAPI_KEY` for TikTok Scraper7 discovery.
-- Every analysis follows one contract: TikTok Scraper7 discovery when needed, TK Note collection, provider-neutral shot evidence, evidence merge, then the selected final model API. The recommended shot strategy is `auto`: ShotLoom Core first, LibTV only as an auditable fallback.
+- For a TikTok or Douyin URL, call `analyze` directly. RapidAPI discovery is not involved.
+- For a search topic, call `analyze` with the topic. This requires one `RAPIDAPI_KEY`: ViralX tries TikTok API23 first and automatically continues through Scraper7 when API23 fails or yields no usable candidates.
+- Every analysis follows one contract: API23-first discovery with Scraper7 fallback when needed, TK Note collection, provider-neutral shot evidence, evidence merge, then the selected final model API. The recommended shot strategy is `auto`: ShotLoom Core first, LibTV only as an auditable fallback.
 - Before `analyze`, run ViralX locally, set `VIRALX_BASE_URL=http://127.0.0.1:5001`, choose `VIRALX_SHOT_ENGINE`, configure a compatible shot vision model, then provide `MODEL_PROVIDER`, `MODEL_API_KEY`, and `MODEL_NAME`. Connect LibTV from `/settings` only when `libtv` is selected or wanted as an `auto` fallback.
 - The hosted website may call an owner-operated ViralX Worker, but an Agent should use the configured Web API or run ViralX locally. Never send a LibTV token or local-management credential to a hosted endpoint.
 - Use `health` before analysis when credential or service readiness is unknown.
@@ -36,7 +36,7 @@ Use `--output <path>` only when the user asks to save the NDJSON stream. Set `VI
 
 - Read credentials from environment variables only. Never request that a user paste a key into chat when they can set it locally.
 - Never pass secrets as CLI arguments, print request headers, or write credentials to output files.
-- A direct URL skips TikTok Scraper7 but still needs TK Note, a ready shot-evidence strategy, and the selected final model API key. LibTV login is not mandatory when ShotLoom Core is ready.
+- A direct URL skips RapidAPI discovery but still needs TK Note, a ready shot-evidence strategy, and the selected final model API key. LibTV login is not mandatory when ShotLoom Core is ready.
 - A keyword request needs those same dependencies plus `RAPIDAPI_KEY`.
 - The EdgeOne endpoint deliberately refuses full analysis because it cannot access local evidence or CLI state. Do not claim the public interface alone completed an analysis.
 

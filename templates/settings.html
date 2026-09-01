@@ -43,7 +43,7 @@
     <header class="settings-hero" data-motion="reveal">
       <p class="section-label">VIRALX · SETUP</p>
       <h1>先跑起来，<br>再谈参数。</h1>
-      <p>准备两把 Key：Scraper7 从关键词发现爆款，Qwen3-VL Flash 把真实证据变成复刻脚本。</p>
+      <p>准备两把 Key：一把 RapidAPI Key 串联 API23 与 Scraper7，Qwen3-VL Flash 把真实证据变成复刻脚本。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
@@ -81,7 +81,7 @@
             <span class="quick-assurance__mark" aria-hidden="true">✓</span>
             <div>
               <strong>推荐参数已经就位</strong>
-              <p>Scraper7 发现爆款，TK Note 下载证据，ShotLoom 切镜取帧，Qwen3-VL Flash 先识别再终审。</p>
+              <p>API23 优先发现爆款，失败自动转 Scraper7；随后 TK Note 下载证据，ShotLoom 切镜取帧，Qwen3-VL Flash 先识别再终审。</p>
             </div>
           </div>
 
@@ -112,15 +112,15 @@
             <div class="quick-search-card__head">
               <span>KEY 01</span>
               <div>
-                <h3>TikTok Scraper7</h3>
-                <p>ViralX 的基础入口：根据关键词抓取相关爆款视频，再交给证据流水线。</p>
+                <h3>TikTok 双链路</h3>
+                <p>API23 优先；服务异常、空结果或候选无效时，自动转到 Scraper7 继续同一任务。</p>
               </div>
             </div>
             <div class="settings-grid">
               <div class="settings-field settings-field--wide">
                 <label for="rapidapi_key">RapidAPI Key</label>
-                <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" aria-describedby="rapidapi-key-note" placeholder="粘贴 TikTok Scraper7 RapidAPI Key">
-                <small class="field-note" id="rapidapi-key-note">关键词发现必填。Key 只发送给 Scraper7，不会出现在结果或日志中。</small>
+                <input type="password" id="rapidapi_key" name="rapidapi_key" autocomplete="off" aria-describedby="rapidapi-key-note" placeholder="粘贴一把 RapidAPI Key">
+                <small class="field-note" id="rapidapi-key-note">关键词发现必填。同一 Key 只发送给 API23 与 Scraper7，不会出现在结果或日志中；需分别订阅两项 API。</small>
               </div>
               <div class="settings-field">
                 <label for="min_likes">爆款最低点赞数</label>
@@ -162,7 +162,7 @@
           <details class="pipeline-peek">
             <summary>查看 ViralX 如何工作</summary>
             <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
-              <div><span>01</span><strong>Scraper7</strong><small>发现候选视频</small></div>
+              <div><span>01</span><strong>API23 → Scraper7</strong><small>主链路失败自动回退</small></div>
               <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
               <div><span>03</span><strong>ShotLoom + 视觉模型</strong><small>切镜并识别逐镜事实</small></div>
               <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
@@ -189,7 +189,7 @@
               <div class="fixed-flow-note" role="note">
                 <span>固定步骤</span>
                 <div>
-                  <strong>每条 Scraper7 候选都会交给 TK Note</strong>
+                  <strong>每条搜索候选都会交给 TK Note</strong>
                   <p>TK Note 下载对应原片、帖子元数据、字幕或转写；采集失败会阻断后续镜头与模型分析。</p>
                 </div>
               </div>

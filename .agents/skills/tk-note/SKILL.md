@@ -13,7 +13,7 @@ The default single-video contract is:
 
 ```text
 TikTok URL
-  -> Scraper7 media hint (when available) / yt-dlp / isolated Chrome fallback
+  -> search-provider media hint (when available) / yt-dlp / isolated Chrome fallback
   -> video + safe metadata + available subtitle tracks
   -> local ASR only when no usable subtitle exists
   -> note budget + reusable assets/asset_manifest.json
@@ -25,7 +25,7 @@ TikTok URL
 
 - Accept international TikTok hosts: `tiktok.com`, `www.tiktok.com`, `m.tiktok.com`, `vt.tiktok.com`, and `vm.tiktok.com`.
 - Do not route `douyin.com` or `v.douyin.com` here; use `dy-note`.
-- Public video download first uses an in-memory Scraper7 media hint when keyword discovery supplied one, otherwise local `yt-dlp`; if TikTok serves a webpage challenge, TK Note opens an isolated local Chrome/Edge profile and reads the real player stream. A paid scraping API is not required for direct links.
+- Public video download first uses an in-memory media hint when API23 or Scraper7 keyword discovery supplied one, otherwise local `yt-dlp`; if TikTok serves a webpage challenge, TK Note opens an isolated local Chrome/Edge profile and reads the real player stream. A paid scraping API is not required for direct links.
 - Browser fallback does not export Cookie or persist signed media URLs. The profile stays under the shared local cache and the browser debugging port binds to loopback for that process only.
 - Comments use the optional MIT-licensed `TikTokApi` package. It may need an `ms_token`, Playwright, or a proxy, and TikTok can still block it. Comment failure must never block the downloaded video from continuing to LibTV.
 - Never print, save, or return cookies, `ms_token`, proxy credentials, signed media URLs, or raw request headers.

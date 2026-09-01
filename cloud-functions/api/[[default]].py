@@ -46,7 +46,7 @@ def _load_tiktok_analyzer_source():
         module_path = PROJECT_ROOT / "tiktok_viral_analyzer.py"
     source_bytes = module_path.read_bytes()
     namespace = {
-        "__name__": "viralx_tiktok_analyzer_status4_fallback_v2",
+        "__name__": "viralx_tiktok_analyzer_api23_first_v3",
         "__file__": str(module_path),
         "__package__": "",
     }
@@ -60,7 +60,7 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-08-31-fixed-evidence-chain-v2"
+VIRALX_RELEASE = "2026-09-01-api23-first-search-v3"
 DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
 PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
 WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
@@ -309,7 +309,7 @@ def health():
         "release": VIRALX_RELEASE,
         "runtime": "edgeone",
         "keyword_search_provider": TikTokViralAnalyzer.SEARCH_PROVIDER,
-        "keyword_search_strategy": "feed-search",
+        "keyword_search_strategy": "api23-first-scraper7-fallback",
         "keyword_search_source": TIKTOK_ANALYZER_SOURCE_SHA,
         "analysis_provider": provider,
         "analysis_ready": provider_ready.get(mode, False),
@@ -385,7 +385,7 @@ def analyze():
                 if not config["rapidapi_key"]:
                     yield json.dumps({
                         "status": "error",
-                        "message": "TikTok Scraper7 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接",
+                        "message": "TikTok 关键词搜索尚未配置 RAPIDAPI_KEY；同一 Key 用于 API23 与 Scraper7，也可以直接粘贴视频链接",
                         "done": True,
                     }, ensure_ascii=False) + "\n"
                     return
@@ -394,8 +394,9 @@ def analyze():
                 videos = tiktok.search_viral_videos(keyword, config["min_likes"], count=30)
                 video_data = [tiktok.extract_video_info(video) for video in videos]
                 video_urls = {
-                    video["video_id"]: f"https://www.tiktok.com/@{video['author']}/video/{video['video_id']}"
+                    video["video_id"]: video["source_url"]
                     for video in video_data
+                    if video.get("source_url")
                 }
 
             if not video_data:

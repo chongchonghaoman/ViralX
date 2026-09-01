@@ -288,7 +288,7 @@
     settings.min_likes = Number.isFinite(parsedMinLikes) ? Math.max(0, parsedMinLikes) : DEFAULTS.min_likes;
     settings.output_dir = byId("output_dir").value.trim() || DEFAULTS.output_dir;
     if (!settings.rapidapi_key && !serverConfigured.keyword_search) {
-      throw new SettingsValidationError("rapidapi_key", "关键词发现需要填写 TikTok Scraper7 RapidAPI Key");
+      throw new SettingsValidationError("rapidapi_key", "关键词发现需要填写 RapidAPI Key；同一 Key 用于 API23 与 Scraper7");
     }
     if (settings.tk_note_proxy) {
       let proxy;
@@ -400,9 +400,10 @@
     const configured = health.configured || {};
     const provider = String(settings.model_provider || health.analysis_provider || "qwen");
     const providerLabel = PROVIDERS[provider]?.name || provider;
-    const searchProvider = String(health.keyword_search_provider || "scraper7").toLowerCase() === "scraper7"
-      ? "TikTok Scraper7"
-      : String(health.keyword_search_provider || "scraper7");
+    const searchProviderValue = String(health.keyword_search_provider || "api23+scraper7").toLowerCase();
+    const searchProvider = searchProviderValue === "api23+scraper7"
+      ? "API23 → Scraper7"
+      : searchProviderValue === "scraper7" ? "TikTok Scraper7" : searchProviderValue;
     const connecting = health.runtime === "connecting";
     note.replaceChildren();
     const copy = document.createElement("div");
@@ -443,7 +444,7 @@
     byId("reset-btn").textContent = "恢复会话值";
     byId("clear-session-btn").hidden = false;
     const rapidNote = byId("rapidapi-key-note");
-    if (rapidNote) rapidNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖搜索 Key。";
+    if (rapidNote) rapidNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖 API23 与 Scraper7 共用的搜索 Key。";
     const modelNote = byId("model-key-note");
     if (modelNote) modelNote.textContent = "服务器已配置时可留空；填写后只在当前标签页覆盖视觉模型 Key。";
     byId("tk_note_timeout").min = "120";
@@ -664,7 +665,7 @@
         updateRuntimeNote(lastHealth);
         await refreshLibTVState();
         if (!serverConfigured.keyword_search) {
-          throw new SettingsValidationError("rapidapi_key", "Worker 没有接受 TikTok Scraper7 Key，请重新粘贴后保存");
+          throw new SettingsValidationError("rapidapi_key", "Worker 没有接受 RapidAPI 搜索 Key，请重新粘贴后保存");
         }
         if (settings.shot_engine !== "skip" && !serverConfigured.model) {
           const issue = String(lastHealth.configuration_issues?.model || "").trim();

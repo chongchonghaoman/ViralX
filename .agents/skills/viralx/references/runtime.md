@@ -27,7 +27,7 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | Environment variable | Purpose |
 | --- | --- |
 | `VIRALX_BASE_URL` | Override the default `https://viralx.metrolabs.mobi` server |
-| `RAPIDAPI_KEY` | TikTok Scraper7 keyword discovery; not used for direct URLs |
+| `RAPIDAPI_KEY` | Shared key for API23-first keyword discovery and automatic Scraper7 fallback; not used for direct URLs |
 | `ANALYSIS_MODE` | Fixed value `pipeline`; legacy mode values are migrated |
 | `MODEL_PROVIDER` | `openai`, `anthropic`, `gemini`, `deepseek`, `openrouter`, or `custom` |
 | `MODEL_API_KEY`, `MODEL_NAME` | Key and model ID for the selected provider |
@@ -37,7 +37,7 @@ The client converts these environment variables to session-only `X-ViralX-*` req
 | `SHOT_MODEL_API_KEY`, `SHOT_MODEL_NAME` | Independent OpenAI-compatible vision model for ShotLoom |
 | `SHOT_MODEL_BASE_URL`, `SHOT_SCENE_THRESHOLD` | Shot-model root and local scene threshold |
 | `GEMINI_*`, `OPENROUTER_*`, `MINIMAX_*` | Legacy compatibility; MiniMax remains available to script generation |
-| `MIN_LIKES` | Default TikTok Scraper7 popularity threshold |
+| `MIN_LIKES` | Default popularity threshold applied consistently to both search providers |
 | `TK_NOTE_ASR_BACKEND`, `TK_NOTE_LANGUAGE`, `TK_NOTE_TIMEOUT` | TK Note collection controls |
 | `TK_NOTE_PROXY` | Explicit proxy override; blank uses the Windows/system proxy |
 | `TK_NOTE_COOKIES_FROM_BROWSER` | Optional yt-dlp browser Cookie source for login walls |

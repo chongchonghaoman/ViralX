@@ -72,7 +72,7 @@ def main() -> int:
             ),
         },
         "guidance": [
-            "媒体采集可使用 Scraper7 临时媒体地址、yt-dlp 或隔离 Chrome 兜底；ffmpeg/ASR/评论失败不应丢弃已验证原片。",
+            "媒体采集可使用搜索服务临时媒体地址、yt-dlp 或隔离 Chrome 兜底；ffmpeg/ASR/评论失败不应丢弃已验证原片。",
             "优先在当前 Python 安装 yt-dlp、requests 与 websockets；浏览器兜底还需要本机 Chrome 或 Edge。",
             "TikTokApi 评论路线是可选的，可能需要 TIKTOK_MS_TOKEN、Playwright 或代理。",
             "任何凭据只报告是否存在，不输出具体值。",

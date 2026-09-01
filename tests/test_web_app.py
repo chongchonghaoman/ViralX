@@ -40,7 +40,8 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload['runtime'], 'local')
-        self.assertEqual(payload['keyword_search_provider'], 'scraper7')
+        self.assertEqual(payload['keyword_search_provider'], 'api23+scraper7')
+        self.assertEqual(payload['keyword_search_strategy'], 'api23-first-scraper7-fallback')
         self.assertIsInstance(payload['analysis_ready'], bool)
         self.assertTrue(all(isinstance(value, bool) for value in payload['configured'].values()))
         self.assertEqual(payload['libtv']['auth'], 'web')
@@ -140,7 +141,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(video['author'], 'tiktok.com')
         self.assertEqual(len(video['video_id']), 20)
 
-    def test_keyword_search_without_scraper7_key_returns_actionable_error(self):
+    def test_keyword_search_without_shared_rapidapi_key_returns_actionable_error(self):
         config = {**web_app.DEFAULT_CONFIG, 'rapidapi_key': ''}
         with patch.object(web_app, 'load_config', return_value=config):
             response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
@@ -149,7 +150,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(payloads[0]['stage'], 'discovery')
         payload = payloads[-1]
         self.assertEqual(payload['status'], 'error')
-        self.assertIn('TikTok Scraper7', payload['message'])
+        self.assertIn('API23 与 Scraper7', payload['message'])
         self.assertIn('RAPIDAPI_KEY', payload['message'])
 
 

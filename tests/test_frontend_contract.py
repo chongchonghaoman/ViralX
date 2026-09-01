@@ -92,10 +92,13 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('class="quick-search-card"', self.settings)
         self.assertIn('SettingsValidationError("rapidapi_key"', self.settings_js)
         self.assertNotIn("可选 · 视频直链不需要搜索 Key", self.settings)
+        self.assertEqual(self.settings.count('id="rapidapi_key"'), 1)
+        self.assertIn("API23 优先", self.settings)
+        self.assertIn("自动转到 Scraper7", self.settings)
 
     def test_settings_explains_the_fixed_collection_and_visual_evidence_contract(self):
         self.assertIn("TK Note 采集故障处理", self.settings)
-        self.assertIn("每条 Scraper7 候选都会交给 TK Note", self.settings)
+        self.assertIn("每条搜索候选都会交给 TK Note", self.settings)
         self.assertIn("ShotLoom 切镜", self.settings)
         self.assertIn('id="shot-model-inherited-name"', self.settings)
         self.assertIn("标准流程 · 推荐", self.settings)

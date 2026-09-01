@@ -164,7 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--product-name", default="", help="Product name for remake guidance")
     analyze.add_argument("--product-info", default="", help="Product selling points and constraints")
     analyze.add_argument("--refresh", action="store_true", help="Refresh evidence before analysis")
-    analyze.add_argument("--min-likes", type=int, help="Override TikTok Scraper7 minimum likes")
+    analyze.add_argument("--min-likes", type=int, help="Override the TikTok search-chain minimum likes")
     analyze.add_argument(
         "--analysis-mode",
         choices=("pipeline",),

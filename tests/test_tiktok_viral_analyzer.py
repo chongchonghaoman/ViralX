@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from tiktok_viral_analyzer import TikTokViralAnalyzer, safe_error_message
+from tiktok_viral_analyzer import Scraper7SearchError, TikTokViralAnalyzer, safe_error_message
 
 
 class TikTokViralAnalyzerTests(unittest.TestCase):
@@ -12,8 +12,13 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.analyzer = TikTokViralAnalyzer(self.temp_dir.name)
         self.analyzer.api_key = "test-scraper7-secret"
+        # These tests exercise the legacy Scraper7 adapter in isolation. The
+        # chain-level API23-first behavior is covered separately below.
+        self.api23_patcher = patch.object(TikTokViralAnalyzer, "_search_api23", return_value=[])
+        self.api23_patcher.start()
 
     def tearDown(self):
+        self.api23_patcher.stop()
         self.temp_dir.cleanup()
 
     @patch("tiktok_viral_analyzer.requests.get")
@@ -201,7 +206,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
     def test_missing_key_stops_before_network_request(self, mock_get):
         self.analyzer.api_key = ""
 
-        with self.assertRaisesRegex(RuntimeError, "Scraper7.*RAPIDAPI_KEY"):
+        with self.assertRaisesRegex(RuntimeError, "RAPIDAPI_KEY.*API23.*Scraper7"):
             self.analyzer.search_viral_videos("camping light")
 
         mock_get.assert_not_called()
@@ -254,6 +259,18 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["cursor"], 12)
 
     @patch("tiktok_viral_analyzer.requests.get")
+    def test_legacy_search_url_and_host_overrides_still_control_scraper7(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"code": 0, "data": {"videos": []}}
+        self.analyzer.SEARCH_URL = "https://mock.example.test/feed/search"
+        self.analyzer.SEARCH_HOST = "mock.example.test"
+
+        self.analyzer.search_viral_videos("camping lamp", min_likes=0, count=1)
+
+        self.assertEqual(mock_get.call_args.args[0], "https://mock.example.test/feed/search")
+        self.assertEqual(mock_get.call_args.kwargs["headers"]["x-rapidapi-host"], "mock.example.test")
+
+    @patch("tiktok_viral_analyzer.requests.get")
     def test_unknown_scraper7_shape_is_not_reported_as_a_true_empty_list(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": 0, "data": {"unexpectedResults": []}}
@@ -272,7 +289,8 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(videos, [])
         message = self.analyzer.empty_result_message()
-        self.assertIn("data.videos 没有返回视频候选", message)
+        self.assertIn("item_list / data.videos", message)
+        self.assertIn("没有返回视频候选", message)
         self.assertIn("与最低点赞数无关", message)
 
     @patch("tiktok_viral_analyzer.requests.get")
@@ -354,6 +372,210 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertNotIn("test-scraper7-secret", message)
         self.assertNotIn("another-secret", message)
         self.assertIn("redacted", message)
+
+
+class TikTokSearchChainTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.analyzer = TikTokViralAnalyzer(self.temp_dir.name)
+        self.analyzer.api_key = "test-shared-rapidapi-key"
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    @staticmethod
+    def response(payload, status=200):
+        result = Mock(status_code=status)
+        result.json.return_value = payload
+        return result
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_is_primary_and_uses_the_shared_key(self, mock_get):
+        mock_get.return_value = self.response({
+            "status_code": 0,
+            "cursor": 12,
+            "has_more": 0,
+            "item_list": [{
+                "id": "7591234567890123456",
+                "desc": "Rechargeable picture light above framed wall artwork #homedecor",
+                "author": {"uniqueId": "gallerylamp"},
+                "stats": {"diggCount": 6200, "commentCount": 42, "playCount": 98000},
+                "video": {
+                    "duration": 18000,
+                    "cover": {"url_list": ["https://example.com/api23-cover.jpg"]},
+                },
+            }],
+        })
+
+        videos = self.analyzer.search_viral_videos("picture light", min_likes=500, count=10)
+
+        self.assertEqual(len(videos), 1)
+        self.assertEqual(videos[0]["search_provider"], "api23")
+        self.assertEqual(videos[0]["digg_count"], 6200)
+        self.assertEqual(videos[0]["cover"], "https://example.com/api23-cover.jpg")
+        self.assertFalse(self.analyzer.last_search_diagnostics["fallback_used"])
+        mock_get.assert_called_once_with(
+            "https://tiktok-api23.p.rapidapi.com/api/search/video",
+            headers={
+                "Content-Type": "application/json",
+                "x-rapidapi-host": "tiktok-api23.p.rapidapi.com",
+                "x-rapidapi-key": "test-shared-rapidapi-key",
+            },
+            params={
+                "keyword": "picture light wall mounted artwork lamp",
+                "cursor": 0,
+                "search_id": 0,
+            },
+            timeout=20,
+        )
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_business_error_falls_back_to_scraper7_without_interrupting(self, mock_get):
+        mock_get.side_effect = [
+            self.response({"status_code": 4, "status_msg": "Server is currently unavailable"}),
+            self.response({
+                "code": 0,
+                "data": {"videos": [{
+                    "id": "7591234567890123457",
+                    "title": "Wireless picture light for gallery wall",
+                    "author": {"unique_id": "fallbackcreator"},
+                    "digg_count": 7100,
+                }]},
+            }),
+        ]
+
+        videos = self.analyzer.search_viral_videos("picture lights", min_likes=500, count=10)
+
+        self.assertEqual([video["search_provider"] for video in videos], ["scraper7"])
+        self.assertTrue(self.analyzer.last_search_diagnostics["fallback_used"])
+        self.assertEqual(self.analyzer.last_search_diagnostics["fallback_reason"], "provider_error")
+        self.assertIn("业务状态 4", self.analyzer.last_search_diagnostics["providers"]["api23"]["error"])
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-key"], "test-shared-rapidapi-key")
+        self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-host"], "tiktok-scraper7.p.rapidapi.com")
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_empty_or_invalid_candidates_fall_back_to_scraper7(self, mock_get):
+        for api23_payload, expected_reason in (
+            ({"status_code": 0, "item_list": []}, "no_candidates"),
+            ({
+                "status_code": 0,
+                "item_list": [{"aweme_id": "v26044gc0000opaque", "digg_count": 9000}],
+            }, "no_valid_candidates"),
+        ):
+            with self.subTest(expected_reason=expected_reason):
+                mock_get.reset_mock()
+                mock_get.side_effect = [
+                    self.response(api23_payload),
+                    self.response({
+                        "code": 0,
+                        "data": {"videos": [{
+                            "id": "7591234567890123458",
+                            "title": "Picture light wall mounted fixture",
+                            "digg_count": 8000,
+                        }]},
+                    }),
+                ]
+                videos = self.analyzer.search_viral_videos("picture light", min_likes=500, count=10)
+                self.assertEqual(videos[0]["search_provider"], "scraper7")
+                self.assertEqual(self.analyzer.last_search_diagnostics["fallback_reason"], expected_reason)
+                self.assertEqual(mock_get.call_count, 2)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_mixed_root_and_data_pagination_fields_are_followed(self, mock_get):
+        mock_get.side_effect = [
+            self.response({
+                "status_code": 0,
+                "has_more": 1,
+                "cursor": 12,
+                "data": {
+                    "search_id": "search-session-1",
+                    "item_list": [{
+                        "id": "7591234567890123460",
+                        "desc": "Camping lantern one",
+                        "stats": {"diggCount": 1000},
+                    }],
+                },
+            }),
+            self.response({
+                "status_code": 0,
+                "has_more": 0,
+                "cursor": 24,
+                "data": {"item_list": [{
+                    "id": "7591234567890123461",
+                    "desc": "Camping lantern two",
+                    "stats": {"diggCount": 2000},
+                }]},
+            }),
+        ]
+
+        videos = self.analyzer.search_viral_videos("camping lantern", min_likes=0, count=2)
+
+        self.assertEqual([video["video_id"] for video in videos], [
+            "7591234567890123460", "7591234567890123461",
+        ])
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["cursor"], 12)
+        self.assertEqual(mock_get.call_args_list[1].kwargs["params"]["search_id"], "search-session-1")
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_api23_does_not_treat_generic_items_as_video_results(self, mock_get):
+        mock_get.side_effect = [
+            self.response({
+                "status_code": 0,
+                "items": [{"id": "7591234567890123462", "title": "search suggestion"}],
+            }),
+            self.response({
+                "code": 0,
+                "data": {"videos": [{
+                    "id": "7591234567890123463",
+                    "title": "Camping light review",
+                    "digg_count": 1500,
+                }]},
+            }),
+        ]
+
+        videos = self.analyzer.search_viral_videos("camping light", min_likes=0, count=1)
+
+        self.assertEqual(videos[0]["video_id"], "7591234567890123463")
+        self.assertEqual(videos[0]["search_provider"], "scraper7")
+        self.assertEqual(self.analyzer.last_search_diagnostics["providers"]["api23"]["raw_items"], 0)
+
+    def test_api23_business_status_is_case_insensitive_and_checks_nested_data(self):
+        self.assertEqual(self.analyzer._api23_business_error({"status": "SUCCESS"}), "")
+        self.assertIn(
+            "业务状态 4",
+            self.analyzer._api23_business_error({
+                "data": {"status_code": 4, "status_msg": "temporarily unavailable"},
+            }),
+        )
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_both_empty_returns_one_combined_actionable_message(self, mock_get):
+        mock_get.side_effect = [
+            self.response({"status_code": 0, "item_list": []}),
+            self.response({"code": 0, "data": {"videos": []}}),
+        ]
+
+        videos = self.analyzer.search_viral_videos("camping lamp", min_likes=500, count=10)
+
+        self.assertEqual(videos, [])
+        message = self.analyzer.empty_result_message()
+        self.assertIn("API23 已自动回退到 TikTok Scraper7", message)
+        self.assertIn("与最低点赞数无关", message)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_both_provider_failures_raise_only_after_fallback_and_redact_key(self, mock_get):
+        mock_get.side_effect = [
+            self.response({}, status=403),
+            self.response({}, status=429),
+        ]
+
+        with self.assertRaisesRegex(Scraper7SearchError, "API23 与 TikTok Scraper7 均未完成搜索") as raised:
+            self.analyzer.search_viral_videos("camping lamp", min_likes=500, count=10)
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertNotIn(self.analyzer.api_key, str(raised.exception))
 
 
 if __name__ == "__main__":

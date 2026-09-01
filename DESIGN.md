@@ -111,8 +111,9 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
 - The default contract is `shot_engine=shotloom` plus `shot_model_source=inherit`: one visual-model
   connection performs frame-fact recognition and final evidence synthesis. A separate shot model,
   `auto` fallback, LibTV-only, and collection-only remain expert troubleshooting choices.
-- The first settings viewport asks for an outcome and two credentials: Scraper7 for mandatory
-  keyword discovery, then a complete final-model connection with Base URL, API Key and model ID.
+- The first settings viewport asks for an outcome and two credentials: one shared RapidAPI Key for
+  API23-first keyword discovery with automatic Scraper7 fallback, then a complete final-model
+  connection with Base URL, API Key and model ID.
   Qwen3-VL Flash is the recommended default and the capability note requires a video-capable model.
   Direct-video ingestion remains a compatibility path, not the product's primary information architecture.
   OpenAI, Claude, Gemini, DeepSeek, OpenRouter, Custom, separate
@@ -182,11 +183,11 @@ change this sequence.
   analysis studio and distinguishes Worker online, owner configuration incomplete, and Worker offline.
   An offline primary action explains that static cases remain available; it never sends visitors to
   Connector setup. Search readiness and analysis readiness are reported separately: keyword input needs
-  Scraper7 plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
+  the API23-first / Scraper7-fallback chain plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
   needs the analysis path. A missing search Key must never block a valid direct-video analysis.
-- TikTok Scraper7 is explained at the source field: video URLs bypass it, while keyword discovery needs
-  it. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `TikTok Scraper7 -> TK Note -> ShotLoom cut/frame ->
+- The dual search chain is explained at the source field: video URLs bypass it, while keyword discovery
+  needs one RapidAPI Key. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
+- The settings page presents the fixed contract `TikTok API23 -> Scraper7 fallback -> TK Note -> ShotLoom cut/frame ->
   configured visual model -> evidence merge -> same model final synthesis`. TK Note is marked required,
   ShotLoom + inherit is the default, LibTV is an explicit fallback, and collection-only states plainly
   that it will not generate a final report.
@@ -222,7 +223,7 @@ change this sequence.
 ## Settings simplification record — 2026-08-31
 
 - Replaced the five equally prominent technical sections with one quick-setup surface and one
-  advanced accordion. The primary path asks for the desired outcome, Scraper7 Key, then the final
+  advanced accordion. The primary path asks for the desired outcome, one RapidAPI search Key, then the final
   model Base URL, API Key and model ID.
 - Made Qwen3-VL Flash the recommended new-user model while keeping all three connection fields
   visible. Editing the Base URL away from a provider preset automatically promotes the configuration
@@ -230,7 +231,7 @@ change this sequence.
   requires a video-capable model.
 - Promoted keyword discovery to the primary configuration path because ViralX begins from a
   keyword and discovers relevant high-performing videos. Direct URLs remain compatible, but they
-  do not make the Scraper7 credential optional in product setup. TK Note network controls,
+  do not make the RapidAPI search credential optional in product setup. TK Note network controls,
   shot-engine selection, LibTV, protocol selection, storage paths and saved topics remain advanced.
 - Verified the quick and evidence-only modes at desktop and mobile widths. Reduced-motion,
   keyboard labels, field-local validation and runtime security boundaries remain unchanged.
@@ -238,7 +239,7 @@ change this sequence.
 ## Fixed evidence chain record — 2026-08-31
 
 - Reclassified TK Note from an apparent optional module to the mandatory collection stage after every
-  Scraper7 candidate. Advanced TK Note controls now describe recovery only; collection failure blocks all
+  search candidate. Advanced TK Note controls now describe recovery only; collection failure blocks all
   downstream work.
 - Reclassified ShotLoom Core as scene-cut and frame-sampling infrastructure rather than a second model.
   The default visual path reuses the Base URL, API Key and model ID configured in quick setup.
@@ -257,13 +258,22 @@ change this sequence.
 - Restricted the public API to health, keywords, analysis and variant generation. CORS allowlisting,
   one-task concurrency, per-source rate limiting, input limits, public-only custom endpoints and cache
   retention protect a small personal server without exposing local management surfaces.
-- Hosted settings now treat Scraper7 and model credentials as optional session overrides when the Worker
+- Hosted settings now treat the shared RapidAPI search credential and model credentials as optional session overrides when the Worker
   already owns defaults. Local Cookie, proxy, directories, shot-engine and LibTV controls remain owner-only.
 
 ## Source-aware readiness record — 2026-08-31
 
 - Split public readiness into two capabilities instead of one misleading master switch. Keyword discovery
-  requires Scraper7 and the complete evidence pipeline; direct HTTP(S) video input bypasses only discovery.
+  requires the API23 / Scraper7 search chain and the complete evidence pipeline; direct HTTP(S) video input bypasses only discovery.
+
+## Search fallback record — 2026-09-01
+
+- Added API23 as the primary keyword-discovery provider without adding a second credential field.
+- Business errors, HTTP failures, empty responses, invalid post identities, semantic mismatches and
+  threshold-empty results automatically continue through Scraper7 inside the same analysis action.
+- Both adapters normalize into one video contract before TK Note, so collection, shot evidence and final
+  analysis do not branch by search provider. The interface reports the selected source only as concise
+  progress text; it asks for recovery only when both providers fail.
 - Added a short health-check timeout so an unreachable home Worker resolves to an honest offline state
   instead of leaving the interface stuck on “正在连接服务”. Long-running analysis streams remain unbounded by
   that probe timeout.

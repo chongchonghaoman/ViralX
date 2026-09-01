@@ -288,6 +288,7 @@ def build_health_payload(config_override=None, runtime_override=None):
         'status': 'ok',
         'runtime': runtime,
         'keyword_search_provider': TikTokViralAnalyzer.SEARCH_PROVIDER,
+        'keyword_search_strategy': 'api23-first-scraper7-fallback',
         'analysis_provider': provider,
         'analysis_ready': readiness.get(mode, False),
         'configuration_issues': {
@@ -346,19 +347,19 @@ def build_analyze_response(config_override=None, max_videos=None):
             if is_video_url(keyword):
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'skipped',
-                    'stage_label': '已提供视频直链，跳过 TikTok Scraper7 搜索', 'stage_progress': 12,
+                    'stage_label': '已提供视频直链，跳过关键词搜索', 'stage_progress': 12,
                 }, ensure_ascii=False) + '\n'
                 video_data = [direct_video_data(keyword)]
                 video_urls = {video_data[0]['video_id']: keyword}
             else:
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'running',
-                    'stage_label': 'TikTok Scraper7 正在搜索候选视频', 'stage_progress': 6,
+                    'stage_label': 'API23 正在搜索候选视频；无结果时自动回退 Scraper7', 'stage_progress': 6,
                 }, ensure_ascii=False) + '\n'
                 if not current_config.get('rapidapi_key'):
                     yield json.dumps({
                         'status': 'error',
-                        'message': 'TikTok Scraper7 关键词搜索尚未配置 RAPIDAPI_KEY；也可以直接粘贴 TikTok / 抖音视频链接',
+                        'message': 'TikTok 关键词搜索尚未配置 RAPIDAPI_KEY；同一 Key 用于 API23 与 Scraper7，也可以直接粘贴视频链接',
                         'done': True,
                     }, ensure_ascii=False) + '\n'
                     return
@@ -378,7 +379,11 @@ def build_analyze_response(config_override=None, max_videos=None):
                 }
                 yield json.dumps({
                     'status': 'progress', 'stage': 'discovery', 'stage_status': 'complete',
-                    'stage_label': f'TikTok Scraper7 已找到并筛选 {len(video_data)} 条候选视频',
+                    'stage_label': (
+                        f"Scraper7 自动回退已找到并筛选 {len(video_data)} 条候选视频"
+                        if tiktok.last_search_diagnostics.get('selected_provider') == 'scraper7'
+                        else f"API23 已找到并筛选 {len(video_data)} 条候选视频"
+                    ),
                     'stage_progress': 18,
                 }, ensure_ascii=False) + '\n'
 
