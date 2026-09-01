@@ -182,6 +182,13 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("subscription-link-list", self.home_css)
         self.assertIn("min-height: 2.75rem", self.home_css)
 
+    def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
+        self.assertIn("filename='viralx.css', v='1.1.1'", self.home)
+        self.assertIn("filename='viralx.js', v='1.1.1'", self.home)
+        self.assertIn("filename='viralx.css', v='1.1.1'", self.settings)
+        self.assertIn("/static/viralx.css?v=${assetVersion}", self.build_js)
+        self.assertIn("/static/viralx.js?v=${assetVersion}", self.build_js)
+
     def test_analysis_results_are_adjacent_and_revealed_once(self):
         self.assertIn('id="results-zone"', self.home)
         self.assertLess(self.home.index('id="results-zone"'), self.home.index('class="signal-strip"'))

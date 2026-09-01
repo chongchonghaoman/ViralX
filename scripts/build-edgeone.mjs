@@ -6,6 +6,7 @@ const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicDir = join(projectRoot, "public");
 const publicStatic = join(publicDir, "static");
 const publicFunctions = join(publicDir, "cloud-functions");
+const assetVersion = "1.1.1";
 const publicApiBaseUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
 let publicApiOrigin = "";
 if (publicApiBaseUrl) {
@@ -23,7 +24,10 @@ let html = await readFile(join(projectRoot, "templates", "index.html"), "utf8");
 html = html
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
-  .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
+  .replaceAll(
+    "{{ url_for('static', filename='viralx.css', v='1.1.1') }}",
+    `/static/viralx.css?v=${assetVersion}`,
+  )
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-640.webp') }}", "/static/assets/viralx-signal-orbit-640.webp")
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit-1024.webp') }}", "/static/assets/viralx-signal-orbit-1024.webp")
   .replaceAll("{{ url_for('static', filename='assets/viralx-signal-orbit.png') }}", "/static/assets/viralx-signal-orbit.png")
@@ -32,7 +36,10 @@ html = html
   .replaceAll("{{ url_for('static', filename='assets/viralx-title-shuei-stacked.webp') }}", "/static/assets/viralx-title-shuei-stacked.webp")
   .replaceAll("{{ url_for('static', filename='runtime-config.js') }}", "/static/runtime-config.js")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
-  .replaceAll("{{ url_for('static', filename='viralx.js') }}", "/static/viralx.js")
+  .replaceAll(
+    "{{ url_for('static', filename='viralx.js', v='1.1.1') }}",
+    `/static/viralx.js?v=${assetVersion}`,
+  )
   .replaceAll('href="/settings"', 'href="/settings.html"')
   .replaceAll('href="/"', 'href="#main-content"')
   .replace("connect-src 'self'", `connect-src 'self'${publicApiOrigin ? ` ${publicApiOrigin}` : ""}`)
@@ -45,7 +52,10 @@ let settingsHtml = await readFile(join(projectRoot, "templates", "settings.html"
 settingsHtml = settingsHtml
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
   .replaceAll("{{ url_for('static', filename='tokens.css') }}", "/static/tokens.css")
-  .replaceAll("{{ url_for('static', filename='viralx.css') }}", "/static/viralx.css")
+  .replaceAll(
+    "{{ url_for('static', filename='viralx.css', v='1.1.1') }}",
+    `/static/viralx.css?v=${assetVersion}`,
+  )
   .replaceAll("{{ url_for('static', filename='settings.css') }}", "/static/settings.css")
   .replaceAll("{{ url_for('static', filename='runtime-config.js') }}", "/static/runtime-config.js")
   .replaceAll("{{ url_for('static', filename='cloud-config.js') }}", "/static/cloud-config.js")
