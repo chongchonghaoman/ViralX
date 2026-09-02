@@ -325,6 +325,50 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertEqual(resumed["retry_scope"], "")
             self.assertEqual(failing_model.calls if hasattr(failing_model, "calls") else [], [])
 
+    def test_saved_report_repairs_explicit_target_label_without_model_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp)
+            video = package / "source.mp4"
+            video.write_bytes(b"video")
+            audit_dir = package / "viralx-evidence"
+            audit_dir.mkdir()
+            bundle_path = audit_dir / "evidence-bundle.json"
+            bundle = {
+                "schema": "viralx.evidence_bundle.v1",
+                "visual_mode": "direct",
+                "target_product": "壁画灯",
+                "video_input": {"source_sha256": hashlib.sha256(b"video").hexdigest()},
+                "platform_evidence": {"duration": 4, "comments_data": []},
+                "shot_evidence": {},
+            }
+            bundle_path.write_text("{}", encoding="utf-8")
+            raw_path = audit_dir / "final-model-report.raw.md"
+            raw_path.write_text(
+                "## 目标产品核验\n- 目标：壁画灯 [TARGET:visible]\n"
+                "画面状态：[TARGET:visible]\n"
+                "灯体出现 [VIDEO:00:00:00-00:00:02]\n"
+                "灯光点亮 [VIDEO:00:00:02-00:00:04]\n"
+                "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+                "评论正文未采集，无法判断真实用户诉求 [META:comments]",
+                encoding="utf-8",
+            )
+            analyzer = AIAnalyzer(
+                analysis_mode="pipeline", model_provider="custom",
+                model_api_key="", model_base_url="", model_name="",
+            )
+            analyzer.model_analyzer = FailingModel()
+
+            resumed = analyzer.resume_final_analysis(
+                {"video_id": "123", "shot_status": "error", "evidence_bundle": bundle},
+                evidence_bundle_path=str(bundle_path),
+                raw_model_report_path=str(raw_path),
+                source_video_path=str(video),
+            )
+
+            self.assertEqual(resumed["pipeline_status"], "completed")
+            self.assertIn("目标：壁画灯 [TARGET:product]", resumed["ai_analysis"])
+            self.assertEqual(resumed["shot_status"], "completed")
+
     def test_default_pipeline_reads_original_video_without_running_shotloom(self):
         with tempfile.TemporaryDirectory() as tmp:
             video = Path(tmp) / "source.mp4"
@@ -574,6 +618,26 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             "灯光点亮 [VIDEO:00:00:02-00:00:04]\n"
             "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
             "评论正文未采集，无法判断真实用户诉求 [META:comments]"
+        )
+        self.assertEqual(analyzer.grounding_error(report, video_data), "")
+
+    def test_direct_video_validator_accepts_natural_no_comments_disclosure(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+        )
+        video_data = {
+            "evidence_bundle": {
+                "visual_mode": "direct", "target_product": "壁画灯",
+                "platform_evidence": {"duration": 4, "comments_data": []},
+            }
+        }
+        report = (
+            "目标：壁画灯 [TARGET:product]\n画面状态：[TARGET:visible]\n"
+            "灯体出现 [VIDEO:00:00:00-00:00:02]\n"
+            "灯光点亮 [VIDEO:00:00:02-00:00:04]\n"
+            "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "已观察反馈：无评论正文，无法判断真实用户诉求 [META:comments]"
         )
         self.assertEqual(analyzer.grounding_error(report, video_data), "")
 

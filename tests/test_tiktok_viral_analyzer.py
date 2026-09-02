@@ -398,6 +398,11 @@ class TikTokSearchChainTests(unittest.TestCase):
                     "number_of_comments": 42,
                     "number_of_plays": 98000,
                 },
+                "video": {
+                    "play_addr": {
+                        "url_list": ["https://v16.tiktokcdn.com/api6-primary.mp4?token=short-lived"]
+                    }
+                },
             }],
         })
 
@@ -452,12 +457,12 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.analyzer.search_provider_chain = ("api6", "scraptik", "scraper7")
         mock_get.side_effect = [
             self.response({"videos": [
-                {"id": "7591234567890123460", "description": "Camping lamp one", "statistics": {"number_of_hearts": 1000}},
-                {"id": "7591234567890123461", "description": "Camping lamp two", "statistics": {"number_of_hearts": 2000}},
+                {"id": "7591234567890123460", "description": "Camping lamp one", "statistics": {"number_of_hearts": 1000}, "video": {"play": "https://v16.tiktokcdn.com/camping-one.mp4"}},
+                {"id": "7591234567890123461", "description": "Camping lamp two", "statistics": {"number_of_hearts": 2000}, "video": {"play": "https://v16.tiktokcdn.com/camping-two.mp4"}},
             ]}),
             self.response({"search_item_list": [
                 {"aweme_info": {"id": "7591234567890123461", "desc": "Duplicate lamp", "stats": {"diggCount": 2000}}},
-                {"aweme_info": {"id": "7591234567890123462", "desc": "Camping lamp three", "stats": {"diggCount": 3000}}},
+                {"aweme_info": {"id": "7591234567890123462", "desc": "Camping lamp three", "stats": {"diggCount": 3000}, "video": {"play": "https://v16.tiktokcdn.com/camping-three.mp4"}}},
             ]}),
         ]
 
@@ -469,6 +474,35 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 2)
         self.assertEqual(self.analyzer.last_search_diagnostics["selected_provider"], "multi")
         self.assertEqual(self.analyzer.last_search_diagnostics["selected_items"], 3)
+
+    @patch("tiktok_viral_analyzer.requests.get")
+    def test_later_provider_enriches_duplicate_with_private_media_transport(self, mock_get):
+        self.analyzer.search_provider_chain = ("api6", "scraper7")
+        video_id = "7591234567890123499"
+        transport_url = "https://v16.tiktokcdn.com/enriched.mp4?token=short-lived"
+        mock_get.side_effect = [
+            self.response({"videos": [{
+                "id": video_id,
+                "description": "Rechargeable picture light above framed wall artwork",
+                "statistics": {"number_of_hearts": 56000},
+            }]}),
+            self.response({"code": 0, "data": {"videos": [{
+                "id": video_id,
+                "title": "Rechargeable picture light above framed wall artwork",
+                "digg_count": 56000,
+                "video": {"play_addr": {"url_list": [transport_url]}},
+            }]}}),
+        ]
+
+        videos = self.analyzer.search_viral_videos("picture lights", min_likes=500, count=1)
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(len(videos), 1)
+        self.assertEqual(videos[0]["_media_transport_url"], transport_url)
+        self.assertEqual(self.analyzer.last_search_diagnostics["enriched_media_urls"], 1)
+        public_video = self.analyzer.extract_video_info(videos[0])
+        self.assertNotIn("_media_transport_url", public_video)
+        self.assertNotIn("short-lived", repr(public_video))
 
     @patch("tiktok_viral_analyzer.requests.get")
     def test_provider_http_failure_is_invisible_when_next_source_works(self, mock_get):

@@ -910,6 +910,8 @@
     }
 
     const refresh = !finalOnly && video.pipeline_stage === "collection";
+    const searchQuery = String(video.search_query || "").trim();
+    const retryThroughSearch = refresh && searchQuery && Boolean(video.video_id);
     let retriedVideo = null;
     let terminalError = "";
     clearInlineError();
@@ -919,13 +921,16 @@
     retryStatus.hidden = false;
     retryStatus.textContent = finalOnly
       ? "正在复用服务端证据检查点，仅重试模型终审…"
-      : refresh ? "正在重新采集原片与字幕证据…" : "正在复用已采集证据并重跑视觉终审…";
+      : retryThroughSearch
+        ? "正在重新搜索同一条视频并补全可下载媒体地址…"
+        : refresh ? "正在重新采集原片与字幕证据…" : "正在复用已采集证据并重跑视觉终审…";
     updateProgress(retryStatus.textContent.replace("…", ""), finalOnly ? 86 : refresh ? 24 : 48);
 
     try {
       const requestBody = finalOnly ? {} : {
-        keyword: source,
+        keyword: retryThroughSearch ? searchQuery : source,
         refresh,
+        target_video_id: retryThroughSearch ? String(video.video_id) : "",
         product_name: byId("product-name")?.value || "",
         product_info: byId("product-info")?.value || "",
       };

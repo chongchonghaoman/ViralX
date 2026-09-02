@@ -192,6 +192,88 @@ class WebAppTests(unittest.TestCase):
         self.assertTrue(payload['subscription_links'][0]['url'].startswith('https://rapidapi.com/'))
         self.assertNotIn('test-key', json.dumps(payload))
 
+    def test_collection_retry_can_research_and_select_only_the_failed_video(self):
+        config = {**web_app.DEFAULT_CONFIG, 'rapidapi_key': 'test-key'}
+        target_id = '7591234567890123499'
+        candidates = [
+            {
+                'video_id': '7591234567890123488',
+                'source_url': 'https://www.tiktok.com/@other/video/7591234567890123488',
+                'title': 'Other picture light',
+                'digg_count': 9000,
+            },
+            {
+                'video_id': target_id,
+                'source_url': f'https://www.tiktok.com/@target/video/{target_id}',
+                'title': 'Target picture light',
+                'digg_count': 56000,
+                '_media_transport_url': 'https://v16.tiktokcdn.com/target.mp4?token=temporary',
+            },
+        ]
+        captured = {}
+
+        class FakeTikTok:
+            def __init__(self, _output_dir):
+                self.api_key = ''
+                self.last_search_diagnostics = {'result_providers': ['scraper7']}
+
+            def search_viral_videos(self, *_args, **_kwargs):
+                return candidates
+
+            @staticmethod
+            def extract_video_info(video):
+                return {
+                    'video_id': video['video_id'],
+                    'source_url': video['source_url'],
+                    'title': video['title'],
+                    'likes': video['digg_count'],
+                    'comments': 0,
+                    'shares': 0,
+                }
+
+            @staticmethod
+            def get_video_comments(_video_id):
+                return []
+
+        class FakeAI:
+            def __init__(self, **_kwargs):
+                pass
+
+            def batch_analyze_streaming(self, videos, **kwargs):
+                captured['videos'] = videos
+                captured['media_urls'] = kwargs['media_urls']
+                yield {
+                    **videos[0],
+                    'ai_analysis': 'completed',
+                    'analysis_provider': 'custom',
+                    'pipeline_stage': 'final-analysis',
+                    'pipeline_status': 'completed',
+                    'shot_status': 'completed',
+                    'model_status': 'completed',
+                }
+
+        with patch.object(web_app, 'load_config', return_value=config), patch.object(
+            web_app, 'TikTokViralAnalyzer', FakeTikTok,
+        ), patch.object(web_app, 'AIAnalyzer', FakeAI):
+            response = self.client.post('/api/analyze', json={
+                'keyword': 'picture lights',
+                'target_video_id': target_id,
+                'refresh': True,
+            })
+            payloads = [
+                json.loads(line)
+                for line in response.get_data(as_text=True).splitlines()
+                if line.strip()
+            ]
+
+        self.assertEqual([video['video_id'] for video in captured['videos']], [target_id])
+        self.assertEqual(
+            captured['media_urls'][target_id],
+            'https://v16.tiktokcdn.com/target.mp4?token=temporary',
+        )
+        progress = next(payload for payload in payloads if payload.get('video'))
+        self.assertEqual(progress['video']['video_id'], target_id)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -387,6 +387,7 @@ class TikTokViralAnalyzer:
             "responses": 0,
             "recognized_lists": 0,
             "requests": 0,
+            "enriched_media_urls": 0,
             "response_shapes": [],
             "error": "",
         }
@@ -424,6 +425,9 @@ class TikTokViralAnalyzer:
             "responses": sum(self._integer(item.get("responses")) for item in provider_values),
             "recognized_lists": sum(self._integer(item.get("recognized_lists")) for item in provider_values),
             "requests": sum(self._integer(item.get("requests")) for item in provider_values),
+            "enriched_media_urls": sum(
+                self._integer(item.get("enriched_media_urls")) for item in provider_values
+            ),
             "providers": dict(providers),
         }
 
@@ -560,6 +564,11 @@ class TikTokViralAnalyzer:
     ) -> None:
         materialized = list(items)
         diagnostics["raw_items"] += len(materialized)
+        existing_by_id = {
+            str(value.get("video_id") or ""): value
+            for value in videos
+            if value.get("video_id")
+        }
         for item in materialized:
             video = cls._normalize_video(item, provider)
             video_id = video["video_id"]
@@ -579,11 +588,25 @@ class TikTokViralAnalyzer:
                 diagnostics["filtered_by_likes"] += 1
                 continue
             if video_id in seen_video_ids:
+                existing = existing_by_id.get(video_id)
+                media_url = str(video.get("_media_transport_url") or "")
+                if existing is not None and media_url and not existing.get("_media_transport_url"):
+                    existing["_media_transport_url"] = media_url
+                    diagnostics["enriched_media_urls"] += 1
+                continue
+            # Once the requested discovery pool is full, later providers may
+            # still contribute directly downloadable candidates. Keep those
+            # private transport alternatives so the final selection can prefer
+            # videos that TK Note can actually collect.
+            if len(videos) >= limit and not video.get("_media_transport_url"):
                 continue
             seen_video_ids.add(video_id)
             videos.append(video)
-            if len(videos) >= limit:
-                break
+            existing_by_id[video_id] = video
+
+    @staticmethod
+    def _media_ready_count(videos: Iterable[Mapping[str, Any]]) -> int:
+        return sum(1 for video in videos if video.get("_media_transport_url"))
 
     @classmethod
     def _scraper7_items(cls, payload: Any) -> List[Dict]:
@@ -1149,8 +1172,9 @@ class TikTokViralAnalyzer:
         videos: List[Dict] = []
         seen_video_ids: set = set()
 
+        media_target = min(limit, 5)
         for provider_id in provider_ids:
-            if len(videos) >= limit:
+            if len(videos) >= limit and self._media_ready_count(videos) >= media_target:
                 break
             attempted.append(provider_id)
             diagnostics = providers[provider_id]
@@ -1173,6 +1197,11 @@ class TikTokViralAnalyzer:
             if len(videos) < limit:
                 reason = self._fallback_reason(diagnostics)
                 print(f"[SEARCH] {provider_id} 当前累计 {len(videos)}/{limit}（{reason}），继续补足")
+            elif self._media_ready_count(videos) < media_target:
+                print(
+                    f"[SEARCH] {provider_id} 候选已足够，但仅有 "
+                    f"{self._media_ready_count(videos)}/{media_target} 条带可下载媒体地址，继续补全"
+                )
 
         videos.sort(
             key=lambda video: (
@@ -1184,7 +1213,9 @@ class TikTokViralAnalyzer:
             ),
             reverse=True,
         )
-        videos = videos[:limit]
+        media_ready = [video for video in videos if video.get("_media_transport_url")]
+        canonical_only = [video for video in videos if not video.get("_media_transport_url")]
+        videos = (media_ready + canonical_only)[:limit]
         result_providers = [str(video.get("search_provider") or "") for video in videos]
         unique_result_providers = list(dict.fromkeys(filter(None, result_providers)))
         selected_provider = (

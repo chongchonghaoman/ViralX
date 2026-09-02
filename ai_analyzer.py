@@ -20,6 +20,7 @@ from evidence_contract import (
     final_video_prompt as _final_video_prompt,
     grounded_sources_text as _grounded_sources_text,
     grounding_error as _grounding_error,
+    normalize_report_citations as _normalize_report_citations,
     persist_evidence_audit as _persist_evidence_audit,
 )
 from libtv_analyzer import LibTVAnalyzer, LibTVError
@@ -1666,6 +1667,7 @@ class AIAnalyzer:
             shot_analysis,
             final_analysis,
         ))
+        final_analysis = _normalize_report_citations(final_analysis, video_data)
         model_error = _model_result_error(final_analysis)
         grounding_error = "" if model_error else _grounding_error(final_analysis, video_data)
         model_failed = bool(model_error or grounding_error)
@@ -1720,6 +1722,7 @@ class AIAnalyzer:
         progress_callback=None,
         evidence_bundle_path: str = '',
         raw_model_report_path: str = '',
+        source_video_path: str = '',
     ) -> dict:
         """Retry only evidence-grounded synthesis from a server-owned checkpoint."""
         def emit(status, label, progress):
@@ -1741,17 +1744,24 @@ class AIAnalyzer:
             shot_error = validate_shot_evidence({'status': 'completed', 'evidence': shot_evidence})
             if shot_error:
                 raise ValueError(f'检查点中的镜头证据不可用：{shot_error}')
-        source_video_path = None
+        resolved_source_video_path = None
         bundle_path = Path(str(evidence_bundle_path or ''))
-        if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
+        explicit_source = Path(str(source_video_path or ''))
+        if explicit_source.name == 'source.mp4' and explicit_source.is_file():
+            expected_hash = str((evidence_bundle.get('video_input') or {}).get('source_sha256') or '')
+            actual_hash = _sha256_path(explicit_source)
+            if expected_hash and actual_hash != expected_hash:
+                raise ValueError('检查点中的原视频与证据包哈希不一致')
+            resolved_source_video_path = str(explicit_source)
+        elif bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
             candidate = bundle_path.parent.parent / 'source.mp4'
             if candidate.is_file():
                 expected_hash = str((evidence_bundle.get('video_input') or {}).get('source_sha256') or '')
                 actual_hash = _sha256_path(candidate)
                 if expected_hash and actual_hash != expected_hash:
                     raise ValueError('检查点中的原视频与证据包哈希不一致')
-                source_video_path = str(candidate)
-        if visual_mode == 'direct' and not source_video_path:
+                resolved_source_video_path = str(candidate)
+        if visual_mode == 'direct' and not resolved_source_video_path:
             raise ValueError('检查点中的原视频已不存在，不能执行原片视觉终审')
 
         saved_report = ''
@@ -1759,7 +1769,7 @@ class AIAnalyzer:
         try:
             trusted_raw_report = (
                 bundle_path.name == 'evidence-bundle.json'
-                and bundle_path.parent.name == 'viralx-evidence'
+                and bundle_path.is_file()
                 and raw_report_path.name == 'final-model-report.raw.md'
                 and raw_report_path.resolve().parent == bundle_path.resolve().parent
                 and raw_report_path.is_file()
@@ -1769,13 +1779,14 @@ class AIAnalyzer:
         except OSError:
             saved_report = ''
         if saved_report:
-            saved_model_error = _model_result_error(saved_report)
-            saved_grounding_error = '' if saved_model_error else _grounding_error(saved_report, video_data)
+            normalized_saved_report = _normalize_report_citations(saved_report, video_data)
+            saved_model_error = _model_result_error(normalized_saved_report)
+            saved_grounding_error = '' if saved_model_error else _grounding_error(normalized_saved_report, video_data)
             if not saved_model_error and not saved_grounding_error:
                 emit('complete', '已重新校验保存的模型报告，无需再次调用模型', 100)
                 return {
                     **video_data,
-                    'ai_analysis': saved_report,
+                    'ai_analysis': normalized_saved_report,
                     'analysis_provider': video_data.get('analysis_provider') or self.model_provider,
                     'pipeline_stage': 'final-analysis',
                     'pipeline_status': 'completed',
@@ -1783,6 +1794,7 @@ class AIAnalyzer:
                     'model_status': 'completed',
                     'model_error_code': '',
                     'model_grounding_error': '',
+                    'shot_status': 'completed' if visual_mode == 'direct' else video_data.get('shot_status', 'completed'),
                     'retry_scope': '',
                     'evidence_bundle_path': str(bundle_path),
                     'raw_model_report_path': str(raw_report_path),
@@ -1795,7 +1807,7 @@ class AIAnalyzer:
 
         emit('running', '正在复用已保存原片与证据，仅重试模型终审', 86)
         try:
-            final_analysis = self.model_analyzer.analyze(video_data, source_video_path)
+            final_analysis = self.model_analyzer.analyze(video_data, resolved_source_video_path)
         except Exception as exc:
             emit('error', '模型终审连接失败；检查点仍可继续使用', 100)
             return {
@@ -1815,7 +1827,7 @@ class AIAnalyzer:
         try:
             if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
                 audit_details = _persist_evidence_audit(
-                    str(bundle_path.parent.parent / 'source.mp4'),
+                    str(resolved_source_video_path or bundle_path.parent.parent / 'source.mp4'),
                     evidence_bundle,
                     str(shot_evidence.get('shot_analysis') or ''),
                     final_analysis,
@@ -1823,6 +1835,7 @@ class AIAnalyzer:
         except (OSError, ValueError):
             audit_details = {}
 
+        final_analysis = _normalize_report_citations(final_analysis, video_data)
         model_error = _model_result_error(final_analysis)
         grounding_error = "" if model_error else _grounding_error(final_analysis, video_data)
         model_failed = bool(model_error or grounding_error)

@@ -366,6 +366,7 @@ def build_analyze_response(config_override=None, max_videos=None):
     refresh = data.get('refresh', False)
     product_name = data.get('product_name', '')
     product_info = data.get('product_info', '')
+    target_video_id = str(data.get('target_video_id') or '').strip()
 
     def generate():
         current_config = {}
@@ -408,6 +409,18 @@ def build_analyze_response(config_override=None, max_videos=None):
                     if v.get('video_id') and v.get('_media_transport_url')
                 }
                 video_data = [tiktok.extract_video_info(v) for v in videos]
+                if target_video_id:
+                    video_data = [
+                        video for video in video_data
+                        if str(video.get('video_id') or '') == target_video_id
+                    ]
+                    if not video_data:
+                        yield json.dumps({
+                            'status': 'error',
+                            'message': '重新搜索已完成，但暂时没有找回这条视频。请重新运行关键词搜索以获得新的可采集候选。',
+                            'done': True,
+                        }, ensure_ascii=False) + '\n'
+                        return
                 video_urls = {
                     v['video_id']: v['source_url']
                     for v in video_data
@@ -577,6 +590,7 @@ def build_resume_response(task_id, config_override=None):
     store = _checkpoint_store(current_config)
 
     def generate():
+        record = None
         try:
             record = store.load(task_id)
             if record.get('resumable_stage') != 'final-analysis':
@@ -597,6 +611,7 @@ def build_resume_response(task_id, config_override=None):
                         progress_callback=progress_callback,
                         evidence_bundle_path=(record.get('internal') or {}).get('evidence_bundle_path', ''),
                         raw_model_report_path=(record.get('internal') or {}).get('raw_model_report_path', ''),
+                        source_video_path=(record.get('internal') or {}).get('source_video_path', ''),
                     )
                 except Exception as exc:
                     result_holder['error'] = exc
@@ -644,12 +659,22 @@ def build_resume_response(task_id, config_override=None):
                 'done': True,
             }, ensure_ascii=False) + '\n'
         except (KeyError, ValueError) as exc:
+            if record is not None:
+                try:
+                    store.update(task_id, status='ready')
+                except (KeyError, ValueError, OSError):
+                    pass
             yield json.dumps({
                 'status': 'error',
                 'message': '恢复任务不存在、已过期或证据无效。请重新运行这条视频。' if isinstance(exc, KeyError) else str(exc),
                 'done': True,
             }, ensure_ascii=False) + '\n'
         except Exception as exc:
+            if record is not None:
+                try:
+                    store.update(task_id, status='ready')
+                except (KeyError, ValueError, OSError):
+                    pass
             yield json.dumps({
                 'status': 'error',
                 'message': safe_error_message(exc, (current_config.get('model_api_key'),)),

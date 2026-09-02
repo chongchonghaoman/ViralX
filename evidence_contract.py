@@ -229,6 +229,15 @@ def _claims_unverified_user_feedback(report: str) -> bool:
     return False
 
 
+def _discloses_unavailable_comments(report: str) -> bool:
+    """Accept clear natural-language disclosures, not one exact phrase."""
+    for raw_line in str(report or "").splitlines():
+        line = raw_line.strip()
+        if "评论" in line and _USER_FEEDBACK_DISCLOSURE_RE.search(line):
+            return True
+    return False
+
+
 def _video_timestamp_seconds(value: str) -> float | None:
     """Normalize MM:SS and HH:MM:SS citations to seconds."""
     parts = str(value or "").split(":")
@@ -261,6 +270,27 @@ def _video_citation_ranges(report: str) -> set[tuple[float, float]]:
         if start is not None and end is not None and end > start:
             ranges.add((start, end))
     return ranges
+
+
+def normalize_report_citations(report: str, video_data: dict | None = None) -> str:
+    """Repair deterministic citation formatting without inventing evidence."""
+    text = str(report or "")
+    bundle = ((video_data or {}).get("evidence_bundle") or {})
+    target = str(bundle.get("target_product") or (video_data or {}).get("target_product") or "").strip()
+    if not target or "[TARGET:product]" in text:
+        return text
+
+    lines = text.splitlines(keepends=True)
+    target_labels = (
+        re.compile(r"^\s*[-*]?\s*目标\s*[：:]"),
+        re.compile(r"^\s*[-*]?\s*目标产品\s*[：:]"),
+    )
+    for label in target_labels:
+        for index, line in enumerate(lines):
+            if label.search(line) and target in line:
+                lines[index] = line.replace(target, f"{target} [TARGET:product]", 1)
+                return "".join(lines)
+    return text
 
 
 def grounding_error(report: str, video_data: dict | None = None) -> str:
@@ -306,7 +336,7 @@ def grounding_error(report: str, video_data: dict | None = None) -> str:
     if not (platform.get("comments_data") or []):
         if _claims_unverified_user_feedback(text):
             return "未采集评论正文，但报告仍声称存在真实用户反馈"
-        if not re.search(r"评论.{0,16}未采集|未采集.{0,16}评论", text):
+        if not _discloses_unavailable_comments(text):
             return "报告没有披露评论正文未采集"
     if not (platform.get("hashtags") or []) and re.search(r"#[A-Za-z0-9_\-]+", text):
         return "未采集标签，但报告生成了具体标签"

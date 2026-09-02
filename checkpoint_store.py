@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import secrets
+import shutil
 import threading
 import time
 from typing import Any
@@ -55,6 +56,49 @@ class CheckpointStore:
             temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
             temporary.replace(target)
 
+    def _artifact_dir(self, task_id: str) -> Path:
+        self._path(task_id)
+        return self.root / "artifacts" / task_id
+
+    def _snapshot_internal_artifacts(self, task_id: str, internal: dict[str, Any]) -> dict[str, str]:
+        """Freeze mutable per-video audit files into this task's private checkpoint."""
+        snapshot = {key: str(value or "") for key, value in internal.items()}
+        bundle = Path(snapshot.get("evidence_bundle_path") or "")
+        if bundle.name != "evidence-bundle.json" or not bundle.is_file():
+            return snapshot
+
+        artifact_dir = self._artifact_dir(task_id)
+        try:
+            if bundle.resolve().parent == artifact_dir.resolve():
+                return snapshot
+        except OSError:
+            return snapshot
+
+        source = bundle.parent.parent / "source.mp4" if bundle.parent.name == "viralx-evidence" else None
+        if source and source.is_file():
+            snapshot["source_video_path"] = str(source)
+
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        expected = {
+            "evidence_bundle_path": "evidence-bundle.json",
+            "shot_evidence_path": "shot-evidence.md",
+            "raw_model_report_path": "final-model-report.raw.md",
+        }
+        for key, file_name in expected.items():
+            candidate = Path(snapshot.get(key) or "")
+            if candidate.name != file_name or candidate.parent != bundle.parent or not candidate.is_file():
+                continue
+            target = artifact_dir / file_name
+            try:
+                shutil.copy2(candidate, target)
+            except OSError:
+                # A checkpoint should remain usable even when an antivirus or
+                # another reader briefly locks one audit file. Keep the
+                # original validated path and allow a later update to retry.
+                continue
+            snapshot[key] = str(target)
+        return snapshot
+
     def create_final_checkpoint(self, video: dict[str, Any]) -> dict[str, Any]:
         now = time.time()
         task_id = secrets.token_urlsafe(24)
@@ -74,11 +118,11 @@ class CheckpointStore:
             "resumable_stage": "final-analysis",
             "retry_scope": "model-only",
             "video": safe_video,
-            "internal": {
+            "internal": self._snapshot_internal_artifacts(task_id, {
                 "evidence_bundle_path": str(video.get("evidence_bundle_path") or ""),
                 "shot_evidence_path": str(video.get("shot_evidence_path") or ""),
                 "raw_model_report_path": str(video.get("raw_model_report_path") or ""),
-            },
+            }),
         }
         self._write(record)
         return self.public(record)
@@ -109,6 +153,7 @@ class CheckpointStore:
                 for key, value in video.items()
                 if key in PUBLIC_VIDEO_FIELDS
             }
+        record["internal"] = self._snapshot_internal_artifacts(task_id, record.get("internal") or {})
         self._write(record)
         return self.public(record)
 
