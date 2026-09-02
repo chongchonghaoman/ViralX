@@ -180,6 +180,13 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('status || "not_run"', self.home_js)
         self.assertIn(".provider-badge.not_run", self.home_css)
         self.assertIn('class="video-card__error"', self.home_js)
+        self.assertIn("function conciseFailureMessage(video)", self.home_js)
+        self.assertIn("function looksLikeGroundedReport(value)", self.home_js)
+        self.assertIn('class="video-card__error" role="alert"><strong>', self.home_js)
+        self.assertIn("grid-template-columns: repeat(auto-fit", self.home_css)
+        self.assertIn('className = "report-table-scroll"', self.home_js)
+        self.assertIn('scroller.setAttribute("role", "region")', self.home_js)
+        self.assertIn(".report-table-scroll", self.home_css)
 
     def test_subscription_failures_render_safe_actionable_rapidapi_links(self):
         self.assertIn("function renderSubscriptionRecovery", self.home_js)
@@ -196,7 +203,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
         home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
         settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
-        self.assertEqual(home_versions, {"1.1.9"})
+        self.assertEqual(home_versions, {"1.1.10"})
         self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
         self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)

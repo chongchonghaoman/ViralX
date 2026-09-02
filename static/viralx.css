@@ -1307,8 +1307,7 @@ h3 {
   white-space: nowrap;
 }
 
-.provider-row,
-.card-actions {
+.provider-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1358,13 +1357,24 @@ h3 {
 }
 
 .video-card__error {
+  display: grid;
+  gap: var(--space-2xs);
+  max-width: 72ch;
   margin: var(--space-md) 0 0;
   padding: var(--space-sm) var(--space-md);
   border-inline-start: 2px solid var(--color-error);
   background: var(--color-paper-2);
-  color: var(--color-ink-2);
   font-size: var(--text-sm);
   line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.video-card__error strong {
+  color: var(--color-error);
+}
+
+.video-card__error span {
+  color: var(--color-ink-2);
 }
 
 .video-card__retry-status {
@@ -1386,7 +1396,16 @@ h3 {
 }
 
 .card-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  align-items: stretch;
+  gap: var(--space-xs);
   margin-block-start: var(--space-md);
+}
+
+.card-actions > * {
+  width: 100%;
+  min-width: 0;
 }
 
 .analysis-btn,
@@ -1401,12 +1420,7 @@ h3 {
   font-size: var(--text-sm);
 }
 
-.analysis-btn {
-  flex: 1 1 auto;
-}
-
 .retry-video-btn {
-  flex: 1 1 12rem;
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: var(--color-accent-ink);
@@ -1615,8 +1629,22 @@ h3 {
 
 .markdown-content table {
   width: 100%;
+  min-width: 42rem;
   border-collapse: collapse;
   font-size: var(--text-sm);
+}
+
+.report-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.report-table-scroll:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .markdown-content th,

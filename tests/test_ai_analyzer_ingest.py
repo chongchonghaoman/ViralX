@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer
+from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer, _model_result_error
 from shot_analyzers import ShotAnalysisResult
 from video_ingest import VideoAsset, VideoIngestError
 
@@ -76,7 +76,8 @@ class FakeModel:
             "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
             "## 用户反馈与受众\n"
             "评论正文未采集，无法判断真实用户诉求 [META:comments]\n"
-            "产品居中 [SHOT:S001]\n手部触发变化 [SHOT:S002]"
+            "产品居中 [SHOT:S001]\n手部触发变化 [SHOT:S002]\n"
+            "适合强调零失败安装体验 [SHOT:S001]"
         )
 
 
@@ -91,6 +92,16 @@ class FailingModel:
 
 
 class AIAnalyzerIngestTests(unittest.TestCase):
+    def test_model_failure_detection_only_accepts_explicit_error_sentinels(self):
+        grounded_report = (
+            "## 证据覆盖\n"
+            "适合强调零失败安装体验 [SHOT:S001]\n"
+            "标题已采集 [META:title]"
+        )
+        self.assertEqual(_model_result_error(grounded_report), "")
+        self.assertEqual(_model_result_error("Custom 分析失败：HTTP 429"), "Custom 分析失败：HTTP 429")
+        self.assertEqual(_model_result_error("分析结果为空"), "分析结果为空")
+
     def test_collection_failure_marks_downstream_stages_not_run(self):
         events = []
         analyzer = AIAnalyzer(

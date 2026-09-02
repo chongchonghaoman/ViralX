@@ -467,7 +467,17 @@
     byId("modal-title").textContent = title;
     const report = content || "暂无报告内容";
     const rendered = window.marked ? window.marked.parse(report) : escapeHtml(report);
-    byId("modal-content").innerHTML = sanitizeReportHtml(rendered);
+    const modalContent = byId("modal-content");
+    modalContent.innerHTML = sanitizeReportHtml(rendered);
+    modalContent.querySelectorAll("table").forEach((table, index) => {
+      const scroller = document.createElement("div");
+      scroller.className = "report-table-scroll";
+      scroller.tabIndex = 0;
+      scroller.setAttribute("role", "region");
+      scroller.setAttribute("aria-label", `报告表格 ${index + 1}`);
+      table.before(scroller);
+      scroller.appendChild(table);
+    });
 
     if (!modal.open) modal.showModal();
     document.body.dataset.modalOpen = "true";
@@ -706,6 +716,29 @@
     }
   }
 
+  function looksLikeGroundedReport(value) {
+    const report = String(value || "").trim();
+    return report.startsWith("## 证据覆盖")
+      && /\[META:[^\]]+\]/.test(report)
+      && /\[SHOT:S\d{3}\]/.test(report);
+  }
+
+  function conciseFailureMessage(video) {
+    const groundingIssue = String(video.model_grounding_error || "").trim();
+    if (groundingIssue) return `最终报告未通过证据校验：${groundingIssue}。`;
+
+    const report = String(video.ai_analysis || "").trim();
+    if (looksLikeGroundedReport(report)) {
+      return "模型报告已经返回，但旧状态被误标为失败；报告本身仍可打开核对。";
+    }
+
+    const firstLine = report
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^#{1,6}\s*/, "").replace(/[|*_`]/g, "").trim())
+      .find(Boolean);
+    return (firstLine || "分析链没有完成").substring(0, 220);
+  }
+
   function renderVideoCard(video, index) {
     const videoUrl = videoSourceUrl(video);
     const analysisId = `analysis-${Date.now()}-${index}`;
@@ -740,16 +773,29 @@
     const shotLabel = `${shotProvider} · ${lifecycleLabel(status, {
       completed: "已完成", running: "处理中", failed: "已阻断", notRun: "未运行", unknown: "状态未知",
     })}`;
-    const providerLabel = `${providerName} · ${lifecycleLabel(modelStatus, {
+    const legacyReportRecovered = video.pipeline_status !== "completed"
+      && modelStatus === "error"
+      && Object.prototype.hasOwnProperty.call(video, "model_grounding_error")
+      && !video.model_grounding_error
+      && looksLikeGroundedReport(video.ai_analysis);
+    const effectiveModelStatus = legacyReportRecovered ? "completed" : modelStatus;
+    const providerLabel = `${providerName} · ${lifecycleLabel(effectiveModelStatus, {
       completed: "最终分析", running: "分析中", failed: "分析失败", notRun: "未运行", unknown: "状态未知",
     })}`;
     const projectUrl = /^https?:\/\//i.test(video.libtv_project_url || "") ? video.libtv_project_url : "";
-    const pipelineFailed = video.pipeline_status && video.pipeline_status !== "completed";
+    const pipelineFailed = Boolean(video.pipeline_status && video.pipeline_status !== "completed" && !legacyReportRecovered);
     const canResumeFinal = pipelineFailed
       && video.resumable_stage === "final-analysis"
       && video.retry_scope === "model-only"
       && Boolean(video.task_id);
-    const failureMessage = pipelineFailed ? String(video.ai_analysis || "分析链没有完成") : "";
+    const failureMessage = pipelineFailed ? conciseFailureMessage(video) : "";
+    const failureTitle = video.pipeline_stage === "collection"
+      ? "原片采集没有完成"
+      : video.pipeline_stage === "shot-analysis"
+        ? "镜头证据没有完成"
+        : video.pipeline_stage === "final-analysis"
+          ? "证据终审没有完成"
+          : "分析没有完成";
     const recoveryLabel = video.pipeline_stage === "collection"
       ? "检查采集设置"
       : video.pipeline_stage === "final-analysis"
@@ -771,14 +817,14 @@
       <div class="provider-row">
         <span class="provider-badge ${escapeHtml(acquisitionStatus || "not_run")}">${escapeHtml(acquisitionLabel)}</span>
         <span class="provider-badge ${escapeHtml(status || "not_run")}">${escapeHtml(shotLabel)}</span>
-        <span class="provider-badge ${escapeHtml(modelStatus || "not_run")}">${escapeHtml(providerLabel)}</span>
+        <span class="provider-badge ${escapeHtml(effectiveModelStatus || "not_run")}">${escapeHtml(providerLabel)}</span>
       </div>
-      ${failureMessage ? `<p class="video-card__error" role="alert">${escapeHtml(failureMessage.substring(0, 600))}</p>` : ""}
+      ${failureMessage ? `<div class="video-card__error" role="alert"><strong>${escapeHtml(failureTitle)}</strong><span>${escapeHtml(failureMessage)}</span></div>` : ""}
       ${canResumeFinal ? `<p class="video-card__checkpoint">证据检查点保留至 ${escapeHtml(checkpointExpiryLabel(video.checkpoint_expires_at))}。仅再次调用模型，不会重新下载或切镜。</p>` : ""}
       <div class="card-actions">
         ${pipelineFailed ? `<button class="retry-video-btn" type="button">${canResumeFinal ? "仅重试终审" : "重试这条视频"}</button>` : ""}
         <button class="analysis-btn" type="button">${pipelineFailed ? "查看失败详情" : "打开最终分析"}</button>
-        ${pipelineFailed ? `<a class="project-link" href="/settings">${recoveryLabel}</a>` : ""}
+        ${pipelineFailed && !video.model_grounding_error ? `<a class="project-link" href="/settings">${recoveryLabel}</a>` : ""}
         ${projectUrl ? `<a class="project-link" href="${escapeHtml(projectUrl)}" target="_blank" rel="noopener noreferrer">打开项目画布</a>` : ""}
       </div>
       <p class="video-card__retry-status" role="status" aria-live="polite" hidden></p>

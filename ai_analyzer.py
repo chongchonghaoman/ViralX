@@ -68,6 +68,25 @@ def _tiktok_numeric_id(value: object) -> str:
     return match.group(1) if match else ""
 
 
+_MODEL_FAILURE_PREFIX_RE = re.compile(
+    r"^(?:"
+    r"分析(?:失败|异常)|"
+    r"分析结果为空|"
+    r"模型\s*API\s*没有返回最终分析|"
+    r"[^：:\n]{1,48}\s+分析失败"
+    r")(?:[：:]|$)"
+)
+
+
+def _model_result_error(report: object) -> str:
+    """Recognize provider error sentinels without scanning valid report prose."""
+    text = str(report or "").strip()
+    if not text:
+        return "模型没有返回报告"
+    first_line = text.splitlines()[0].strip()
+    return first_line[:240] if _MODEL_FAILURE_PREFIX_RE.match(first_line) else ""
+
+
 class AICache:
     """AI 分析结果缓存"""
     def __init__(self, cache_dir: str = None):
@@ -1184,7 +1203,7 @@ class AIAnalyzer:
                         'acquisition_note': f'视频采集失败，已改用元数据分析：{str(exc)[:120]}',
                     }
             result = self.model_analyzer.analyze(video_data, video_file_path)
-            failed = '失败' in result
+            failed = bool(_model_result_error(result))
             return {
                 'analysis': result,
                 'analysis_provider': self.model_provider,
@@ -1460,10 +1479,16 @@ class AIAnalyzer:
             shot_analysis,
             final_analysis,
         ))
-        grounding_error = _grounding_error(final_analysis, video_data)
-        model_failed = '失败' in final_analysis or not final_analysis.strip() or bool(grounding_error)
+        model_error = _model_result_error(final_analysis)
+        grounding_error = "" if model_error else _grounding_error(final_analysis, video_data)
+        model_failed = bool(model_error or grounding_error)
         visible_analysis = final_analysis
-        if grounding_error:
+        if model_error:
+            visible_analysis = (
+                f'最终模型调用失败：{model_error}。'
+                '平台、TK Note 与镜头证据已保存，可稍后直接重试终审。'
+            )
+        elif grounding_error:
             visible_analysis = (
                 f'最终模型报告已拦截：{grounding_error}。'
                 '原始输出已保存到本机审计目录，但不会作为可信分析展示；请重试。'
@@ -1495,6 +1520,7 @@ class AIAnalyzer:
             'libtv_project_url': shot_details.get('project_url', ''),
             'libtv_result_urls': shot_details.get('result_urls', []),
             'model_status': 'error' if model_failed else 'completed',
+            'model_error_code': 'provider_error' if model_error else '',
             'model_grounding_error': grounding_error,
             **audit_details,
             **acquisition_details,
@@ -1560,9 +1586,15 @@ class AIAnalyzer:
         except (OSError, ValueError):
             audit_details = {}
 
-        grounding_error = _grounding_error(final_analysis, video_data)
-        model_failed = '失败' in final_analysis or not final_analysis.strip() or bool(grounding_error)
-        if grounding_error:
+        model_error = _model_result_error(final_analysis)
+        grounding_error = "" if model_error else _grounding_error(final_analysis, video_data)
+        model_failed = bool(model_error or grounding_error)
+        if model_error:
+            visible_analysis = (
+                f'最终模型调用失败：{model_error}。'
+                '已保存证据未受影响，可再次仅重试终审。'
+            )
+        elif grounding_error:
             visible_analysis = (
                 f'最终模型报告已拦截：{grounding_error}。'
                 '原始输出已保存，但不会作为可信分析展示；可再次仅重试终审。'
@@ -1584,6 +1616,7 @@ class AIAnalyzer:
             'pipeline_status': 'error' if model_failed else 'completed',
             'evidence_status': 'merged',
             'model_status': 'error' if model_failed else 'completed',
+            'model_error_code': 'provider_error' if model_error else '',
             'model_grounding_error': grounding_error,
             'retry_scope': 'model-only',
             **audit_details,
