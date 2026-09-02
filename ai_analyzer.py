@@ -1719,6 +1719,7 @@ class AIAnalyzer:
         video_data: dict,
         progress_callback=None,
         evidence_bundle_path: str = '',
+        raw_model_report_path: str = '',
     ) -> dict:
         """Retry only evidence-grounded synthesis from a server-owned checkpoint."""
         def emit(status, label, progress):
@@ -1740,11 +1741,6 @@ class AIAnalyzer:
             shot_error = validate_shot_evidence({'status': 'completed', 'evidence': shot_evidence})
             if shot_error:
                 raise ValueError(f'检查点中的镜头证据不可用：{shot_error}')
-        if self.model_config_error:
-            raise ValueError(f'模型 API 配置无效：{self.model_config_error}')
-        if not self.model_api_key or not self.model_name or not self.model_analyzer:
-            raise ValueError('最终模型尚未配置完成')
-
         source_video_path = None
         bundle_path = Path(str(evidence_bundle_path or ''))
         if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
@@ -1757,6 +1753,45 @@ class AIAnalyzer:
                 source_video_path = str(candidate)
         if visual_mode == 'direct' and not source_video_path:
             raise ValueError('检查点中的原视频已不存在，不能执行原片视觉终审')
+
+        saved_report = ''
+        raw_report_path = Path(str(raw_model_report_path or ''))
+        try:
+            trusted_raw_report = (
+                bundle_path.name == 'evidence-bundle.json'
+                and bundle_path.parent.name == 'viralx-evidence'
+                and raw_report_path.name == 'final-model-report.raw.md'
+                and raw_report_path.resolve().parent == bundle_path.resolve().parent
+                and raw_report_path.is_file()
+            )
+            if trusted_raw_report:
+                saved_report = raw_report_path.read_text(encoding='utf-8').strip()
+        except OSError:
+            saved_report = ''
+        if saved_report:
+            saved_model_error = _model_result_error(saved_report)
+            saved_grounding_error = '' if saved_model_error else _grounding_error(saved_report, video_data)
+            if not saved_model_error and not saved_grounding_error:
+                emit('complete', '已重新校验保存的模型报告，无需再次调用模型', 100)
+                return {
+                    **video_data,
+                    'ai_analysis': saved_report,
+                    'analysis_provider': video_data.get('analysis_provider') or self.model_provider,
+                    'pipeline_stage': 'final-analysis',
+                    'pipeline_status': 'completed',
+                    'evidence_status': 'merged',
+                    'model_status': 'completed',
+                    'model_error_code': '',
+                    'model_grounding_error': '',
+                    'retry_scope': '',
+                    'evidence_bundle_path': str(bundle_path),
+                    'raw_model_report_path': str(raw_report_path),
+                }
+
+        if self.model_config_error:
+            raise ValueError(f'模型 API 配置无效：{self.model_config_error}')
+        if not self.model_api_key or not self.model_name or not self.model_analyzer:
+            raise ValueError('最终模型尚未配置完成')
 
         emit('running', '正在复用已保存原片与证据，仅重试模型终审', 86)
         try:
@@ -1820,7 +1855,7 @@ class AIAnalyzer:
             'model_status': 'error' if model_failed else 'completed',
             'model_error_code': 'provider_error' if model_error else '',
             'model_grounding_error': grounding_error,
-            'retry_scope': 'model-only',
+            'retry_scope': 'model-only' if model_failed else '',
             **audit_details,
         }
 

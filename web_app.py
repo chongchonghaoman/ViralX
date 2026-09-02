@@ -596,6 +596,7 @@ def build_resume_response(task_id, config_override=None):
                         dict(record.get('video') or {}),
                         progress_callback=progress_callback,
                         evidence_bundle_path=(record.get('internal') or {}).get('evidence_bundle_path', ''),
+                        raw_model_report_path=(record.get('internal') or {}).get('raw_model_report_path', ''),
                     )
                 except Exception as exc:
                     result_holder['error'] = exc
@@ -611,10 +612,11 @@ def build_resume_response(task_id, config_override=None):
             if result_holder.get('error'):
                 raise result_holder['error']
             video = result_holder['video']
+            completed = video.get('pipeline_status') == 'completed'
             video.update({
                 'task_id': task_id,
-                'resumable_stage': 'final-analysis',
-                'retry_scope': 'model-only',
+                'resumable_stage': '' if completed else 'final-analysis',
+                'retry_scope': '' if completed else 'model-only',
                 'checkpoint_expires_at': record.get('expires_at', ''),
             })
             public_task = store.update(

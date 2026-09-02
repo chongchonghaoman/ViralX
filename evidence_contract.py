@@ -210,6 +210,14 @@ _USER_FEEDBACK_DISCLOSURE_RE = re.compile(
     r"不得推断|不能判断|非直接用户反馈|待验证|仅能.{0,12}推断"
 )
 
+_VIDEO_CITATION_RE = re.compile(
+    r"\[VIDEO:"
+    r"(?P<start>\d{1,3}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)"
+    r"-"
+    r"(?P<end>\d{1,3}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)"
+    r"\]"
+)
+
 
 def _claims_unverified_user_feedback(report: str) -> bool:
     for raw_line in str(report or "").splitlines():
@@ -219,6 +227,40 @@ def _claims_unverified_user_feedback(report: str) -> bool:
         if _USER_FEEDBACK_CLAIM_RE.search(line) and not _USER_FEEDBACK_DISCLOSURE_RE.search(line):
             return True
     return False
+
+
+def _video_timestamp_seconds(value: str) -> float | None:
+    """Normalize MM:SS and HH:MM:SS citations to seconds."""
+    parts = str(value or "").split(":")
+    try:
+        if len(parts) == 2:
+            hours = 0
+            minutes = int(parts[0])
+            seconds = float(parts[1])
+        elif len(parts) == 3:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = float(parts[2])
+            if minutes >= 60:
+                return None
+        else:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if hours < 0 or minutes < 0 or not 0 <= seconds < 60:
+        return None
+    return round((hours * 3600) + (minutes * 60) + seconds, 3)
+
+
+def _video_citation_ranges(report: str) -> set[tuple[float, float]]:
+    """Return unique, valid video ranges regardless of citation clock style."""
+    ranges: set[tuple[float, float]] = set()
+    for match in _VIDEO_CITATION_RE.finditer(str(report or "")):
+        start = _video_timestamp_seconds(match.group("start"))
+        end = _video_timestamp_seconds(match.group("end"))
+        if start is not None and end is not None and end > start:
+            ranges.add((start, end))
+    return ranges
 
 
 def grounding_error(report: str, video_data: dict | None = None) -> str:
@@ -233,10 +275,7 @@ def grounding_error(report: str, video_data: dict | None = None) -> str:
     bundle = ((video_data or {}).get("evidence_bundle") or {})
     visual_mode = str(bundle.get("visual_mode") or "professional").lower()
     shot_citations = {item for item in unique if re.fullmatch(r"\[SHOT:S\d{3}\]", item)}
-    video_citations = set(re.findall(
-        r"\[VIDEO:\d{1,2}:\d{2}(?:\.\d{1,3})?-\d{1,2}:\d{2}(?:\.\d{1,3})?\]",
-        text,
-    ))
+    video_citations = _video_citation_ranges(text)
     evidence = bundle.get("shot_evidence") or {}
     if visual_mode == "direct":
         try:
@@ -245,6 +284,11 @@ def grounding_error(report: str, video_data: dict | None = None) -> str:
             duration = 0
         required_video_citations = 1 if 0 < duration < 2 else 2
         if len(video_citations) < required_video_citations:
+            if "[VIDEO:" in text and not video_citations:
+                return (
+                    "报告中的原视频时间引用格式无法识别；请使用 "
+                    "[VIDEO:MM:SS-MM:SS] 或 [VIDEO:HH:MM:SS-HH:MM:SS]"
+                )
             return f"报告没有引用足够的原视频时间段（需要至少 {required_video_citations} 个）"
         target = str(bundle.get("target_product") or "").strip()
         if target and "[TARGET:product]" not in text:

@@ -277,7 +277,53 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertEqual(len(fake_model.calls), 1)
             self.assertEqual(fake_model.calls[0][1], str(video))
             self.assertEqual(resumed["pipeline_status"], "completed")
-            self.assertEqual(resumed["retry_scope"], "model-only")
+            self.assertEqual(resumed["retry_scope"], "")
+
+    def test_saved_direct_report_is_revalidated_without_calling_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp)
+            video = package / "source.mp4"
+            video.write_bytes(b"video")
+            audit_dir = package / "viralx-evidence"
+            audit_dir.mkdir()
+            bundle_path = audit_dir / "evidence-bundle.json"
+            bundle = {
+                "schema": "viralx.evidence_bundle.v1",
+                "visual_mode": "direct",
+                "target_product": "picture light",
+                "video_input": {"source_sha256": hashlib.sha256(b"video").hexdigest()},
+                "platform_evidence": {"duration": 4, "comments_data": []},
+                "shot_evidence": {},
+            }
+            bundle_path.write_text("{}", encoding="utf-8")
+            raw_path = audit_dir / "final-model-report.raw.md"
+            raw_report = (
+                "# ViralX 爆款视频证据报告\n"
+                "目标是 picture light [TARGET:product]\n"
+                "画面状态：[TARGET:visible]\n"
+                "灯体出现 [VIDEO:00:00:00-00:00:02]\n"
+                "灯光照亮画作 [VIDEO:00:00:02-00:00:04]\n"
+                "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+                "评论正文未采集，无法判断真实用户诉求 [META:comments]"
+            )
+            raw_path.write_text(raw_report, encoding="utf-8")
+            analyzer = AIAnalyzer(
+                analysis_mode="pipeline", model_provider="custom",
+                model_api_key="", model_base_url="", model_name="",
+            )
+            failing_model = FailingModel()
+            analyzer.model_analyzer = failing_model
+
+            resumed = analyzer.resume_final_analysis(
+                {"video_id": "123", "evidence_bundle": bundle},
+                evidence_bundle_path=str(bundle_path),
+                raw_model_report_path=str(raw_path),
+            )
+
+            self.assertEqual(resumed["pipeline_status"], "completed")
+            self.assertEqual(resumed["ai_analysis"], raw_report)
+            self.assertEqual(resumed["retry_scope"], "")
+            self.assertEqual(failing_model.calls if hasattr(failing_model, "calls") else [], [])
 
     def test_default_pipeline_reads_original_video_without_running_shotloom(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -510,6 +556,45 @@ class AIAnalyzerIngestTests(unittest.TestCase):
         )
 
         self.assertEqual(analyzer.grounding_error(report, video_data), "")
+
+    def test_direct_video_validator_accepts_hour_clock_citations(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+        )
+        video_data = {
+            "evidence_bundle": {
+                "visual_mode": "direct", "target_product": "picture light",
+                "platform_evidence": {"duration": 4, "comments_data": []},
+            }
+        }
+        report = (
+            "目标是 picture light [TARGET:product]\n画面状态：[TARGET:visible]\n"
+            "灯体出现 [VIDEO:00:00:00-00:00:02]\n"
+            "灯光点亮 [VIDEO:00:00:02-00:00:04]\n"
+            "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "评论正文未采集，无法判断真实用户诉求 [META:comments]"
+        )
+        self.assertEqual(analyzer.grounding_error(report, video_data), "")
+
+    def test_direct_video_validator_deduplicates_equivalent_clock_styles(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+        )
+        video_data = {
+            "evidence_bundle": {
+                "visual_mode": "direct", "target_product": "picture light",
+                "platform_evidence": {"duration": 4, "comments_data": []},
+            }
+        }
+        report = (
+            "目标是 picture light [TARGET:product]\n画面状态：[TARGET:visible]\n"
+            "同一段画面 [VIDEO:00:00-00:02] [VIDEO:00:00:00-00:00:02]\n"
+            "标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "评论正文未采集，无法判断真实用户诉求 [META:comments]"
+        )
+        self.assertIn("需要至少 2 个", analyzer.grounding_error(report, video_data))
 
 
 if __name__ == "__main__":
