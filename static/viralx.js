@@ -372,7 +372,8 @@
   function syncPrimaryActions() {
     document.querySelectorAll("[data-runtime-action]").forEach((action) => {
       action.href = "#analysis-studio";
-      action.textContent = primaryActionLabel(action.classList.contains("nav-cta"));
+      const marketingCta = action.classList.contains("nav-cta") || action.classList.contains("hero-cta");
+      action.textContent = marketingCta ? "开始分析" : primaryActionLabel(false);
     });
     const analyzeButton = byId("analyze-btn");
     if (analyzeButton && !analyzeButton.disabled) {

@@ -400,35 +400,41 @@
     const configured = health.configured || {};
     const provider = String(settings.model_provider || health.analysis_provider || "qwen");
     const providerLabel = PROVIDERS[provider]?.name || provider;
-    const searchProviderValue = String(health.keyword_search_provider || "rapidapi-multisource").toLowerCase();
-    const searchProvider = searchProviderValue === "rapidapi-multisource"
-      ? "TikTok 多源搜索"
-      : `${searchProviderValue} 搜索`;
     const connecting = health.runtime === "connecting";
+    const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
+    const searchConfigured = Boolean(settings.rapidapi_key) || configured.keyword_search;
+    const workerOnline = health.runtime === "worker";
+    const fullyReady = workerOnline && Boolean(health.analysis_ready) && searchConfigured;
+    note.dataset.state = fullyReady ? "ready" : connecting ? "connecting" : workerOnline ? "partial" : "offline";
     note.replaceChildren();
     const copy = document.createElement("div");
     const title = document.createElement("strong");
-    title.textContent = health.runtime === "worker"
-      ? "ViralX 实时分析服务"
-      : connecting ? "正在连接实时分析服务" : "实时分析服务暂离线";
+    title.textContent = fullyReady
+      ? "分析服务已就绪"
+      : workerOnline ? "分析服务在线，配置待补齐" : connecting ? "正在连接分析服务" : "分析服务暂未连接";
     const description = document.createElement("p");
-    description.textContent = health.runtime === "worker"
-      ? "TK Note 与 ShotLoom 运行在站点所有者的电脑上。服务器默认配置可直接使用；这里填写的 Key 只作为当前标签页的临时覆盖。"
+    description.textContent = fullyReady
+      ? "关键词发现、TK Note、ShotLoom 与视觉终审都可以开始运行。"
+      : workerOnline
+        ? "完成下面缺少的配置后，就可以返回分析页开始拉片。"
       : connecting
-        ? "正在读取 Worker 与模型状态；页面配置不会发送到其他站点。"
-        : "网站内容与方法仍可浏览；实时分析会在站点所有者的电脑重新上线后自动恢复。";
+        ? "正在读取 Worker 与模型状态。"
+        : "配置可先保存；服务上线后会自动恢复分析。";
     copy.append(title, description);
-    const badges = document.createElement("div");
-    badges.className = "runtime-badges";
-    const modelConfigured = Boolean(settings.model_api_key && settings.model_name) || configured.model;
-    const workerLabel = health.runtime === "worker" ? "在线" : connecting ? "连接中" : "离线";
-    [["实时 Worker", workerLabel], [`${providerLabel} 模型`, modelConfigured ? "已配置" : "未配置"], [searchProvider, settings.rapidapi_key || configured.keyword_search ? "已配置" : "未配置"]]
+    const meta = document.createElement("div");
+    meta.className = "runtime-meta";
+    [["关键词发现", searchConfigured ? "已配置" : "待配置"], [`${providerLabel} 视觉模型`, modelConfigured ? "已配置" : "待配置"]]
       .forEach(([label, value]) => {
-        const badge = document.createElement("span");
-        badge.textContent = `${label} · ${value}`;
-        badges.appendChild(badge);
+        const item = document.createElement("span");
+        item.textContent = `${label} · ${value}`;
+        meta.appendChild(item);
       });
-    note.append(copy, badges);
+    const refresh = document.createElement("button");
+    refresh.type = "button";
+    refresh.className = "runtime-refresh-btn";
+    refresh.textContent = "重新检测";
+    refresh.addEventListener("click", () => loadSettings());
+    note.append(copy, meta, refresh);
     note.hidden = false;
   }
 
@@ -438,7 +444,7 @@
       field.hidden = true;
       field.querySelectorAll("input, select, textarea").forEach((control) => { control.disabled = true; });
     });
-    document.querySelector(".settings-hero > p:last-child").textContent = "完整工作流由 ViralX Worker 执行；只有需要临时替换服务端配置时，才填写下面两把 Key。";
+    document.querySelector(".settings-hero > p:last-child").textContent = "Worker 负责完整分析；仅在需要临时覆盖服务配置时填写两把 Key。";
     document.querySelector(".settings-actions > p").textContent = "Key 只保存在当前标签页；请在这里保存并返回分析页，新标签页不会共享 Key。";
     byId("save-btn").textContent = "保存并返回分析页";
     byId("reset-btn").textContent = "恢复会话值";
@@ -601,10 +607,9 @@
         applySettings();
         updateRuntimeNote(lastHealth);
       }
-      const message = hostedPage()
-        ? "实时分析服务暂时离线。你仍可浏览设置；服务恢复后再保存临时覆盖。"
-        : `配置没有载入：${error.message}。确认本地服务可访问后重试。`;
-      showStatus(message, "error");
+      if (!hostedPage()) {
+        showStatus(`配置没有载入：${error.message}。确认本地服务可访问后重试。`, "error");
+      }
     }
   }
 
@@ -652,12 +657,14 @@
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
     button.textContent = "正在保存";
+    let cloudSessionSaved = false;
     try {
       clearFieldErrors();
       collectSettings();
       if (hostedPage()) {
         settings.tk_note_timeout = Math.min(Math.max(settings.tk_note_timeout, 120), 7200);
         window.ViralXCloudConfig.write(settings);
+        cloudSessionSaved = true;
         const healthResponse = await apiFetch("/api/health", { cache: "no-store" });
         if (!healthResponse.ok) throw new Error(`Worker 返回 HTTP ${healthResponse.status}`);
         lastHealth = await healthResponse.json();
@@ -690,8 +697,11 @@
       }
     } catch (error) {
       if (error instanceof SettingsValidationError) {
-        showStatus(`设置没有保存：${error.message}。`, "error", { focus: false });
+        const prefix = hostedPage() && cloudSessionSaved ? "临时值已保存，但未通过验证" : "设置没有保存";
+        showStatus(`${prefix}：${error.message}。`, "error", { focus: false });
         showFieldError(error.fieldId, error.message);
+      } else if (hostedPage() && cloudSessionSaved) {
+        showStatus(`配置已保存在当前标签页，但暂未完成在线验证：${error.message}。`, "warning");
       } else {
         const fetchFailed = hostedPage() && (error.name === "AbortError" || /failed to fetch/i.test(error.message || ""));
         const message = fetchFailed

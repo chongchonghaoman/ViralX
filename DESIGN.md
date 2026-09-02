@@ -286,3 +286,16 @@ change this sequence.
   intentionally absent from the public BYOK surface.
 - Removed repeated section fade-ups. GSAP now concentrates motion in the first-screen sequence and the
   evidence timeline, so scrolling feels deliberate rather than continuously animated.
+
+## Two-step configuration polish — 2026-09-02
+
+- Reordered the public configuration path into two explicit tasks—TikTok discovery, then the visual
+  model—and placed the save action after both fields instead of asking users to commit before reading them.
+- Flattened nested grey and dark cards into one setup surface with ruled steps. Runtime readiness is now one
+  compact status row with a retry action, rather than a dark dashboard plus a second error alert.
+- Kept TK Note, ShotLoom, LibTV fallback, local storage, provider presets and custom endpoints intact in the
+  advanced disclosures. No field ID, API payload, collection stage or analysis dependency was removed.
+- On hosted pages, values already written to the current tab are now reported as saved-but-unverified when
+  the Worker is unavailable; the UI no longer claims that a successful session write never happened.
+- Homepage navigation and hero keep a stable “开始分析” action while detailed runtime blockers remain inside
+  the analysis studio. Mobile uses an explicit “设置” label and full-width studio/save actions.

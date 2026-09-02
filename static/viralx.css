@@ -205,17 +205,18 @@ h3 {
 
 .mobile-settings {
   display: inline-flex;
-  width: 2.75rem;
+  width: auto;
   min-height: 2.75rem;
   align-items: center;
   justify-content: center;
+  padding-inline: var(--space-sm);
   border-radius: var(--radius-pill);
   background: var(--color-ink);
   color: var(--color-paper);
   font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   line-height: 1;
   text-decoration: none;
 }
@@ -579,10 +580,17 @@ h3 {
 
 .source-tools {
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
   margin-block-start: var(--space-md);
+}
+
+@media (max-width: 39.99rem) {
+  .source-row > .btn,
+  .source-tools > .refresh-link {
+    width: 100%;
+  }
 }
 
 .remake-options {

@@ -9,12 +9,12 @@
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.8') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.8') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.9') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.9') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.8') }}"></script>
-  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.8') }}"></script>
-  <script defer src="{{ url_for('static', filename='settings.js', v='1.1.8') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.9') }}"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.9') }}"></script>
+  <script defer src="{{ url_for('static', filename='settings.js', v='1.1.9') }}"></script>
 </head>
 <body class="settings-page">
   <a class="skip-link" href="#settings-form">跳到设置表单</a>
@@ -41,32 +41,21 @@
 
   <main class="settings-main" id="main-content">
     <header class="settings-hero" data-motion="reveal">
-      <p class="section-label">VIRALX · SETUP</p>
+      <p class="section-label">VIRALX · 两步配置</p>
       <h1>先跑起来，<br>再谈参数。</h1>
-      <p>准备两把 Key：一把 RapidAPI Key 驱动多源关键词发现，Qwen3-VL Flash 把真实证据变成复刻脚本。</p>
+      <p>准备两把 Key：先发现真实爆款，再让视觉模型基于完整证据完成拉片与复刻脚本。</p>
     </header>
 
     <aside class="settings-runtime-note" id="runtime-note" role="note" hidden></aside>
 
     <div class="settings-layout settings-layout--simple">
       <form class="settings-form" id="settings-form" novalidate>
-        <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
-
-        <div class="settings-actions" data-motion="reveal" aria-label="设置保存操作">
-          <p>保存后，新的分析任务立即使用这组配置。</p>
-          <div>
-            <button class="btn btn-primary" id="save-btn" type="submit">保存并开始</button>
-            <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
-            <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
-          </div>
-        </div>
-
         <section class="settings-section settings-section--quick" id="runtime" data-motion="reveal">
           <div class="settings-section__head settings-section__head--compact">
-            <span>01</span>
+            <span>只需完成下面两步</span>
             <div>
-              <h2>快速配置</h2>
-              <p>TK Note 与 ShotLoom 已固定串联，不需要先理解底层组件。</p>
+              <h2>开始前的必要配置</h2>
+              <p>TK Note 与 ShotLoom 已固定串联；这里不再让你重复选择底层组件。</p>
             </div>
           </div>
 
@@ -75,8 +64,8 @@
           <div class="quick-assurance" aria-label="推荐配置说明">
             <span class="quick-assurance__mark" aria-hidden="true">✓</span>
             <div>
-              <strong>推荐参数已经就位</strong>
-              <p>多源搜索自动发现、补足并去重爆款；随后 TK Note 下载证据，ShotLoom 切镜取帧，Qwen3-VL Flash 先识别再终审。</p>
+              <strong>分析链已经编排好</strong>
+              <p>完成搜索与视觉模型配置后，ViralX 会自动执行采集、切镜、证据合并与终审。</p>
             </div>
           </div>
 
@@ -105,7 +94,7 @@
 
           <div class="quick-search-card">
             <div class="quick-search-card__head">
-              <span>KEY 01</span>
+              <span>步骤 01</span>
               <div>
                 <h3>TikTok 多源发现</h3>
                 <p>一把 Key 串联已订阅的搜索源；空结果、配额或服务故障时自动换源，并跨源去重补足候选。</p>
@@ -128,7 +117,7 @@
           <div class="quick-model-card" id="quick-model-card">
             <div class="quick-model-card__head">
               <div>
-                <span class="recommend-pill">KEY 02 · 推荐模型</span>
+                <span class="recommend-pill">步骤 02 · 推荐模型</span>
                 <h3>Qwen3-VL Flash</h3>
                 <p id="quick-model-copy">推荐配置已填好，也可以接入第三方兼容服务。</p>
                 <small class="quick-model-requirement">所选模型需要具备视频识别能力。</small>
@@ -166,9 +155,20 @@
           </details>
         </section>
 
+        <div class="settings-status" id="status" role="status" tabindex="-1" hidden></div>
+
+        <div class="settings-actions" data-motion="reveal" aria-label="设置保存操作">
+          <p>保存后，新的分析任务立即使用这组配置。</p>
+          <div>
+            <button class="btn btn-primary" id="save-btn" type="submit">保存并开始</button>
+            <button class="refresh-link" id="reset-btn" type="button">恢复已保存值</button>
+            <button class="refresh-link" id="clear-session-btn" type="button" hidden>清除会话密钥</button>
+          </div>
+        </div>
+
         <section class="settings-section settings-section--advanced" id="advanced" data-motion="reveal" data-server-owner-only>
           <div class="settings-section__head">
-            <span>02</span>
+            <span>按需打开</span>
             <div>
               <h2>高级设置</h2>
               <p>只有默认流程不适合你时才需要打开。所有原有能力仍在这里。</p>

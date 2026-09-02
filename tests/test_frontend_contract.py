@@ -66,7 +66,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('LibTV', self.settings)
         self.assertIn('模型 API', self.settings)
         self.assertIn("function syncAnalysisMode()", self.settings_js)
-        self.assertLess(self.settings.index('id="save-btn"'), self.settings.index('id="runtime"'))
+        self.assertLess(self.settings.index('id="runtime"'), self.settings.index('id="save-btn"'))
+        self.assertLess(self.settings.index('id="save-btn"'), self.settings.index('id="advanced"'))
         for button_id, button_type in (
             ("save-btn", "submit"),
             ("reset-btn", "button"),
@@ -117,7 +118,7 @@ class FrontendContractTests(unittest.TestCase):
         quick_card = self.settings[quick_card_start:quick_card_end]
         for control_id in ("model_base_url", "model_api_key", "model_name"):
             self.assertIn(f'id="{control_id}"', quick_card)
-        self.assertIn("KEY 02 · 推荐模型", quick_card)
+        self.assertIn("步骤 02 · 推荐模型", quick_card)
         self.assertIn("所选模型需要具备视频识别能力", quick_card)
         self.assertIn("第三方兼容地址", quick_card)
         self.assertIn("function promoteEditedEndpointToCustom", self.settings_js)
@@ -195,7 +196,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
         home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
         settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
-        self.assertEqual(home_versions, {"1.1.8"})
+        self.assertEqual(home_versions, {"1.1.9"})
         self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
         self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)
