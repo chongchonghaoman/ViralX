@@ -5,6 +5,7 @@
   // EdgeOne Functions may cold-start before relaying to the home Worker.
   // Keep the UI in its explicit connecting state long enough for that first hop.
   const HEALTH_TIMEOUT_MS = 15000;
+  const JOB_POLL_FALLBACK_MS = 900;
   const ALLOWED_FIELDS = [
     "analysis_mode",
     "min_likes",
@@ -77,9 +78,14 @@
   const REMOTE_WORKER_PATHS = new Set([
     "/api/health",
     "/api/analyze",
+    "/api/jobs",
     "/api/keywords",
     "/api/generate_variants",
   ]);
+
+  const isWorkerRoute = (pathname) => REMOTE_WORKER_PATHS.has(pathname)
+    || pathname.startsWith("/api/tasks/")
+    || pathname.startsWith("/api/jobs/");
 
   function clean(input) {
     const result = {};
@@ -143,7 +149,7 @@
     const hosted = document.documentElement.dataset.deployment === "edgeone";
     const workerRoute = hosted
       && ["remote-worker", "same-origin-worker"].includes(config.mode)
-      && (REMOTE_WORKER_PATHS.has(target.pathname) || target.pathname.startsWith("/api/tasks/"));
+      && isWorkerRoute(target.pathname);
     if (!workerRoute || config.mode === "same-origin-worker") {
       return target.origin === window.location.origin ? `${target.pathname}${target.search}` : target.href;
     }
@@ -151,12 +157,102 @@
     return `${config.apiBaseUrl}${target.pathname}${target.search}`;
   }
 
+  const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+  function streamError(controller, message) {
+    controller.enqueue(new TextEncoder().encode(`${JSON.stringify({
+      status: "error",
+      message,
+      done: true,
+    })}\n`));
+    controller.close();
+  }
+
+  async function startPolledJob(route, options, requestHeaders) {
+    const resumeMatch = route.match(/^\/api\/tasks\/([A-Za-z0-9_-]{24,96})\/resume$/);
+    const startPath = resumeMatch
+      ? `/api/jobs/tasks/${resumeMatch[1]}/resume`
+      : "/api/jobs";
+    const startResponse = await window.fetch(startPath, {
+      ...options,
+      headers: requestHeaders,
+    });
+    if (!startResponse.ok) return startResponse;
+
+    let accepted;
+    try {
+      accepted = await startResponse.json();
+    } catch (_) {
+      return new Response(JSON.stringify({
+        status: "error",
+        message: "分析任务已提交，但服务没有返回有效任务编号。",
+        done: true,
+      }) + "\n", { status: 502, headers: { "Content-Type": "application/x-ndjson" } });
+    }
+    const jobId = String(accepted.job_id || "");
+    if (!/^[A-Za-z0-9_-]{24,96}$/.test(jobId)) {
+      return new Response(JSON.stringify({
+        status: "error",
+        message: "分析任务编号无效，请重新开始。",
+        done: true,
+      }) + "\n", { status: 502, headers: { "Content-Type": "application/x-ndjson" } });
+    }
+
+    const body = new ReadableStream({
+      async start(controller) {
+        let cursor = 0;
+        let consecutiveFailures = 0;
+        while (true) {
+          if (options.signal?.aborted) {
+            controller.close();
+            return;
+          }
+          try {
+            const pollResponse = await window.fetch(
+              `/api/jobs/${encodeURIComponent(jobId)}/events?after=${cursor}`,
+              { headers: requestHeaders, cache: "no-store" },
+            );
+            if (!pollResponse.ok) {
+              throw new Error(`HTTP ${pollResponse.status}`);
+            }
+            const payload = await pollResponse.json();
+            const events = Array.isArray(payload.events) ? payload.events : [];
+            events.forEach((event) => {
+              controller.enqueue(new TextEncoder().encode(String(event)));
+            });
+            cursor = Number.isFinite(Number(payload.cursor)) ? Number(payload.cursor) : cursor + events.length;
+            consecutiveFailures = 0;
+            if (payload.done) {
+              controller.close();
+              return;
+            }
+            await wait(Math.max(350, Math.min(Number(payload.retry_after_ms) || JOB_POLL_FALLBACK_MS, 2500)));
+          } catch (_) {
+            consecutiveFailures += 1;
+            if (consecutiveFailures >= 5) {
+              streamError(controller, "分析仍在 Worker 中运行，但网页暂时取不到进度。请保持原页并稍后重试。");
+              return;
+            }
+            await wait(JOB_POLL_FALLBACK_MS * consecutiveFailures);
+          }
+        }
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   function apiFetch(url, options = {}) {
     const route = new URL(url, window.location.origin).pathname;
     const config = runtime();
     const remoteWorker = document.documentElement.dataset.deployment === "edgeone"
       && ["remote-worker", "same-origin-worker"].includes(config.mode)
-      && REMOTE_WORKER_PATHS.has(route);
+      && isWorkerRoute(route);
     const requestHeaders = new Headers(options.headers || {});
     if (runtime().allowSessionOverrides) {
       Object.entries(headers({ remoteWorker })).forEach(([name, value]) => requestHeaders.set(name, value));
@@ -166,6 +262,13 @@
       target = workerUrl(url);
     } catch (error) {
       return Promise.reject(error);
+    }
+    const usePolledJob = document.documentElement.dataset.deployment === "edgeone"
+      && config.mode === "same-origin-worker"
+      && String(options.method || "GET").toUpperCase() === "POST"
+      && (route === "/api/analyze" || /^\/api\/tasks\/[A-Za-z0-9_-]{24,96}\/resume$/.test(route));
+    if (usePolledJob) {
+      return startPolledJob(route, options, requestHeaders);
     }
     const timeoutMs = route === "/api/health" ? HEALTH_TIMEOUT_MS : 0;
     if (!timeoutMs || options.signal) {

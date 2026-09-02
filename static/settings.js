@@ -12,13 +12,13 @@
   };
 
   const DEFAULTS = {
-    workflow_version: 2,
+    workflow_version: 3,
     rapidapi_key: "", analysis_mode: "pipeline", libtv_concurrency: 1, tk_note_asr_backend: "auto",
     tk_note_language: "auto", tk_note_cookies_from_browser: "", tk_note_proxy: "",
     tk_note_timeout: 1800, video_cache_dir: "./video_cache", model_provider: "qwen",
     model_protocol: "openai", model_api_key: "", model_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model_name: "qwen3-vl-flash", gemini_api_key: "", gemini_model: "gemini-3.7-flash", openrouter_api_key: "",
-    shot_engine: "shotloom", shot_model_source: "inherit", shot_model_api_key: "",
+    shot_engine: "direct", shot_model_source: "inherit", shot_model_api_key: "",
     shot_model_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     shot_model_name: "qwen3-vl-flash", shot_scene_threshold: 27,
     openrouter_model: "openrouter/auto",
@@ -70,10 +70,12 @@
       migrated.model_name ||= legacy.model || "";
     }
     migrated.analysis_mode = "pipeline";
-    if (Number(migrated.workflow_version || 0) < 2) {
-      if (!migrated.shot_engine || migrated.shot_engine === "auto") migrated.shot_engine = "shotloom";
+    if (Number(migrated.workflow_version || 0) < 3) {
+      if (!["libtv", "skip"].includes(String(migrated.shot_engine || "").toLowerCase())) {
+        migrated.shot_engine = "direct";
+      }
       migrated.shot_model_source = "inherit";
-      migrated.workflow_version = 2;
+      migrated.workflow_version = 3;
     }
     return migrated;
   }
@@ -131,7 +133,7 @@
   }
 
   function renderQuickSummary() {
-    const engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "shotloom";
+    const engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "direct";
     const quickMode = engine === "skip" ? "evidence" : "full";
     document.querySelectorAll('input[name="quick_mode"]').forEach((radio) => {
       radio.checked = radio.value === quickMode;
@@ -149,6 +151,7 @@
     if (inheritedShotModel) inheritedShotModel.textContent = modelName;
     if (shotSummary) {
       shotSummary.textContent = {
+        direct: "原片直读",
         auto: "回退",
         shotloom: "固定",
         libtv: "LibTV",
@@ -166,7 +169,7 @@
   }
 
   function selectQuickMode(mode) {
-    const engine = mode === "evidence" ? "skip" : "shotloom";
+    const engine = mode === "evidence" ? "skip" : "direct";
     document.querySelectorAll('input[name="shot_engine"]').forEach((radio) => {
       radio.checked = radio.value === engine;
     });
@@ -174,7 +177,7 @@
   }
 
   function renderShotEngine() {
-    const engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "shotloom";
+    const engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "direct";
     const source = byId("shot_model_source")?.value || "inherit";
     const shotloomRelevant = ["auto", "shotloom"].includes(engine);
     const libtvRelevant = ["auto", "libtv"].includes(engine);
@@ -243,7 +246,7 @@
     };
     selectProvider(activeProvider, { restore: false });
     document.querySelectorAll('input[name="shot_engine"]').forEach((radio) => {
-      radio.checked = radio.value === (settings.shot_engine || "shotloom");
+      radio.checked = radio.value === (settings.shot_engine || "direct");
     });
     renderShotEngine();
     renderKeywords();
@@ -252,7 +255,7 @@
   }
 
   function collectSettings() {
-    settings.workflow_version = 2;
+    settings.workflow_version = 3;
     settings.rapidapi_key = byId("rapidapi_key").value.trim();
     settings.analysis_mode = "pipeline";
     settings.tk_note_asr_backend = byId("tk_note_asr_backend").value || DEFAULTS.tk_note_asr_backend;
@@ -261,7 +264,7 @@
     settings.tk_note_proxy = byId("tk_note_proxy").value.trim();
     settings.tk_note_timeout = Number.parseInt(byId("tk_note_timeout").value, 10) || DEFAULTS.tk_note_timeout;
     settings.video_cache_dir = byId("video_cache_dir").value.trim() || DEFAULTS.video_cache_dir;
-    settings.shot_engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "shotloom";
+    settings.shot_engine = document.querySelector('input[name="shot_engine"]:checked')?.value || "direct";
     settings.shot_model_source = byId("shot_model_source").value || "inherit";
     settings.shot_model_api_key = byId("shot_model_api_key").value.trim();
     settings.shot_model_base_url = byId("shot_model_base_url").value.trim();
@@ -414,7 +417,7 @@
       : workerOnline ? "分析服务在线，配置待补齐" : connecting ? "正在连接分析服务" : "分析服务暂未连接";
     const description = document.createElement("p");
     description.textContent = fullyReady
-      ? "关键词发现、TK Note、ShotLoom 与视觉终审都可以开始运行。"
+      ? "关键词发现、TK Note、完整原片理解与证据终审都可以开始运行。"
       : workerOnline
         ? "完成下面缺少的配置后，就可以返回分析页开始拉片。"
       : connecting
@@ -683,7 +686,7 @@
           );
         }
         if (settings.shot_engine !== "skip" && !lastHealth.analysis_ready) {
-          throw new Error("视觉模型已连接，但服务器上的 TK Note / ShotLoom 分析链尚未就绪");
+          throw new Error("视觉模型已连接，但服务器上的 TK Note / 原片视觉分析链尚未就绪");
         }
         showStatus("配置已验证，正在返回分析页。Key 关闭标签页后自动清除。", "success", { focus: false });
         window.location.assign("/#analysis-studio");

@@ -11,13 +11,11 @@ const renderStaticUrls = (source) => source.replace(
   (_match, filename, version) => `/static/${filename}${version ? `?v=${version}` : ""}`,
 );
 const publicApiBaseUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
-let publicApiOrigin = "";
 if (publicApiBaseUrl) {
   const parsed = new URL(publicApiBaseUrl);
   if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new Error("VIRALX_PUBLIC_API_BASE_URL must be a credential-free HTTPS URL");
   }
-  publicApiOrigin = parsed.origin;
 }
 
 await rm(publicDir, { recursive: true, force: true });
@@ -28,7 +26,6 @@ html = html
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
   .replaceAll('href="/settings"', 'href="/settings.html"')
   .replaceAll('href="/"', 'href="#main-content"')
-  .replace("connect-src 'self'", `connect-src 'self'${publicApiOrigin ? ` ${publicApiOrigin}` : ""}`)
   .replace("本地设置", "网页设置")
   .replace("LOCAL-FIRST · 2026", "EDGE + LOCAL · 2026");
 
@@ -37,7 +34,6 @@ await writeFile(join(publicDir, "index.html"), html, "utf8");
 let settingsHtml = renderStaticUrls(await readFile(join(projectRoot, "templates", "settings.html"), "utf8"));
 settingsHtml = settingsHtml
   .replace('<html lang="zh-CN">', '<html lang="zh-CN" data-deployment="edgeone">')
-  .replace("connect-src 'self'", `connect-src 'self'${publicApiOrigin ? ` ${publicApiOrigin}` : ""}`)
   .replace("配置留在本地；证据留在你的工作区。", "网页负责展示与可选会话配置；完整证据链由 ViralX Worker 执行。")
   .replace("静态 EdgeOne 展示", "EdgeOne 网页 + 健康检查")
   .replace("LOCAL-FIRST · 2026", "SESSION-FIRST · EDGEONE · 2026");
@@ -49,8 +45,8 @@ await cp(join(projectRoot, "static", "settings.css"), join(publicStatic, "settin
 await writeFile(
   join(publicStatic, "runtime-config.js"),
   `window.ViralXRuntimeConfig=Object.freeze(${JSON.stringify({
-    mode: publicApiBaseUrl ? "remote-worker" : "same-origin-worker",
-    apiBaseUrl: publicApiBaseUrl,
+    mode: "same-origin-worker",
+    apiBaseUrl: "",
     allowSessionOverrides: true,
   })});\n`,
   "utf8",

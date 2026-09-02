@@ -31,7 +31,7 @@ from libtv_analyzer import DEFAULT_SHOT_MODEL, LibTVAnalyzer, LibTVError
 SHOT_EVIDENCE_SCHEMA = "viralx.shot_evidence.v1"
 EVIDENCE_BUNDLE_SCHEMA = "viralx.evidence_bundle.v1"
 SHOTLOOM_SOURCE_COMMIT = "78b65e24a587052ff2c0c4ccae72575295bde34f"
-VALID_ENGINES = {"auto", "shotloom", "libtv", "skip"}
+VALID_ENGINES = {"direct", "auto", "shotloom", "libtv", "skip"}
 VALID_MODEL_SOURCES = {"inherit", "qwen", "custom"}
 DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_QWEN_MODEL = "qwen3-vl-flash"
@@ -84,11 +84,11 @@ class ShotAnalysisResult:
 def normalize_shot_config(config: dict[str, Any]) -> dict[str, Any]:
     """Normalize the shot engine without ever returning a secret in status."""
     source = str(config.get("shot_model_source") or "inherit").strip().lower()
-    engine = str(config.get("shot_engine") or "shotloom").strip().lower()
+    engine = str(config.get("shot_engine") or "direct").strip().lower()
     if source not in VALID_MODEL_SOURCES:
         source = "inherit"
     if engine not in VALID_ENGINES:
-        engine = "shotloom"
+        engine = "direct"
 
     final_vision = bool(config.get("model_supports_vision"))
     final_protocol = str(config.get("model_protocol") or "openai").lower()
@@ -649,7 +649,7 @@ def validate_shot_evidence(details: ShotAnalysisResult | dict[str, Any]) -> str:
 
 
 class ShotAnalyzerRouter:
-    """Select ShotLoom Core first and use LibTV only as an explicit fallback."""
+    """Route optional professional shot indexing without owning final visual truth."""
 
     def __init__(
         self,
@@ -665,7 +665,7 @@ class ShotAnalyzerRouter:
     def status(self) -> dict[str, Any]:
         shotloom = self.shotloom.status()
         libtv = self.libtv.status()
-        if self.engine == "skip":
+        if self.engine in {"direct", "skip"}:
             ready = True
         elif self.engine == "shotloom":
             ready = bool(shotloom.get("ready"))
@@ -681,6 +681,13 @@ class ShotAnalyzerRouter:
         }
 
     def analyze(self, video_path: str, user_request: str = "") -> ShotAnalysisResult:
+        if self.engine == "direct":
+            return ShotAnalysisResult(
+                provider="direct-video",
+                model=self.config.get("model", ""),
+                status="not_used",
+                block_reason="默认模式由最终视觉模型直接读取原视频，不预先切镜",
+            )
         if self.engine == "skip":
             return ShotAnalysisResult(
                 provider="none",

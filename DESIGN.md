@@ -105,12 +105,12 @@ Install the pinned build-only dependency from `requirements-dev.txt` before rege
   one owner-operated ViralX Worker over HTTPS; visitors never pair a loopback process. The server may
   provide default credentials, while optional browser overrides remain session-only. There is one fixed
   evidence pipeline. TK Note is mandatory collection; owner-only network recovery stays off the public UI.
-- ShotLoom Core is the default scene splitter and frame sampler. It reuses the exact file already
-  downloaded by TK Note, then sends keyframes to the visual model configured above. It is not a
-  second model. LibTV remains an explicit failure fallback, never a silent default dependency.
-- The default contract is `shot_engine=shotloom` plus `shot_model_source=inherit`: one visual-model
-  connection performs frame-fact recognition and final evidence synthesis. A separate shot model,
-  `auto` fallback, LibTV-only, and collection-only remain expert troubleshooting choices.
+- The default visual contract is source-video-first. The configured video-capable model receives the
+  exact file already downloaded and identity-checked by TK Note; ShotLoom is an optional professional
+  scene-boundary and keyframe index, not the only visual truth. LibTV remains an explicit fallback.
+- The default contract is `shot_engine=direct` plus `shot_model_source=inherit`. `shotloom`, `auto`,
+  LibTV-only, and collection-only remain expert choices. Even professional mode keeps the original
+  video in final synthesis so a missed keyframe cannot silently become a false conclusion.
 - The first settings viewport asks for an outcome and two credentials: one shared RapidAPI Key for
   provider-neutral multi-source keyword discovery, then a complete final-model
   connection with Base URL, API Key and model ID.
@@ -142,14 +142,18 @@ change this sequence.
 ## Runtime and deployment boundary
 
 - The Flask build is the full local product. It owns `/api/analyze`, `/api/settings`, TK Note,
-  ShotLoom Core, local video/cache files, Obsidian export and optional `/api/libtv/auth/*`.
+  optional ShotLoom Core, local video/cache files, Obsidian export and optional `/api/libtv/auth/*`.
   ViralX asks the official LibTV CLI for connection state but never reads its tokens.
 - The EdgeOne build is a static product surface plus browser-safe export helpers. It does not run
   TK Note, OpenCV, persistent caches, browser-cookie access or CLI login itself.
 - The production page calls an owner-operated ViralX Worker through a credential-free HTTPS base
-  URL. The Worker runs TK Note, ShotLoom Core (or owner-configured LibTV fallback), evidence merge,
-  then the selected visual model API. The model receives sampled frames during shot evidence and
-  the merged named evidence during final synthesis; it never receives an unbounded source-file upload.
+  URL. The Worker runs TK Note, sends the validated source video to the selected visual model, merges
+  named evidence, and enforces target-product and citation gates. OpenAI-compatible providers receive
+  native video when supported; rejected or oversized inputs degrade explicitly to timeline-wide,
+  timestamped frames. ShotLoom and LibTV remain owner-selected professional modes.
+- Hosted analysis is submitted as a short Worker job and read back through bounded same-origin polling
+  responses. This preserves the NDJSON rendering contract without exposing a private-network hostname
+  to the browser or holding an Edge request open for the full analysis duration.
 - The public Worker binds locally behind an outbound tunnel, allows exact trusted Origins, validates
   CORS preflights, limits concurrency and request frequency, and applies evidence-cache retention.
   It never mounts settings writes, cache clearing, arbitrary file export, local Cookie/proxy controls,
@@ -185,13 +189,13 @@ change this sequence.
   analysis studio and distinguishes Worker online, owner configuration incomplete, and Worker offline.
   An offline primary action explains that static cases remain available; it never sends visitors to
   Connector setup. Search readiness and analysis readiness are reported separately: keyword input needs
-  the multi-source search chain plus the fixed TK Note + ShotLoom + visual-model path, while a direct HTTP(S) video URL only
+  the multi-source search chain plus the fixed TK Note + source-video visual-model path, while a direct HTTP(S) video URL only
   needs the analysis path. A missing search Key must never block a valid direct-video analysis.
 - The multi-source search chain is explained at the source field: video URLs bypass it, while keyword discovery
   needs one RapidAPI Key. Both local Flask and a paired hosted page may use the browser-connected LibTV CLI.
-- The settings page presents the fixed contract `TikTok multi-source discovery -> TK Note -> ShotLoom cut/frame ->
-  configured visual model -> evidence merge -> same model final synthesis`. TK Note is marked required,
-  ShotLoom + inherit is the default, LibTV is an explicit fallback, and collection-only states plainly
+- The settings page presents the default contract `TikTok multi-source discovery -> TK Note ->
+  configured visual model reads source video -> evidence validation -> same model final synthesis`.
+  TK Note is required, direct source-video input is the default, ShotLoom and LibTV are explicit professional modes, and collection-only states plainly
   that it will not generate a final report.
 - Hosted LibTV state is owner-managed and read-only. Local Flask still exposes `disconnected`,
   `starting`, `awaiting_browser`, `connected`, `error`, `unavailable`, and compatibility `local_only`.
@@ -299,3 +303,17 @@ change this sequence.
   the Worker is unavailable; the UI no longer claims that a successful session write never happened.
 - Homepage navigation and hero keep a stable “开始分析” action while detailed runtime blockers remain inside
   the analysis studio. Mobile uses an explicit “设置” label and full-width studio/save actions.
+
+## Source-video-first evidence record — 2026-09-02
+
+- Promoted the TK Note `source.mp4` to the primary visual evidence. The default Qwen3-VL path now sends the
+  original video to the configured OpenAI-compatible endpoint, with a bounded, full-timeline frame fallback
+  only when native video transport is rejected or the local file exceeds the in-memory cap.
+- Added a target-product lock derived from the user's product name or search query. Every direct-video report
+  must emit exactly one target visibility state and cite at least two original-video time ranges, preventing
+  accessories or installation consumables from silently replacing the requested product.
+- Reclassified ShotLoom as optional professional shot indexing. It still preserves scene boundaries, keyframes,
+  hashes and LibTV fallback, but final synthesis also receives the original source video.
+- Kept the five NDJSON stage keys stable for clients and retries while changing their visible meaning to source
+  preparation, evidence validation and final review. Workflow version 3 migrates the former implicit ShotLoom
+  default to direct video without overriding explicit LibTV-only or collection-only choices.

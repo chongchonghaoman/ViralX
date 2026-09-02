@@ -9,12 +9,12 @@
   <title>ViralX · 设置</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.10') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.10') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.11') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings.css', v='1.1.11') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.10') }}"></script>
-  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.10') }}"></script>
-  <script defer src="{{ url_for('static', filename='settings.js', v='1.1.10') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.11') }}"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.11') }}"></script>
+  <script defer src="{{ url_for('static', filename='settings.js', v='1.1.11') }}"></script>
 </head>
 <body class="settings-page">
   <a class="skip-link" href="#settings-form">跳到设置表单</a>
@@ -55,7 +55,7 @@
             <span>只需完成下面两步</span>
             <div>
               <h2>开始前的必要配置</h2>
-              <p>TK Note 与 ShotLoom 已固定串联；这里不再让你重复选择底层组件。</p>
+              <p>默认链路已经编排好：TK Note 保存原片，视觉模型直接看完整视频。</p>
             </div>
           </div>
 
@@ -65,7 +65,7 @@
             <span class="quick-assurance__mark" aria-hidden="true">✓</span>
             <div>
               <strong>分析链已经编排好</strong>
-              <p>完成搜索与视觉模型配置后，ViralX 会自动执行采集、切镜、证据合并与终审。</p>
+              <p>完成搜索与视觉模型配置后，ViralX 会自动执行采集、原片理解、证据校验与终审。</p>
             </div>
           </div>
 
@@ -148,9 +148,9 @@
             <div class="pipeline-contract" aria-label="ViralX 固定分析流程">
               <div><span>01</span><strong>多源无感搜索</strong><small>自动切换、合并与去重</small></div>
               <div><span>02</span><strong>TK Note</strong><small>下载原片与平台证据</small></div>
-              <div><span>03</span><strong>ShotLoom + 视觉模型</strong><small>切镜并识别逐镜事实</small></div>
-              <div><span>04</span><strong>证据合并</strong><small>统一结构化上下文</small></div>
-              <div><span>05</span><strong>模型 API</strong><small>最终分析与脚本</small></div>
+              <div><span>03</span><strong>视觉模型读原片</strong><small>完整视频与真实时间段</small></div>
+              <div><span>04</span><strong>证据校验</strong><small>产品锁定、来源与矛盾拦截</small></div>
+              <div><span>05</span><strong>证据终审</strong><small>最终分析与复刻脚本</small></div>
             </div>
           </details>
         </section>
@@ -231,24 +231,28 @@
 
           <details class="advanced-disclosure" id="shots">
             <summary>
-              <span><strong>镜头取证与故障回退</strong><small>ShotLoom 负责切镜；默认复用上方视觉模型识别</small></span>
-              <em id="shot-engine-summary">固定</em>
+              <span><strong>专业镜头索引 · 可选</strong><small>默认直接看原片；需要剪辑点索引时再启用 ShotLoom</small></span>
+              <em id="shot-engine-summary">原片直读</em>
             </summary>
             <div class="advanced-disclosure__body">
               <div class="fixed-flow-note fixed-flow-note--shots" role="note">
-                <span>默认链路</span>
+                <span>推荐链路</span>
                 <div>
-                  <strong>ShotLoom 切镜 → <span id="shot-model-inherited-name">qwen3-vl-flash</span> 识别</strong>
-                  <p>ShotLoom Core 不是第二个模型：它只对 TK Note 原片切镜、抽帧，再把关键帧交给上方配置的视觉模型生成事实证据。</p>
+                  <strong><span id="shot-model-inherited-name">qwen3-vl-flash</span> 直接读取 TK Note 完整原片</strong>
+                  <p>原片是视觉事实主源。ShotLoom 只在你需要稳定的镜头边界、关键帧索引或逐镜审计时提供专业增强。</p>
                 </div>
               </div>
               <fieldset class="provider-picker" aria-describedby="shot-engine-help">
-                <legend>故障回退策略</legend>
-                <p class="field-note" id="shot-engine-help">默认不需要修改。只有 ShotLoom 无法生成完整证据时，才考虑启用 LibTV 或只采集。</p>
+                <legend>视觉取证方式</legend>
+                <p class="field-note" id="shot-engine-help">日常分析保持“原片直读”。只有需要剪辑点审计时才打开 ShotLoom；它不会替代最终模型对原片的核验。</p>
                 <div class="provider-grid provider-grid--compact">
+                  <label class="provider-option provider-option--recommended">
+                    <input type="radio" name="shot_engine" value="direct">
+                    <span><strong>原片直读 · 推荐</strong><small>上方视觉模型直接看完整视频</small></span>
+                  </label>
                   <label class="provider-option">
                     <input type="radio" name="shot_engine" value="shotloom">
-                    <span><strong>标准流程 · 推荐</strong><small>ShotLoom 切镜，上方视觉模型识别</small></span>
+                    <span><strong>ShotLoom 专业模式</strong><small>增加切镜、关键帧与逐镜索引</small></span>
                   </label>
                   <label class="provider-option">
                     <input type="radio" name="shot_engine" value="auto">
@@ -327,7 +331,7 @@
 
           <details class="advanced-disclosure" id="models">
             <summary>
-              <span><strong>视觉模型与接口</strong><small>同一模型负责逐镜识别与证据终审</small></span>
+              <span><strong>视觉模型与接口</strong><small>同一模型负责完整原片理解与证据终审</small></span>
               <em id="model-summary">Qwen3-VL Flash</em>
             </summary>
             <div class="advanced-disclosure__body">

@@ -10,13 +10,13 @@
   <title>ViralX · 把爆款拆到每一秒</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.10') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.11') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.10') }}"></script>
-  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.10') }}"></script>
-  <script defer src="{{ url_for('static', filename='viralx.js', v='1.1.10') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.11') }}"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.11') }}"></script>
+  <script defer src="{{ url_for('static', filename='viralx.js', v='1.1.11') }}"></script>
 </head>
 <body>
   <a class="skip-link" href="#analysis-studio">跳到分析入口</a>
@@ -79,7 +79,7 @@
           <div class="source-field">
             <label for="keyword">视频链接或搜索主题</label>
             <input type="text" id="keyword" name="keyword" autocomplete="off" aria-describedby="source-help" placeholder="粘贴 TikTok / 抖音链接，或输入搜索主题">
-            <small class="source-help" id="source-help">搜索主题由多源搜索链自动发现、补足并去重；随后 TK Note 下载真实原片，ShotLoom Core 切镜抽帧，上方视觉模型基于证据识别与终审。视频直链只跳过第一步。</small>
+            <small class="source-help" id="source-help">搜索主题由多源搜索链自动发现、补足并去重；随后 TK Note 下载真实原片，视觉模型直接理解完整视频并基于统一证据终审。ShotLoom 是可选的专业镜头索引。视频直链只跳过第一步。</small>
           </div>
           <button class="btn btn-primary" id="analyze-btn" type="button">检查运行环境</button>
         </div>
@@ -117,12 +117,12 @@
           <div class="pipeline-stages" aria-label="任务阶段" aria-live="polite">
             <div class="stage" data-stage="discovery" data-state="idle"><span>01</span><strong>发现视频</strong><small class="stage__state">等待</small></div>
             <div class="stage" data-stage="collection" data-state="idle"><span>02</span><strong>TK Note 采集</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-stage="shot-analysis" data-state="idle"><span>03</span><strong>切镜与识别</strong><small class="stage__state">等待</small></div>
-            <div class="stage" data-stage="evidence-merge" data-state="idle"><span>04</span><strong>合并证据</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="shot-analysis" data-state="idle"><span>03</span><strong>原片送审</strong><small class="stage__state">等待</small></div>
+            <div class="stage" data-stage="evidence-merge" data-state="idle"><span>04</span><strong>校验证据</strong><small class="stage__state">等待</small></div>
             <div class="stage" data-stage="final-analysis" data-state="idle"><span>05</span><strong>证据终审</strong><small class="stage__state">等待</small></div>
           </div>
           <div class="error" id="error" role="alert" tabindex="-1" hidden></div>
-          <div class="loading" id="loading" role="status" hidden>正在串联采集、镜头取证与模型分析。视频较长时可能需要几分钟。</div>
+          <div class="loading" id="loading" role="status" hidden>正在串联原片采集、视频理解与证据终审。视频较长时可能需要几分钟。</div>
         </div>
       </section>
     </section>
@@ -139,12 +139,12 @@
         <section class="empty-state" aria-labelledby="empty-title">
           <div>
             <h3 id="empty-title">先给 ViralX 一条真实视频。</h3>
-            <p>它不会从空白模板编结论。分析完成后，报告、镜头证据、可选 LibTV 画布和 Obsidian 导出会出现在这里。</p>
+            <p>它不会从空白模板编结论。分析完成后，原片时间证据、可信报告、可选专业镜头索引和 Obsidian 导出会出现在这里。</p>
             <button class="empty-action" id="focus-source" type="button">粘贴视频来源</button>
           </div>
           <div class="empty-proof" aria-label="空状态下的输出说明">
             <span>INPUT</span><strong>视频链接 / 搜索主题</strong>
-            <span>PROCESS</span><strong>TK Note → 镜头证据 → 模型</strong>
+            <span>PROCESS</span><strong>TK Note → 原片视觉 → 证据终审</strong>
             <span>OUTPUT</span><strong>报告 / 脚本 / Obsidian</strong>
           </div>
         </section>
@@ -173,7 +173,7 @@
       <div class="evidence-demo" aria-label="分析时间线示意">
         <div class="demo-topline">
           <span>00:00 — 00:18</span>
-          <span>TK NOTE + SHOT EVIDENCE</span>
+          <span>TK NOTE + SOURCE VIDEO</span>
         </div>
         <div class="frame-row" aria-hidden="true">
           <div class="frame frame--lime"><span>HOOK</span></div>
@@ -200,8 +200,8 @@
       <div class="workflow-list">
         <article><span>01</span><h3>发现视频</h3><p>多源搜索自动切换、补足并去重；视频直链直接进入采集。</p></article>
         <article><span>02</span><h3>TK Note 采集</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
-        <article><span>03</span><h3>镜头取证</h3><p>ShotLoom Core 为每段画面生成时间线、镜头 ID 和可核验视觉事实；LibTV 仅作备用。</p></article>
-        <article><span>04</span><h3>合并与终审</h3><p>平台、转写与镜头证据进入所选模型；缺一环就阻断，不输出猜测报告。</p></article>
+        <article><span>03</span><h3>原片视觉理解</h3><p>Qwen3-VL 等视频模型直接读取完整原片，以真实时间段记录画面事实。</p></article>
+        <article><span>04</span><h3>校验与终审</h3><p>平台、转写与原片事实进入统一证据协议；目标产品矛盾或引用不足时阻断报告。</p></article>
         <article><span>05</span><h3>导出工作区</h3><p>最终报告、证据审计文件与 Obsidian 笔记回到你的工作流。</p></article>
       </div>
     </section>

@@ -41,11 +41,11 @@ MAX_ANALYZE_VIDEOS = max(
 )
 
 DEFAULT_CONFIG = {
-    'workflow_version': 2,
+    'workflow_version': 3,
     'rapidapi_key': '',
     'analysis_mode': 'pipeline',
     'libtv_concurrency': 2,
-    'shot_engine': 'shotloom',
+    'shot_engine': 'direct',
     'shot_model_source': 'inherit',
     'shot_model_api_key': '',
     'shot_model_base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -85,11 +85,14 @@ def load_config():
         workflow_version = int(loaded.get('workflow_version', 0) or 0)
     except (TypeError, ValueError):
         workflow_version = 0
-    if workflow_version < 2:
-        if str(merged.get('shot_engine') or '').lower() in {'', 'auto'}:
-            merged['shot_engine'] = 'shotloom'
+    if workflow_version < 3:
+        # v1/v2 shipped ShotLoom as an implicit mandatory stage. v3 makes the
+        # final vision model read the original video by default; the old engines
+        # remain available as explicit professional modes.
+        if str(loaded.get('shot_engine') or '').lower() in {'', 'auto', 'shotloom'}:
+            merged['shot_engine'] = 'direct'
         merged['shot_model_source'] = 'inherit'
-        merged['workflow_version'] = 2
+        merged['workflow_version'] = 3
 
     env_map = {
         'RAPIDAPI_KEY': ('rapidapi_key', str),
@@ -274,10 +277,11 @@ def build_health_payload(config_override=None, runtime_override=None):
     if IS_EDGE_RUNTIME:
         shotloom_state.update({
             'ready': False,
-            'message': 'Edge 运行时不能读取原视频；请使用 ViralX Worker 运行 TK Note 与 ShotLoom Core。',
+            'message': 'Edge 运行时不能读取原视频；请使用 ViralX Worker 运行 TK Note 与原片视觉分析。',
         })
     engine = shot_config['engine']
     engine_ready = {
+        'direct': bool(readiness['model'] and current_config.get('model_supports_vision')),
         'auto': bool(shotloom_state.get('ready') or readiness['libtv']),
         'shotloom': bool(shotloom_state.get('ready')),
         'libtv': readiness['libtv'],
@@ -338,7 +342,7 @@ def _create_ai_analyzer(current_config):
         tk_note_cookies_from_browser=current_config.get('tk_note_cookies_from_browser', ''),
         tk_note_proxy=current_config.get('tk_note_proxy', ''),
         tk_note_timeout=current_config.get('tk_note_timeout', 1800),
-        shot_engine=current_config.get('shot_engine', 'shotloom'),
+        shot_engine=current_config.get('shot_engine', 'direct'),
         shot_model_source=current_config.get('shot_model_source', 'inherit'),
         shot_model_api_key=current_config.get('shot_model_api_key', ''),
         shot_model_base_url=current_config.get('shot_model_base_url', ''),
@@ -432,6 +436,10 @@ def build_analyze_response(config_override=None, max_videos=None):
                 )
 
             video_data = sorted(video_data, key=hot_score, reverse=True)[:video_limit]
+            target_product = str(product_name or (keyword if not is_video_url(keyword) else '')).strip()
+            for item in video_data:
+                item['search_query'] = keyword if not is_video_url(keyword) else ''
+                item['target_product'] = target_product
             if tiktok:
                 for item in video_data:
                     try:

@@ -6,13 +6,17 @@ import os
 import re
 import sys
 import hashlib
+import ipaddress
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import requests
 from flask import Flask, Response, has_request_context, jsonify, request, stream_with_context
+from requests.adapters import HTTPAdapter
+from urllib3 import HTTPSConnectionPool
 
 
 FUNCTIONS_DIR = Path(__file__).resolve().parents[1]
@@ -60,10 +64,12 @@ safe_error_message = _tiktok_namespace["safe_error_message"]
 
 
 MAX_ANALYZE_VIDEOS = max(1, min(int(os.environ.get("VIRALX_MAX_ANALYZE_VIDEOS", "1")), 5))
-VIRALX_RELEASE = "2026-09-01-checkpoint-recovery-v6"
+VIRALX_RELEASE = "2026-09-02-ipv4-funnel-v8"
 DEFAULT_WORKER_BASE_URL = "https://desktop-6a71m2q.tail2691cd.ts.net"
 PUBLIC_SITE_ORIGIN = os.environ.get("VIRALX_PUBLIC_SITE_ORIGIN", "https://viralx.metrolabs.mobi").rstrip("/")
 WORKER_PROXY_ENABLED = os.environ.get("VIRALX_WORKER_PROXY_ENABLED", "1") == "1"
+WORKER_DOH_URL = "https://cloudflare-dns.com/dns-query"
+_WORKER_IPV4_CACHE = {"hostname": "", "expires_at": 0.0, "values": []}
 WORKER_FORWARD_HEADERS = {
     "Content-Type",
     "X-ViralX-Min-Likes",
@@ -98,6 +104,146 @@ def _worker_base_url():
 WORKER_BASE_URL = _worker_base_url()
 
 
+class _ResolvedWorkerAdapter(HTTPAdapter):
+    """Connect to a relay IPv4 while retaining the Worker hostname for TLS/SNI."""
+
+    def __init__(self, connect_ip, server_hostname):
+        self.connect_ip = connect_ip
+        self.server_hostname = server_hostname
+        super().__init__(max_retries=0)
+
+    def _connection_pool(self):
+        return HTTPSConnectionPool(
+            self.connect_ip,
+            port=443,
+            server_hostname=self.server_hostname,
+            assert_hostname=self.server_hostname,
+        )
+
+    def get_connection(self, url, proxies=None):  # pragma: no cover - requests < 2.32
+        return self._connection_pool()
+
+    def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
+        return self._connection_pool()
+
+
+def _doh_records(name, record_type):
+    """Resolve a public DNS record without inheriting the Function runtime's DNS limits."""
+    response = requests.get(
+        WORKER_DOH_URL,
+        params={"name": name, "type": record_type},
+        headers={"Accept": "application/dns-json"},
+        timeout=(5, 10),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if int(payload.get("Status", -1)) != 0:
+        return []
+    expected_type = {"A": 1, "AAAA": 28, "PTR": 12}[record_type]
+    return [
+        str(answer.get("data") or "").strip().rstrip(".")
+        for answer in payload.get("Answer", [])
+        if int(answer.get("type", -1)) == expected_type and answer.get("data")
+    ]
+
+
+def _is_public_ipv4(value):
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return address.version == 4 and address.is_global
+
+
+def _worker_ipv4_candidates(hostname):
+    """Find IPv4 ingress peers for an IPv6-only Tailscale Funnel hostname."""
+    configured = [
+        value.strip()
+        for value in os.environ.get("VIRALX_WORKER_IPV4", "").split(",")
+        if _is_public_ipv4(value.strip())
+    ]
+    if configured:
+        return list(dict.fromkeys(configured))
+
+    now = time.monotonic()
+    if (
+        _WORKER_IPV4_CACHE["hostname"] == hostname
+        and _WORKER_IPV4_CACHE["expires_at"] > now
+    ):
+        return list(_WORKER_IPV4_CACHE["values"])
+
+    relay_hosts = [
+        value.strip().rstrip(".")
+        for value in os.environ.get("VIRALX_WORKER_RELAY_HOST", "").split(",")
+        if value.strip()
+    ]
+    try:
+        for address in _doh_records(hostname, "AAAA"):
+            try:
+                reverse_name = ipaddress.ip_address(address).reverse_pointer
+            except ValueError:
+                continue
+            relay_hosts.extend(_doh_records(reverse_name, "PTR"))
+    except requests.RequestException:
+        relay_hosts = relay_hosts or []
+
+    relay_hosts = sorted(
+        dict.fromkeys(relay_hosts),
+        key=lambda value: (0 if value.endswith(".tailscale.com") else 1, value),
+    )
+    candidates = []
+    for relay_host in relay_hosts:
+        try:
+            candidates.extend(
+                value for value in _doh_records(relay_host, "A") if _is_public_ipv4(value)
+            )
+        except requests.RequestException:
+            continue
+
+    values = list(dict.fromkeys(candidates))
+    _WORKER_IPV4_CACHE.update({
+        "hostname": hostname,
+        "expires_at": now + 240,
+        "values": values,
+    })
+    return values
+
+
+def _request_worker(method, target, *, data, headers, stream, timeout):
+    """Request the Worker, falling back to a public IPv4 Funnel relay when required."""
+    try:
+        return requests.request(
+            method,
+            target,
+            data=data,
+            headers=headers,
+            stream=stream,
+            timeout=timeout,
+        )
+    except requests.RequestException as direct_error:
+        parsed = urlparse(target)
+        hostname = parsed.hostname or ""
+        for connect_ip in _worker_ipv4_candidates(hostname):
+            session = requests.Session()
+            session.trust_env = False
+            session.mount("https://", _ResolvedWorkerAdapter(connect_ip, hostname))
+            relay_headers = {**headers, "Host": hostname}
+            try:
+                upstream = session.request(
+                    method,
+                    target,
+                    data=data,
+                    headers=relay_headers,
+                    stream=stream,
+                    timeout=timeout,
+                )
+                upstream._viralx_session = session
+                return upstream
+            except requests.RequestException:
+                session.close()
+        raise direct_error
+
+
 def _proxy_worker(worker_path, *, stream=False):
     """Relay the public API to the home Worker without exposing local DNS to browsers."""
     if not WORKER_PROXY_ENABLED or not WORKER_BASE_URL:
@@ -122,7 +268,7 @@ def _proxy_worker(worker_path, *, stream=False):
 
     timeout = (10, 3600) if stream else (10, 60)
     try:
-        upstream = requests.request(
+        upstream = _request_worker(
             request.method,
             target,
             data=request.get_data(cache=True) if request.method in {"POST", "PUT", "PATCH"} else None,
@@ -144,7 +290,13 @@ def _proxy_worker(worker_path, *, stream=False):
     response_headers["Cache-Control"] = "no-store"
 
     if not stream:
-        return Response(upstream.content, status=upstream.status_code, headers=response_headers)
+        content = upstream.content
+        status_code = upstream.status_code
+        upstream.close()
+        relay_session = getattr(upstream, "_viralx_session", None)
+        if relay_session:
+            relay_session.close()
+        return Response(content, status=status_code, headers=response_headers)
 
     def generate():
         try:
@@ -153,6 +305,9 @@ def _proxy_worker(worker_path, *, stream=False):
                     yield chunk
         finally:
             upstream.close()
+            relay_session = getattr(upstream, "_viralx_session", None)
+            if relay_session:
+                relay_session.close()
 
     return Response(
         stream_with_context(generate()),
@@ -173,7 +328,7 @@ def load_config():
     config = {
         "rapidapi_key": os.environ.get("RAPIDAPI_KEY", ""),
         "analysis_mode": os.environ.get("ANALYSIS_MODE", "pipeline"),
-        "shot_engine": os.environ.get("VIRALX_SHOT_ENGINE", "shotloom"),
+        "shot_engine": os.environ.get("VIRALX_SHOT_ENGINE", "direct"),
         "shot_model_source": os.environ.get("SHOT_MODEL_SOURCE", "inherit"),
         "shot_model_api_key": os.environ.get("SHOT_MODEL_API_KEY", ""),
         "shot_model_base_url": os.environ.get("SHOT_MODEL_BASE_URL", ""),
@@ -325,9 +480,9 @@ def health():
             "cli_installed": False,
         },
         "shot": {
-            "engine": str(config.get("shot_engine") or "shotloom"),
+            "engine": str(config.get("shot_engine") or "direct"),
             "ready": False,
-            "collection_only": str(config.get("shot_engine") or "shotloom") == "skip",
+            "collection_only": str(config.get("shot_engine") or "direct") == "skip",
             "shotloom": {
                 "ready": False,
                 "installed": False,
@@ -489,6 +644,25 @@ def keywords():
         if cache_file.exists():
             values.append({"keyword": keyword, "cached": True})
     return jsonify({"keywords": values})
+
+
+@app.post("/jobs")
+def create_analysis_job():
+    return _proxy_worker("/api/jobs")
+
+
+@app.get("/jobs/<job_id>/events")
+def analysis_job_events(job_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,96}", str(job_id or "")):
+        return jsonify({"status": "error", "message": "任务 ID 无效"}), 400
+    return _proxy_worker(f"/api/jobs/{job_id}/events")
+
+
+@app.post("/jobs/tasks/<task_id>/resume")
+def create_resume_job(task_id):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{24,96}", str(task_id or "")):
+        return jsonify({"status": "error", "message": "任务 ID 无效"}), 400
+    return _proxy_worker(f"/api/jobs/tasks/{task_id}/resume")
 
 
 @app.get("/tasks/<task_id>")

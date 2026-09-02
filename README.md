@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>把爆款拆到每一秒，也把每个结论还给证据。</strong><br>
-  短视频发现、原片采集、逐镜取证与复刻分析工作台。
+  短视频发现、原片采集、原片视觉理解与复刻分析工作台。
 </p>
 
 <p align="center">
@@ -36,11 +36,13 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
                                                   ├→ TK Note 下载真实原片与平台证据
                                                   │   搜索媒体提示 → yt-dlp → 隔离 Chrome 兜底
                                               ↓ 同一份本地原片
-                                     ShotLoom Core 切镜与抽帧
-                                              ↓ 上方视觉模型识别逐镜事实
-                                     统一证据包 + 质量门禁
+                                     Qwen3-VL 等视觉模型直接读取完整视频
+                                              ↓ 原片时间段 + 目标产品锁
+                                     统一证据包 + 引用 / 矛盾门禁
                                               ↓ 同一模型基于完整证据终审
                                      最终报告与可执行复刻脚本
+
+专业模式可在原片主证据之外增加 ShotLoom 镜头边界、关键帧和镜头 ID；它不再替代最终模型对原片的核验。
 ```
 
 面向人的产品界面是 Web；需要 Python、OpenCV、TK Note、本地缓存或 LibTV CLI 登录态的能力由站点所有者运行的 ViralX Worker 执行，网页访客无需安装 Connector。仓库同时提供 Agent-native Skill，让 Codex 等 Agent 直接运行同一套证据方法，不需要第二套客户端界面。
@@ -55,18 +57,19 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 - **TK Note 是固定采集阶段**：搜索链找到的每个候选都会进入 TK Note，下载对应 `source.mp4`、帖子元数据、字幕 / ASR 与评论证据；失败就阻断后续步骤。
 - **采集不再单押 yt-dlp**：搜索响应若含真实媒体地址只在内存中交给 TK Note；网页挑战出现时自动使用隔离的本机 Chrome / Edge 播放器兜底，不导出 Cookie，也不保存签名地址。
 - **刷新不会破坏有效原片**：网页上的“刷新证据”保留已校验 `source.mp4`，只重建字幕、ASR 与派生证据；显式重下也必须先校验临时文件，再原子替换旧原片。
-- **ShotLoom Core 只负责切镜与抽帧**：它直接读取 TK Note 的同一份原片，不是第二个分析模型，也不会重复下载视频。
-- **默认复用上方视觉模型**：推荐 Qwen3-VL Flash；同一套 Base URL、API Key 和模型 ID 先识别关键帧中的可见事实，再基于合并证据完成终审与复刻脚本。
+- **默认原片直读**：推荐 Qwen3-VL Flash；同一套 Base URL、API Key 和模型 ID 直接接收 TK Note 校验过的完整原片，再基于平台、字幕与原片时间证据完成终审。
+- **ShotLoom 变成专业增强**：需要稳定镜头边界、关键帧索引和逐镜审计时再启用；即使启用，最终视觉模型仍会核对原片，避免关键帧漏检成为错误结论。
 - **LibTV 改为显式故障回退**：标准流程不会调用 LibTV；只有用户选择“失败后回退 LibTV”或“仅 LibTV”时才需要官方 CLI 登录。
-- **统一证据合同**：镜头层输出 `viralx.shot_evidence.v1`，合并层输出 `viralx.evidence_bundle.v1`；每个镜头都有 ID、时间范围、关键帧、视觉事实、未知项、置信度和原片哈希。
-- **质量门禁阻止猜测**：时间线覆盖不足、镜头 ID 冲突、原片哈希缺失或视觉事实为空时，最终模型不会运行。
-- **报告引用门禁**：事实必须引用真实 `[SHOT:Sxxx]`、`[META:*]` 或 `[TK:*]`；没有评论正文时不得声称“用户认为”。
+- **统一证据合同**：合并层输出 `viralx.evidence_bundle.v1`，记录目标产品、原片哈希、平台证据、TK Note 证据与可选 `viralx.shot_evidence.v1`。
+- **目标产品锁**：关键词或用户填写的产品名固定为本次研究对象；模型必须把目标产品与胶条、支架、遥控器等配件分开，并输出唯一可见状态。
+- **报告引用门禁**：原片事实必须引用 `[VIDEO:MM:SS-MM:SS]`，专业镜头可追加 `[SHOT:Sxxx]`；平台与字幕分别引用 `[META:*]`、`[TK:*]`。没有评论正文时不得声称“用户认为”。
 - **搜索与下载身份核对**：搜索候选和 TK Note 下载结果的视频 ID 必须一致，避免搜索链接与实际原片错配。
 - **声音证据单独取证**：声音、台词和字幕只能来自 TK Note 字幕或 ASR，不能从静态关键帧推断。
 - **失败成为正式状态**：采集、镜头、合并或模型任一阶段失败都会明确阻断，不再把“任务结束”写成“可信分析完成”。
-- **终审失败可从检查点续跑**：统一证据已生成但模型连接或引用门禁失败时，服务端保存 24 小时匿名任务检查点；网页只重试模型终审，不重复下载原片、TK Note 采集或 ShotLoom 切镜。
+- **终审失败可从检查点续跑**：统一证据已生成但模型连接或引用门禁失败时，服务端保存 24 小时匿名任务检查点；网页复用已校验原片和证据，只重试模型终审。
 - **Agent-native Skill**：`$viralx-agent` 使用 TK Note、FFmpeg 和当前 Codex 模型完成取证与分析，不要求用户额外购买模型 API。
 - **网页改为集中式 Worker**：Edge 前端通过受限 HTTPS API 调用同一套证据链；访客不再连接自己的 `127.0.0.1`，离线时仍可浏览产品方法与界面内容。
+- **长任务改为后台任务传输**：网页同源提交任务，再用短轮询持续取回 NDJSON 进度；搜索、下载和原片终审超过网关单次请求时限时，不再直接变成 HTTP 504。
 
 原有能力继续保留：品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、Obsidian 导出、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
 
@@ -82,27 +85,27 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 | --- | --- | --- | --- |
 | 01 · 发现视频 | 七个搜索源按质量顺序自动切换、合并和去重；直链跳过 | 可打开的真实帖子 URL 与平台指标 | 所有可用来源都无候选才停止 |
 | 02 · TK Note 采集 | 缓存优先；搜索媒体提示、yt-dlp、隔离 Chrome 依次采集原片，再生成元数据、字幕 / ASR 与资产清单 | 原片非空、可解码；帖子 ID 一致 | 保留旧证据；无可用原片才阻断 |
-| 03 · 镜头取证 | ShotLoom 切镜、抽帧；上方视觉模型识别逐镜事实 | 完整时间线、镜头 ID、视觉事实、原片哈希 | 阻断；仅显式配置时回退 LibTV |
-| 04 · 合并证据 | 合并平台、TK Note 与镜头证据 | `viralx.evidence_bundle.v1` | 保存部分证据并阻断最终模型 |
-| 05 · 最终分析 | 只基于命名证据生成事实、推断与创意提案 | 每项事实引用对应证据 | 拦截不可信输出；保留证据检查点，仅重试终审 |
+| 03 · 原片视觉理解 | 视觉模型直接读取完整原片；可选 ShotLoom 增加镜头边界与关键帧索引 | 原片哈希、目标产品状态、真实时间段 | 原片不可读就阻断；不以关键帧猜测兜底 |
+| 04 · 校验证据 | 合并平台、TK Note、原片事实与可选镜头索引 | `viralx.evidence_bundle.v1` | 目标产品矛盾或来源不足时拦截 |
+| 05 · 最终分析 | 基于原片与命名证据生成事实、推断与创意提案 | 原片事实引用 `[VIDEO:*]`，其他事实引用对应来源 | 拦截不可信输出；保留原片检查点，仅重试终审 |
 
 三个角色不能混淆：
 
 - 多个 RapidAPI 搜索源组成**关键词发现链**，不是原片下载器；ViralX 自动切换、补足和去重，页面不要求用户选择供应商。视频直链不需要 RapidAPI。
 - TK Note 是**固定的原片和平台证据采集器**，每个候选都必须经过；它会复用已验证缓存，并在 yt-dlp 受阻时使用隔离浏览器兜底，后续分析始终读取同一份 `source.mp4`。
-- ShotLoom Core 是**切镜与关键帧编排器**，不是另一个模型；关键帧事实由上方配置的视觉模型识别。
-- 上方视觉模型同时承担**逐镜事实识别与最终证据综合**，但任何上游失败都不能靠模型猜测兜底。
+- 上方视觉模型是**原片视觉事实与最终证据综合的主引擎**；默认直接读取完整原片，不依赖 ShotLoom 才能判断画面。
+- ShotLoom Core 是**可选的切镜与关键帧编排器**，用于专业剪辑点索引，不是另一套真相源。
 
 ## 使用方式与 API 边界
 
 | 使用方式 | 必需项 | 可选项 |
 | --- | --- | --- |
-| 粘贴单条 TikTok / 抖音链接 | ViralX Worker、TK Note、ShotLoom、可用视觉模型 API | LibTV 故障回退；RapidAPI 不需要 |
+| 粘贴单条 TikTok / 抖音链接 | ViralX Worker、TK Note、可读视频的视觉模型 API | ShotLoom 专业镜头索引；RapidAPI 不需要 |
 | 输入关键词搜索并分析 | 上述配置 + 已订阅搜索源共用的 `RAPIDAPI_KEY` | LibTV 备用 |
 | `只采集` 模式 | ViralX Worker + TK Note | 不调用镜头模型和最终模型 |
 | Codex 中使用 `$viralx-agent` | Codex 当前模型、Python、FFmpeg；直链再需要 TK Note | **不需要独立模型 API**；关键词发现服务另算 |
 
-标准完整流程要求上方模型具备视觉输入能力，推荐 Qwen3-VL Flash。DeepSeek 等纯文本模型不能完成默认的逐镜事实识别；若坚持使用，需要在专家设置中单独配置视觉模型。LibTV 只在被明确选择为故障回退时需要官方 CLI 登录。
+标准完整流程要求上方模型具备视频输入能力，推荐 Qwen3-VL Flash。DeepSeek 等纯文本模型不能完成默认原片分析。ShotLoom 与 LibTV 都属于显式选择的专业增强或回退，不是日常流程前置条件。
 
 ## 网页能力
 
@@ -111,10 +114,11 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 | TikTok 多源无感搜索 | 七个可用搜索源自动切换、补足和去重，统一归一化帖子 ID、链接、互动数据与语义相关性；任一单点故障不会中断任务 |
 | 品类消歧 | 区分 `picture light` 与 `light painting` 等相邻但不同的内容 |
 | TK Note 采集 | 缓存优先，按搜索媒体提示 → yt-dlp → 隔离 Chrome 兜底；保存原片、元数据、字幕 / ASR、资产清单和警告 |
-| ShotLoom Core | 本地切镜与关键帧采样；把帧交给上方视觉模型并检查时间线质量 |
+| 原片视觉模型 | 直接读取 TK Note 保存的完整视频，输出目标产品状态和可核验时间段 |
+| ShotLoom Core | 可选的本地切镜与关键帧索引；用于专业剪辑点审计，不替代原片核验 |
 | LibTV 备用 | 通过官方 CLI 登录，仅在显式回退或显式选择时生成拉片证据 |
-| 上方视觉模型 | 默认复用一套自定义 Base URL、API Key 与模型 ID，先识别逐镜事实，再基于统一证据终审 |
-| 流式进度 | NDJSON 返回发现、采集、镜头、合并和最终分析五个真实阶段 |
+| 上方视觉模型 | 默认复用一套自定义 Base URL、API Key 与模型 ID，直接理解完整原片并完成证据终审 |
+| 流式进度 | NDJSON 返回发现、采集、原片送审、证据校验和最终分析五个真实阶段 |
 | 审计文件 | 保存证据包、镜头证据和最终原始输出，便于追查结论 |
 | Obsidian | 本地写入，或生成 URI / 下载 Markdown |
 
@@ -161,6 +165,8 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
 | `/api/health` | GET | 无密钥的运行时与模型就绪状态 |
 | `/api/keywords` | GET | 常用主题 |
 | `/api/analyze` | POST | NDJSON 流式分析 |
+| `/api/jobs` | POST | 托管网页快速提交后台分析任务 |
+| `/api/jobs/:id/events` | GET | 以短响应增量取回原 NDJSON 进度 |
 | `/api/generate_variants` | POST | 基于已完成证据报告生成脚本变体 |
 
 本地 Flask 另外提供设置、缓存、文件导出与可选 LibTV 管理接口；这些管理能力不属于公开 Worker。
@@ -170,7 +176,7 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
 ```json
 {
   "pipeline_status": "completed | blocked | error",
-  "shot_provider": "shotloom | libtv | none",
+  "shot_provider": "direct-video | shotloom | libtv | none",
   "shot_status": "completed | blocked",
   "shot_evidence_quality": {
     "timeline_coverage": 1.0,
@@ -190,13 +196,14 @@ Browser
 ├── 首页与设置页
 ├── 可选会话级 BYOK
 ├── 流式进度、报告与导出
-└── HTTPS → owner-operated ViralX Worker
+└── 同源任务 API → owner-operated ViralX Worker
     ├── TikTok multi-source search（关键词发现、自动切换、合并与去重）
     ├── TK Note（缓存 / 搜索媒体提示 / yt-dlp / 隔离 Chrome）
-    ├── ShotLoom Core（默认镜头证据）
+    ├── source-video vision（默认完整原片理解）
+    ├── ShotLoom Core（可选专业镜头索引）
     ├── official LibTV CLI（可选回退）
     ├── evidence merge + quality gates
-    └── selected final model（只接收证据）
+    └── selected visual model（接收原片与统一证据）
 ```
 
 ## 项目结构

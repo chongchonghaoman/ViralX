@@ -2,12 +2,13 @@ flowchart LR
     K[搜索主题] --> A[01 多源无感搜索<br/>自动切换 · 合并 · 去重]
     A -->|达到目标候选数| T[02 TK Note / yt-dlp<br/>原片与平台证据]
     U[视频直链] -->|跳过关键词搜索| T
-    T --> F[03a ShotLoom Core<br/>切镜与关键帧采样]
-    F --> V[03b 上方视觉模型<br/>识别逐镜事实]
-    V -. 仅显式开启失败回退 .-> L[LibTV 备用<br/>官方 CLI 拉片]
+    T --> V[03 上方视觉模型<br/>直接读取完整原片]
+    T -. 可选专业增强 .-> F[ShotLoom Core<br/>镜头边界与关键帧索引]
+    F --> V
+    F -. 仅显式开启失败回退 .-> L[LibTV 备用<br/>官方 CLI 拉片]
     V --> E[04 证据合并<br/>viralx.evidence_bundle.v1]
     L --> E
-    E --> M[05 已选模型 API<br/>最终分析]
+    E --> M[05 同一视觉模型<br/>证据终审]
     M --> R[最终报告]
     M --> P[复刻脚本]
     M --> O[Obsidian / Markdown]

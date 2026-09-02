@@ -131,9 +131,9 @@ class ShotAnalyzerTests(unittest.TestCase):
         result.evidence["quality"]["timeline_coverage"] = float("nan")
         self.assertIn("有限数值", validate_shot_evidence(result))
 
-    def test_default_shot_config_uses_shotloom_and_inherits_the_final_visual_model(self):
+    def test_default_visual_config_reads_the_source_video_directly(self):
         config = normalize_shot_config({})
-        self.assertEqual(config["engine"], "shotloom")
+        self.assertEqual(config["engine"], "direct")
         self.assertEqual(config["model_source"], "inherit")
 
     def test_fast_cuts_are_retained_and_timeline_stays_contiguous(self):

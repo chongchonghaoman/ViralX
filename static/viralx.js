@@ -405,7 +405,7 @@
             : "server_config_missing";
           chip.dataset.state = runtimeAnalysisReady && runtimeSearchReady ? "ready" : "warning";
           label.textContent = runtimeAnalysisReady && runtimeSearchReady
-            ? "完整分析在线 · 关键词搜索 → TK Note → ShotLoom + 视觉模型"
+            ? "完整分析在线 · 关键词搜索 → TK Note → 原片视觉终审"
             : runtimeAnalysisReady
               ? "直链分析在线 · 关键词搜索 Key 待配置"
               : runtimeSearchReady
@@ -429,11 +429,13 @@
           const shot = data.shot || {};
           const pipelineLabel = shot.collection_only
             ? "本地采集链就绪 · 不生成最终报告"
-            : `本地完整链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom + 视觉模型"} → 证据终审`;
+            : shot.engine === "direct"
+              ? "本地完整链路就绪 · TK Note → 原片视觉 → 证据终审"
+              : `本地专业链路就绪 · TK Note → ${shot.engine === "libtv" ? "LibTV" : "ShotLoom"} → 原片终审`;
           label.textContent = runtimeSearchReady ? pipelineLabel : `${pipelineLabel} · 关键词搜索 Key 待配置`;
         } else {
           chip.dataset.state = "warning";
-          label.textContent = "本地服务在线 · 待补齐 ShotLoom 与视觉模型配置";
+          label.textContent = "本地服务在线 · 待补齐支持视频输入的视觉模型配置";
         }
         syncPrimaryActions();
       } catch (_) {
@@ -718,9 +720,13 @@
 
   function looksLikeGroundedReport(value) {
     const report = String(value || "").trim();
-    return report.startsWith("## 证据覆盖")
+    const professional = report.startsWith("## 证据覆盖") && /\[SHOT:S\d{3}\]/.test(report);
+    const direct = report.startsWith("## 目标产品核验")
+      && /\[TARGET:(?:visible|not_visible|uncertain)\]/.test(report)
+      && /\[VIDEO:\d{1,2}:\d{2}(?:\.\d+)?-\d{1,2}:\d{2}(?:\.\d+)?\]/.test(report);
+    return (professional || direct)
       && /\[META:[^\]]+\]/.test(report)
-      && /\[SHOT:S\d{3}\]/.test(report);
+      ;
   }
 
   function conciseFailureMessage(video) {
@@ -769,7 +775,9 @@
       openrouter: "OpenRouter",
       custom: "自定义模型",
     }[provider] || provider;
-    const shotProvider = video.shot_provider === "libtv" ? "LibTV" : video.shot_provider === "shotloom" ? "ShotLoom" : "镜头证据";
+    const shotProvider = video.shot_provider === "direct-video" ? "原片视觉"
+      : video.shot_provider === "libtv" ? "LibTV"
+        : video.shot_provider === "shotloom" ? "ShotLoom" : "镜头证据";
     const shotLabel = `${shotProvider} · ${lifecycleLabel(status, {
       completed: "已完成", running: "处理中", failed: "已阻断", notRun: "未运行", unknown: "状态未知",
     })}`;
@@ -792,7 +800,7 @@
     const failureTitle = video.pipeline_stage === "collection"
       ? "原片采集没有完成"
       : video.pipeline_stage === "shot-analysis"
-        ? "镜头证据没有完成"
+        ? (video.shot_provider === "direct-video" ? "原片视觉准备没有完成" : "专业镜头索引没有完成")
         : video.pipeline_stage === "final-analysis"
           ? "证据终审没有完成"
           : "分析没有完成";
@@ -820,7 +828,7 @@
         <span class="provider-badge ${escapeHtml(effectiveModelStatus || "not_run")}">${escapeHtml(providerLabel)}</span>
       </div>
       ${failureMessage ? `<div class="video-card__error" role="alert"><strong>${escapeHtml(failureTitle)}</strong><span>${escapeHtml(failureMessage)}</span></div>` : ""}
-      ${canResumeFinal ? `<p class="video-card__checkpoint">证据检查点保留至 ${escapeHtml(checkpointExpiryLabel(video.checkpoint_expires_at))}。仅再次调用模型，不会重新下载或切镜。</p>` : ""}
+      ${canResumeFinal ? `<p class="video-card__checkpoint">原片与证据检查点保留至 ${escapeHtml(checkpointExpiryLabel(video.checkpoint_expires_at))}。仅再次调用模型，不会重新下载原片或重复专业镜头取证。</p>` : ""}
       <div class="card-actions">
         ${pipelineFailed ? `<button class="retry-video-btn" type="button">${canResumeFinal ? "仅重试终审" : "重试这条视频"}</button>` : ""}
         <button class="analysis-btn" type="button">${pipelineFailed ? "查看失败详情" : "打开最终分析"}</button>

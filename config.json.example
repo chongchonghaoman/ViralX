@@ -1,9 +1,9 @@
 {
-  "workflow_version": 2,
+  "workflow_version": 3,
   "rapidapi_key": "YOUR_SCRAPER7_RAPIDAPI_KEY_HERE",
   "analysis_mode": "pipeline",
   "libtv_concurrency": 2,
-  "shot_engine": "shotloom",
+  "shot_engine": "direct",
   "shot_model_source": "inherit",
   "shot_model_api_key": "",
   "shot_model_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",

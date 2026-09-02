@@ -2,7 +2,7 @@ const rawUrl = String(process.env.VIRALX_PUBLIC_API_BASE_URL || "").trim();
 
 if (!rawUrl) {
   throw new Error(
-    "Production deploy requires VIRALX_PUBLIC_API_BASE_URL so long analysis streams bypass the EdgeOne gateway.",
+    "Production deploy requires VIRALX_PUBLIC_API_BASE_URL so EdgeOne can relay short analysis-job requests to the Worker.",
   );
 }
 
@@ -17,4 +17,4 @@ if (
   throw new Error("VIRALX_PUBLIC_API_BASE_URL must be a credential-free HTTPS root URL.");
 }
 
-console.log("Production analysis transport:", workerUrl.origin);
+console.log("Production analysis Worker:", workerUrl.origin);

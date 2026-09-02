@@ -10,17 +10,17 @@ ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网�
 4. 只有需要临时覆盖站点默认搜索或视觉模型配置时，才进入[网页设置](https://viralx.metrolabs.mobi/settings.html)填写会话级 Key。
 5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
 
-公开网站不会把站点所有者的第三方 Key 写入前端。默认 Key 由 ViralX Worker 保存在服务器环境；会话级模型 / RapidAPI 搜索覆盖值只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只由 Worker 所有者在运行服务的电脑上管理。
+公开网站不会把站点所有者的第三方 Key 写入前端。默认 Key 由 ViralX Worker 保存在服务器环境；会话级模型 / RapidAPI 搜索覆盖值只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只由 Worker 所有者在运行服务的电脑上管理。长分析由 Worker 在后台继续执行，网页通过同源短轮询读取进度，避免浏览器私网限制与单次网关超时把仍在运行的任务误报为失败。
 
 ## API 依赖边界
 
 | 输入方式 | 调用链 | 必要凭据 |
 | --- | --- | --- |
-| 网页 TikTok / 抖音视频链接 | ViralX Worker → TK Note → ShotLoom 切镜 → 上方视觉模型识别 → 证据合并 → 同模型终审 | Worker + TK Note + ShotLoom + 视觉模型 API |
-| 网页 TikTok 搜索主题 | 多源搜索自动切换、合并、去重 → ViralX Worker → TK Note → ShotLoom 切镜 → 上方视觉模型识别 → 证据合并 → 同模型终审 | 上述配置 + 一把共用的 `RAPIDAPI_KEY` |
+| 网页 TikTok / 抖音视频链接 | ViralX Worker → TK Note → 视觉模型读取完整原片 → 证据校验 → 同模型终审 | Worker + TK Note + 支持视频输入的视觉模型 API |
+| 网页 TikTok 搜索主题 | 多源搜索自动切换、合并、去重 → ViralX Worker → TK Note → 视觉模型读取完整原片 → 证据校验 → 同模型终审 | 上述配置 + 一把共用的 `RAPIDAPI_KEY` |
 | 只采集 | ViralX Worker → TK Note → 保存部分证据 | Worker；不需要镜头或最终模型 API |
 
-RapidAPI 只承载 TikTok 关键词发现：ViralX 按质量顺序尝试已订阅的搜索源，自动换源、补足并按真实帖子 ID 去重；所有来源使用同一个 Key 配置位。它们不解析已知视频链接。TK Note 固定负责真实原片与平台证据；ShotLoom Core 只切镜与抽帧，上方配置的视觉模型负责逐镜事实识别。证据质量检查通过后，同一模型再完成终审。LibTV 只在显式故障回退或显式选择时调用，不使用 Access Key；生产网页通过 HTTPS 调用由站点所有者运行的受限 Worker。
+RapidAPI 只承载 TikTok 关键词发现：ViralX 按质量顺序尝试已订阅的搜索源，自动换源、补足并按真实帖子 ID 去重；所有来源使用同一个 Key 配置位。它们不解析已知视频链接。TK Note 固定负责真实原片与平台证据；上方视觉模型直接读取完整原片并完成证据终审。ShotLoom 仅在专业模式中增加镜头边界与关键帧索引，LibTV 只在显式回退或显式选择时调用。
 
 ## 运行公开 ViralX Worker
 
@@ -34,7 +34,7 @@ Copy-Item config.json.example config.json
 
 Worker 默认只监听 `127.0.0.1:8000`，应通过受信任的 HTTPS 隧道对外提供服务，不能直接开放家庭路由器端口。前端构建时通过 `VIRALX_PUBLIC_API_BASE_URL` 写入公开 Worker 地址；该值只能是无账号信息的 HTTPS 根地址。
 
-公开 Worker 只挂载 `/api/health`、`/api/keywords`、`/api/analyze` 和 `/api/generate_variants`。它按 Origin 白名单限制浏览器访问，默认一次只运行一个任务、每个来源每小时最多六次分析，并在新任务启动时清理超过 24 小时的证据缓存。浏览器不能控制服务器 Cookie、代理、LibTV 账号、文件目录或镜头引擎。
+公开 Worker 只挂载健康检查、关键词、分析、后台任务进度、终审续跑和脚本变体所需的受限 API。它按 Origin 白名单限制访问，默认一次只运行一个分析任务、每个来源每小时最多六次，并在新任务启动时清理超过 24 小时的证据缓存。浏览器不能控制服务器 Cookie、代理、LibTV 账号、文件目录或镜头引擎。
 
 ## 本地 Web 运行
 
@@ -59,7 +59,7 @@ python web_app.py
 ```json
 {
   "analysis_mode": "pipeline",
-  "shot_engine": "shotloom",
+  "shot_engine": "direct",
   "shot_model_source": "inherit",
   "model_provider": "qwen",
   "model_api_key": "YOUR_MODEL_API_KEY",
@@ -73,7 +73,7 @@ python web_app.py
 
 ## 配置最终分析模型
 
-ViralX 不再要求普通用户分别配置“镜头模型”和“最终模型”。设置页上方的一套 Base URL、API Key 与模型 ID 默认复用两次：先读取 ShotLoom 抽取的关键帧生成逐镜事实，再读取平台、TK Note 与镜头证据的合并文本完成终审。推荐 Qwen3-VL Flash；其他服务也可以使用，但所选模型必须具备视觉输入能力。只有专家场景才需要单独配置另一套镜头模型。
+ViralX 不再要求普通用户分别配置“镜头模型”和“最终模型”。设置页上方的一套 Base URL、API Key 与模型 ID 直接读取 TK Note 保存的完整原片，并基于平台、字幕与原片时间证据完成终审。推荐 Qwen3-VL Flash；其他服务也可以使用，但所选模型必须具备视频输入能力。只有需要稳定剪辑点索引的专家场景才开启 ShotLoom。
 
 本地配置示例：
 

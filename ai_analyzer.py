@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from evidence_contract import (
     evidence_bundle_text as _evidence_bundle_text,
     final_evidence_prompt as _final_evidence_prompt,
+    final_video_prompt as _final_video_prompt,
     grounded_sources_text as _grounded_sources_text,
     grounding_error as _grounding_error,
     persist_evidence_audit as _persist_evidence_audit,
@@ -30,6 +31,15 @@ from shot_analyzers import (
     validate_shot_evidence,
 )
 from video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
+
+
+def _sha256_path(path_value: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path_value).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def load_config():
     config_path = Path(__file__).parent / "config.json"
@@ -145,10 +155,11 @@ class OpenAICompatibleAnalyzer:
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
         self.video_dir.mkdir(exist_ok=True, parents=True)
 
-    def extract_frames(self, video_path: str, output_dir: str = None) -> list:
-        """从视频每1秒提取1帧，返回帧文件路径列表"""
+    def extract_frames(self, video_path: str, output_dir: str = None, max_frames: int = 64) -> list:
+        """Extract a timeline-wide fallback sample instead of the first few frames."""
         if output_dir is None:
-            output_dir = self.video_dir / "frames"
+            source_key = hashlib.sha256(str(Path(video_path).resolve()).encode("utf-8")).hexdigest()[:12]
+            output_dir = self.video_dir / "frames" / source_key
         output_dir = Path(output_dir)
         output_dir.mkdir(exist_ok=True, parents=True)
 
@@ -156,9 +167,11 @@ class OpenAICompatibleAnalyzer:
             f.unlink()
 
         try:
+            duration = self._probe_duration(video_path)
+            fps = min(2.0, max(0.1, max_frames / duration)) if duration else 1.0
             cmd = [
                 "ffmpeg", "-i", video_path,
-                "-vf", "fps=1/2,scale='min(960,iw)':-2",
+                "-vf", f"fps={fps:.5f},scale='min(960,iw)':-2",
                 "-q:v", "5",
                 str(output_dir / "frame_%04d.jpg"),
                 "-y"
@@ -168,60 +181,128 @@ class OpenAICompatibleAnalyzer:
                 print(f"[帧提取失败] {result.stderr[:100]}")
                 return []
 
-            frames = sorted(output_dir.glob("frame_*.jpg"))
+            frames = sorted(output_dir.glob("frame_*.jpg"))[:max_frames]
             print(f"[帧提取完成] {len(frames)} 帧")
             return [str(f) for f in frames]
         except Exception as e:
             print(f"[帧提取异常] {e}")
             return []
 
+    @staticmethod
+    def _probe_duration(video_path: str) -> float:
+        try:
+            probe = subprocess.run(
+                [
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1", video_path,
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            return max(float(probe.stdout.strip() or 0), 0.0)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return 0.0
+
+    @staticmethod
+    def _timestamp(seconds: float) -> str:
+        milliseconds = max(0, int(round(seconds * 1000)))
+        minutes, remainder = divmod(milliseconds, 60_000)
+        secs, millis = divmod(remainder, 1000)
+        return f"{minutes:02d}:{secs:02d}.{millis:03d}"
+
+    @staticmethod
+    def _video_mime(path: str) -> str:
+        return {
+            ".mov": "video/quicktime", ".webm": "video/webm", ".mkv": "video/x-matroska",
+            ".avi": "video/x-msvideo",
+        }.get(Path(path).suffix.lower(), "video/mp4")
+
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://viralx.metrolabs.mobi",
+            "X-Title": "ViralX",
+        }
+
+    def _request(self, content_parts: list, timeout: int = 360):
+        return requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json={
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": content_parts}],
+                "max_tokens": 8192,
+                "temperature": 0.1,
+            },
+            timeout=timeout,
+        )
+
+    @staticmethod
+    def _mark_video_input(video_data: dict, **updates) -> None:
+        bundle = video_data.get("evidence_bundle") or {}
+        if isinstance(bundle.get("video_input"), dict):
+            bundle["video_input"].update(updates)
+
+    def _analyze_sampled_frames(self, video_data: dict, video_file_path: str, prompt: str) -> str:
+        frames = self.extract_frames(video_file_path)
+        if not frames:
+            return f"{self.provider_name} 分析失败：原视频无法读取，且没有生成可用的全片抽帧"
+        self._mark_video_input(
+            video_data, status="completed", transport="timeline-frames",
+            frame_count=len(frames), fps="adaptive<=2",
+        )
+        duration = self._probe_duration(video_file_path)
+        interval = duration / max(len(frames), 1) if duration else 1.0
+        fallback_disclosure = (
+            "\n\n=== 视觉输入降级声明 ===\n"
+            "当前接口没有接受原生连续视频，下面提供的是覆盖全片时间线的带时间戳抽帧。"
+            "你不能据此断言帧间连续动作、转场细节或音频事实；[VIDEO:*] 引用只能覆盖对应抽帧附近的时间。"
+        )
+        content_parts = [{"type": "text", "text": prompt + fallback_disclosure}]
+        for index, frame in enumerate(frames):
+            timestamp = self._timestamp(min(index * interval, duration or index * interval))
+            encoded = base64.b64encode(Path(frame).read_bytes()).decode("ascii")
+            content_parts.extend([
+                {"type": "text", "text": f"[FRAME:{index + 1:03d}@{timestamp}] 原视频时间线抽帧"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded}"}},
+            ])
+        response = self._request(content_parts)
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"].strip()
+        return f"{self.provider_name} 分析失败：HTTP {response.status_code}"
+
     def analyze(self, video_data: dict, video_file_path: str = None) -> str:
-        """用 OpenRouter 模型分析视频帧 + 文本数据"""
+        """Prefer provider-native source-video input; degrade to full-timeline frames."""
         video_id = video_data.get('video_id', '')
-        metadata_text = self._build_metadata_text(video_data)
 
         try:
             if self.supports_vision and video_file_path and os.path.exists(video_file_path):
-                print(f"[{self.provider_name} 分析] {video_id}...")
-                frames = self.extract_frames(video_file_path)
-                if not frames:
-                    return self._analyze_text_only(video_data)
-
-                prompt = self._build_analysis_prompt(video_data, metadata_text, len(frames))
-
-                content_parts = [{"type": "text", "text": prompt}]
-                for frame in frames[:12]:
-                    encoded = base64.b64encode(Path(frame).read_bytes()).decode("ascii")
-                    content_parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
-                    })
-
-                headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://viralx.metrolabs.mobi",
-                    "X-Title": "ViralX",
-                }
-                payload = {
-                    "model": self.model_name,
-                    "messages": [{"role": "user", "content": content_parts}],
-                    "max_tokens": 8192,
-                    "temperature": 0.1
-                }
-
-                resp = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=120
-                )
-
-                if resp.status_code == 200:
-                    result = resp.json()["choices"][0]["message"]["content"].strip()
-                    return result
-                else:
-                    return f"{self.provider_name} 分析失败：HTTP {resp.status_code}"
+                print(f"[{self.provider_name} 原片分析] {video_id}...")
+                prompt = _final_video_prompt(video_data)
+                source = Path(video_file_path)
+                # DashScope's OpenAI-compatible contract accepts a Base64 Data
+                # URL for video_url. Keep an explicit cap so unusually large
+                # files degrade to timeline-wide frames instead of exhausting RAM.
+                if source.stat().st_size <= 96 * 1024 * 1024:
+                    encoded = base64.b64encode(source.read_bytes()).decode("ascii")
+                    content_parts = [
+                        {
+                            "type": "video_url",
+                            "video_url": {"url": f"data:{self._video_mime(video_file_path)};base64,{encoded}"},
+                            "fps": 2,
+                        },
+                        {"type": "text", "text": prompt},
+                    ]
+                    self._mark_video_input(video_data, status="running", transport="video-base64", fps=2)
+                    response = self._request(content_parts)
+                    if response.status_code == 200:
+                        self._mark_video_input(video_data, status="completed", transport="video-base64", fps=2)
+                        return response.json()["choices"][0]["message"]["content"].strip()
+                    if response.status_code not in {400, 404, 413, 415, 422}:
+                        self._mark_video_input(video_data, status="error", transport="video-base64")
+                        return f"{self.provider_name} 分析失败：HTTP {response.status_code}"
+                self._mark_video_input(video_data, status="degraded", transport="timeline-frames")
+                return self._analyze_sampled_frames(video_data, video_file_path, prompt)
 
             return self._analyze_text_only(video_data)
 
@@ -493,25 +574,35 @@ class AnthropicCompatibleAnalyzer:
         return self._extract_text(message) or "分析结果为空"
 
     def analyze(self, video_data: dict, video_file_path: str = None) -> str:
-        metadata = self.prompt_helper._build_metadata_text(video_data)
         frames = []
         if self.supports_vision and video_file_path and os.path.exists(video_file_path):
             frames = self.prompt_helper.extract_frames(video_file_path)
         prompt = (
-            self.prompt_helper._build_analysis_prompt(video_data, metadata, len(frames))
+            _final_video_prompt(video_data) + (
+                "\n\n=== 视觉输入声明 ===\n"
+                "当前接口接收的是覆盖全片时间线的带时间戳抽帧，不是原生连续视频。"
+                "不得推断帧间动作、转场或音频；[VIDEO:*] 只能引用对应抽帧附近的时间。"
+            )
             if frames
             else self.prompt_helper._analyze_text_prompt(video_data)
         )
         content = [{"type": "text", "text": prompt}]
-        for frame in frames[:12]:
-            content.append({
+        selected_frames = frames[:24]
+        duration = self.prompt_helper._probe_duration(video_file_path) if selected_frames else 0.0
+        interval = duration / max(len(selected_frames), 1) if duration else 1.0
+        for index, frame in enumerate(selected_frames):
+            timestamp = self.prompt_helper._timestamp(min(index * interval, duration or index * interval))
+            content.extend([{
+                "type": "text",
+                "text": f"[FRAME:{index + 1:03d}@{timestamp}] 原视频时间线抽帧",
+            }, {
                 "type": "image",
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
                     "data": base64.b64encode(Path(frame).read_bytes()).decode("ascii"),
                 },
-            })
+            }])
         try:
             return self._request(content)
         except Exception as exc:
@@ -549,7 +640,9 @@ class GeminiAnalyzer:
                     time.sleep(2)
                     uploaded_file = self.client.files.get(name=uploaded_file.name)
 
-                prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
+                prompt = _final_video_prompt(video_data)
+
+                _legacy_prompt = f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
 
 === 视频数据 ===
 {metadata_text}
@@ -920,7 +1013,7 @@ class MiniMaxAnalyzer:
 *拆解完毕*"""
 
 class AIAnalyzer:
-    """Evidence-first analyzer: TK Note -> shot evidence -> final model synthesis."""
+    """Evidence-first analyzer: TK Note -> source video -> grounded synthesis."""
 
     _cache = None
     MAX_CONCURRENT = 5
@@ -1015,7 +1108,7 @@ class AIAnalyzer:
         self.libtv = LibTVAnalyzer()
         shot_config = {
             **model_config,
-            'shot_engine': shot_engine or config.get('shot_engine', 'shotloom'),
+            'shot_engine': shot_engine or config.get('shot_engine', 'direct'),
             'shot_model_source': shot_model_source or config.get('shot_model_source', 'inherit'),
             'shot_model_api_key': shot_model_api_key or config.get('shot_model_api_key', ''),
             'shot_model_base_url': shot_model_base_url or config.get('shot_model_base_url', ''),
@@ -1031,10 +1124,12 @@ class AIAnalyzer:
             shot_config,
             libtv=LibTVProviderAdapter(self.libtv),
         )
-        print(
-            "[AIAnalyzer] 串联链路: TK Note -> "
-            f"{self.shot_config['engine']} 镜头证据 -> 模型终审"
+        pipeline_label = (
+            "原片视觉模型 -> 证据终审"
+            if self.shot_config['engine'] == 'direct'
+            else f"{self.shot_config['engine']} 专业镜头证据 -> 原片视觉模型终审"
         )
+        print(f"[AIAnalyzer] 串联链路: TK Note -> {pipeline_label}")
 
         self.model_analyzer = None
         self.gemini = None
@@ -1242,6 +1337,7 @@ class AIAnalyzer:
                 })
 
         collection_only = self.shot_config['engine'] == 'skip'
+        direct_video_mode = self.shot_config['engine'] == 'direct'
         if not collection_only and not self.model_api_key:
             return {
                 'analysis': '串联分析失败：最终模型 API Key 尚未配置',
@@ -1328,38 +1424,56 @@ class AIAnalyzer:
 
         emit('collection', 'complete', 'TK Note 证据包已保存', 40)
         engine_label = {
+            'direct': f'{self.model_name or self.model_provider} 原片视觉理解',
             'auto': 'ShotLoom Core（失败时回退 LibTV）',
             'shotloom': 'ShotLoom Core',
             'libtv': 'LibTV',
             'skip': '只采集模式',
         }.get(self.shot_config['engine'], self.shot_config['engine'])
-        emit('shot-analysis', 'running', f'{engine_label} 正在生成镜头证据', 48)
-        try:
-            shot_result = self.shot_router.analyze(
-                video_file_path,
-                user_request='逐镜头记录直接可见事实；不要输出营销结论',
-            )
-            shot_details = shot_result.to_dict()
-        except Exception as exc:
+        emit('shot-analysis', 'running', f'{engine_label} 正在准备视觉证据', 48)
+        if direct_video_mode:
+            source_hash = _sha256_path(video_file_path)
             shot_details = {
-                'provider': self.shot_config['engine'],
-                'model': '',
-                'status': 'blocked',
+                'provider': 'direct-video',
+                'model': self.model_name,
+                'status': 'not_used',
                 'analysis': '',
                 'evidence': {},
-                'block_reason': f'{type(exc).__name__}: {str(exc)[:180]}',
+                'block_reason': '',
                 'fallback_used': False,
                 'fallback_chain': [],
+                'source_sha256': source_hash,
             }
-        shot_evidence_error = (
-            validate_shot_evidence(shot_details)
-            if shot_details.get('status') == 'completed'
-            else str(shot_details.get('block_reason') or '镜头证据没有完成')
-        )
+            shot_evidence_error = ''
+        else:
+            try:
+                shot_result = self.shot_router.analyze(
+                    video_file_path,
+                    user_request='逐镜头记录直接可见事实；不要输出营销结论',
+                )
+                shot_details = shot_result.to_dict()
+            except Exception as exc:
+                shot_details = {
+                    'provider': self.shot_config['engine'],
+                    'model': '',
+                    'status': 'blocked',
+                    'analysis': '',
+                    'evidence': {},
+                    'block_reason': f'{type(exc).__name__}: {str(exc)[:180]}',
+                    'fallback_used': False,
+                    'fallback_chain': [],
+                }
+            shot_evidence_error = (
+                validate_shot_evidence(shot_details)
+                if shot_details.get('status') == 'completed'
+                else str(shot_details.get('block_reason') or '专业镜头索引没有完成')
+            )
         emit(
             'shot-analysis',
             'blocked' if shot_evidence_error else 'complete',
             (
+                '视觉模型将直接读取完整原视频'
+                if direct_video_mode else
                 '只采集模式：镜头分析与最终模型已跳过'
                 if collection_only else
                 f"镜头证据不可用：{shot_evidence_error[:100]}" if shot_evidence_error else
@@ -1387,8 +1501,28 @@ class AIAnalyzer:
             'warnings': list(getattr(asset, 'warnings', []) or []),
             'blocked_stages': list(getattr(asset, 'blocked_stages', []) or []),
         }
+        target_product = str(
+            video_data.get('target_product')
+            or video_data.get('search_query')
+            or ''
+        ).strip()
+        video_input_hash = (
+            shot_details.get('source_sha256')
+            or ((shot_details.get('evidence') or {}).get('source') or {}).get('sha256')
+            or _sha256_path(video_file_path)
+        )
         evidence_bundle = {
             'schema': EVIDENCE_BUNDLE_SCHEMA,
+            'visual_mode': 'direct' if direct_video_mode else 'professional',
+            'target_product': target_product,
+            'video_input': {
+                'status': 'ready',
+                'transport': 'pending',
+                'provider': self.model_provider,
+                'model': self.model_name,
+                'source_sha256': video_input_hash,
+                'file_name': Path(video_file_path).name,
+            },
             'platform_evidence': {
                 key: video_data.get(key)
                 for key in (
@@ -1445,11 +1579,9 @@ class AIAnalyzer:
                 **acquisition_details,
             }
 
-        emit('final-analysis', 'running', f'{self.model_provider} 正在进行最终综合分析', 86)
-        # The final model is evidence-only. It never receives the original file
-        # and therefore cannot silently re-interpret frames outside the shot log.
+        emit('final-analysis', 'running', f'{self.model_provider} 正在读取原视频并进行证据终审', 86)
         try:
-            final_analysis = self.model_analyzer.analyze(video_data, None)
+            final_analysis = self.model_analyzer.analyze(video_data, video_file_path)
         except Exception as exc:
             emit('final-analysis', 'error', '最终模型连接失败；已保留此前证据', 100)
             return {
@@ -1500,6 +1632,7 @@ class AIAnalyzer:
             if model_failed else '最终报告已生成',
             100,
         )
+        visual_status = ('error' if model_failed else 'completed') if direct_video_mode else shot_details.get('status', 'completed')
         return {
             'analysis': visible_analysis or '模型 API 没有返回最终分析',
             'analysis_provider': self.model_provider,
@@ -1509,7 +1642,7 @@ class AIAnalyzer:
             'evidence_bundle': evidence_bundle,
             'shot_provider': shot_details.get('provider'),
             'shot_model': shot_details.get('model'),
-            'shot_status': shot_details.get('status', 'completed'),
+            'shot_status': visual_status,
             'shot_evidence_quality': (shot_details.get('evidence') or {}).get('quality', {}),
             'shot_block_reason': '',
             'fallback_used': bool(shot_details.get('fallback_used')),
@@ -1547,17 +1680,32 @@ class AIAnalyzer:
         shot_evidence = evidence_bundle.get('shot_evidence') or {}
         if evidence_bundle.get('schema') != EVIDENCE_BUNDLE_SCHEMA:
             raise ValueError('检查点中的统一证据包版本无效')
-        shot_error = validate_shot_evidence({'status': 'completed', 'evidence': shot_evidence})
-        if shot_error:
-            raise ValueError(f'检查点中的镜头证据不可用：{shot_error}')
+        visual_mode = str(evidence_bundle.get('visual_mode') or 'professional').lower()
+        if visual_mode != 'direct':
+            shot_error = validate_shot_evidence({'status': 'completed', 'evidence': shot_evidence})
+            if shot_error:
+                raise ValueError(f'检查点中的镜头证据不可用：{shot_error}')
         if self.model_config_error:
             raise ValueError(f'模型 API 配置无效：{self.model_config_error}')
         if not self.model_api_key or not self.model_name or not self.model_analyzer:
             raise ValueError('最终模型尚未配置完成')
 
-        emit('running', '正在复用已保存证据，仅重试模型终审', 86)
+        source_video_path = None
+        bundle_path = Path(str(evidence_bundle_path or ''))
+        if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
+            candidate = bundle_path.parent.parent / 'source.mp4'
+            if candidate.is_file():
+                expected_hash = str((evidence_bundle.get('video_input') or {}).get('source_sha256') or '')
+                actual_hash = _sha256_path(candidate)
+                if expected_hash and actual_hash != expected_hash:
+                    raise ValueError('检查点中的原视频与证据包哈希不一致')
+                source_video_path = str(candidate)
+        if visual_mode == 'direct' and not source_video_path:
+            raise ValueError('检查点中的原视频已不存在，不能执行原片视觉终审')
+
+        emit('running', '正在复用已保存原片与证据，仅重试模型终审', 86)
         try:
-            final_analysis = self.model_analyzer.analyze(video_data, None)
+            final_analysis = self.model_analyzer.analyze(video_data, source_video_path)
         except Exception as exc:
             emit('error', '模型终审连接失败；检查点仍可继续使用', 100)
             return {
@@ -1575,7 +1723,6 @@ class AIAnalyzer:
         final_analysis = final_analysis if isinstance(final_analysis, str) else ''
         audit_details = {}
         try:
-            bundle_path = Path(str(evidence_bundle_path or ''))
             if bundle_path.name == 'evidence-bundle.json' and bundle_path.parent.name == 'viralx-evidence':
                 audit_details = _persist_evidence_audit(
                     str(bundle_path.parent.parent / 'source.mp4'),

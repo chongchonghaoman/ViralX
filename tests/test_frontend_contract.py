@@ -62,7 +62,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('value="pipeline"', self.settings)
         self.assertIn('class="pipeline-contract"', self.settings)
         self.assertIn('TK Note', self.settings)
-        self.assertIn('ShotLoom Core', self.settings)
+        self.assertIn('ShotLoom', self.settings)
         self.assertIn('LibTV', self.settings)
         self.assertIn('模型 API', self.settings)
         self.assertIn("function syncAnalysisMode()", self.settings_js)
@@ -80,7 +80,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('data-connection-state="starting"', self.settings)
         self.assertIn("function renderLibTVState", self.settings_js)
         self.assertIn("function renderShotEngine", self.settings_js)
-        for mode in ("auto", "shotloom", "libtv", "skip"):
+        for mode in ("direct", "auto", "shotloom", "libtv", "skip"):
             self.assertIn(f'name="shot_engine" value="{mode}"', self.settings)
         for state in ("connected", "awaiting_browser", "starting", "unavailable", "error", "local_only", "disconnected"):
             self.assertIn(f'{state}:', self.settings_js)
@@ -103,13 +103,13 @@ class FrontendContractTests(unittest.TestCase):
     def test_settings_explains_the_fixed_collection_and_visual_evidence_contract(self):
         self.assertIn("TK Note 采集故障处理", self.settings)
         self.assertIn("每条搜索候选都会交给 TK Note", self.settings)
-        self.assertIn("ShotLoom 切镜", self.settings)
+        self.assertIn("直接读取 TK Note 完整原片", self.settings)
         self.assertIn('id="shot-model-inherited-name"', self.settings)
-        self.assertIn("标准流程 · 推荐", self.settings)
+        self.assertIn("原片直读 · 推荐", self.settings)
         self.assertIn("视觉模型与接口", self.settings)
-        self.assertIn("同一模型负责逐镜识别与证据终审", self.settings)
-        self.assertIn('workflow_version: 2', self.settings_js)
-        self.assertIn('shot_engine: "shotloom"', self.settings_js)
+        self.assertIn("同一模型负责完整原片理解与证据终审", self.settings)
+        self.assertIn('workflow_version: 3', self.settings_js)
+        self.assertIn('shot_engine: "direct"', self.settings_js)
         self.assertIn('shot_model_source: "inherit"', self.settings_js)
 
     def test_quick_model_card_exposes_a_complete_customizable_visual_model_contract(self):
@@ -124,7 +124,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("function promoteEditedEndpointToCustom", self.settings_js)
         self.assertIn('selectedProvider = "custom"', self.settings_js)
 
-    def test_hosted_site_uses_a_remote_worker_instead_of_visitor_loopback(self):
+    def test_hosted_site_uses_same_origin_short_polling_instead_of_visitor_loopback(self):
         for html in (self.home, self.settings):
             self.assertNotIn("http://127.0.0.1:57231", html)
             self.assertNotIn("filename='connector.js'", html)
@@ -133,9 +133,12 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("REMOTE_WORKER_PATHS", self.cloud_config_js)
         self.assertIn("function workerUrl", self.cloud_config_js)
         self.assertIn("apiBaseUrl", self.build_js)
-        self.assertIn('"remote-worker"', self.build_js)
         self.assertIn('"same-origin-worker"', self.build_js)
         self.assertIn('["remote-worker", "same-origin-worker"]', self.cloud_config_js)
+        self.assertIn("function startPolledJob", self.cloud_config_js)
+        self.assertIn("new ReadableStream", self.cloud_config_js)
+        self.assertIn('"/api/jobs"', self.cloud_config_js)
+        self.assertIn('config.mode === "same-origin-worker"', self.cloud_config_js)
         self.assertNotIn('join(projectRoot, "static", "connector.js")', self.build_js)
         self.assertNotIn("ViralXConnector", self.home_js)
         self.assertIn("const HEALTH_TIMEOUT_MS = 15000;", self.cloud_config_js)
@@ -203,7 +206,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
         home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
         settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
-        self.assertEqual(home_versions, {"1.1.10"})
+        self.assertEqual(home_versions, {"1.1.11"})
         self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
         self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)
@@ -224,15 +227,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("clip-path: none;", self.home_css)
         self.assertIn('(min-width: 52rem) 36rem', self.home)
 
-    def test_production_deploy_cannot_silently_fall_back_to_edgeone_proxying(self):
+    def test_production_deploy_requires_a_worker_for_same_origin_job_relay(self):
         self.assertIn("VIRALX_PUBLIC_API_BASE_URL", self.deploy_guard_js)
         self.assertIn("if (!rawUrl)", self.deploy_guard_js)
         self.assertIn("node scripts/require-public-worker.mjs", self.package_json)
 
-    def test_gateway_timeout_explains_recovery_path(self):
+    def test_gateway_timeout_fallback_and_async_job_transport_are_both_present(self):
         self.assertIn("responseError.status = response.status", self.home_js)
         self.assertIn("长任务被中转网关提前截断", self.home_js)
         self.assertNotIn("请稍后重试后重试", self.home_js)
+        self.assertIn("JOB_POLL_FALLBACK_MS", self.cloud_config_js)
+        self.assertIn("/events?after=", self.cloud_config_js)
 
     def test_stream_protocol_deduplicates_results_and_requires_a_terminal_event(self):
         self.assertIn('async function consumeAnalysisStream(requestBody, onPayload, endpoint = "/api/analyze")', self.home_js)
@@ -249,10 +254,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('video.resumable_stage === "final-analysis"', self.home_js)
         self.assertIn('video.retry_scope === "model-only"', self.home_js)
         self.assertIn('"仅重试终审"', self.home_js)
-        self.assertIn("不会重新下载或切镜", self.home_js)
+        self.assertIn("不会重新下载原片或重复专业镜头取证", self.home_js)
         self.assertIn("function checkpointExpiryLabel(value)", self.home_js)
         self.assertIn('/api/tasks/${encodeURIComponent(video.task_id)}/resume', self.home_js)
-        self.assertIn('target.pathname.startsWith("/api/tasks/")', self.cloud_config_js)
+        self.assertIn('pathname.startsWith("/api/tasks/")', self.cloud_config_js)
 
     def test_failed_video_has_an_in_place_retry_and_runtime_self_recovers(self):
         self.assertIn('class="retry-video-btn"', self.home_js)

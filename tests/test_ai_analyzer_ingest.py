@@ -2,6 +2,7 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer, _model_result_error
 from shot_analyzers import ShotAnalysisResult
@@ -78,6 +79,23 @@ class FakeModel:
             "评论正文未采集，无法判断真实用户诉求 [META:comments]\n"
             "产品居中 [SHOT:S001]\n手部触发变化 [SHOT:S002]\n"
             "适合强调零失败安装体验 [SHOT:S001]"
+        )
+
+
+class FakeDirectModel:
+    def __init__(self):
+        self.calls = []
+
+    def analyze(self, video_data, video_file_path=None):
+        self.calls.append((video_data, video_file_path))
+        return (
+            "## 目标产品核验\n"
+            "目标是 picture light [TARGET:product]\n"
+            "画面状态：[TARGET:visible]\n"
+            "00:00 展示灯体 [VIDEO:00:00-00:02]\n"
+            "00:02 展示灯光照亮画作 [VIDEO:00:02-00:04]\n"
+            "## 证据覆盖\n标题已采集 [META:title]\n互动数据已采集 [META:metrics]\n"
+            "评论正文未采集，无法判断真实用户诉求 [META:comments]"
         )
 
 
@@ -162,6 +180,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 analysis_mode="pipeline", model_provider="openai",
                 model_api_key="model-key", model_base_url="https://api.openai.com/v1",
                 model_name="gpt-4.1-mini", video_collector=collector,
+                shot_engine="shotloom",
                 shot_router=shot_router,
             )
             fake_model = FakeModel()
@@ -179,7 +198,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertIn("tiktok.com", collector.calls[0][3])
             self.assertEqual(shot_router.paths[0][0], str(video))
             self.assertEqual(len(fake_model.calls), 1)
-            self.assertIsNone(fake_model.calls[0][1])
+            self.assertEqual(fake_model.calls[0][1], str(video))
             bundle = fake_model.calls[0][0]["evidence_bundle"]
             self.assertEqual(bundle["schema"], "viralx.evidence_bundle.v1")
             self.assertEqual(bundle["tk_note_evidence"]["provider"], "tk-note")
@@ -205,6 +224,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 analysis_mode="pipeline", model_provider="deepseek",
                 model_api_key="model-key", model_base_url="https://api.deepseek.com",
                 model_name="deepseek-v4-flash", video_collector=FakeCollector(asset),
+                shot_engine="shotloom",
                 shot_router=FakeShotRouter(valid=False),
             )
             fake_model = FakeModel()
@@ -233,6 +253,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 analysis_mode="pipeline", model_provider="openai",
                 model_api_key="model-key", model_base_url="https://api.openai.com/v1",
                 model_name="gpt-4.1-mini", video_collector=collector,
+                shot_engine="shotloom",
                 shot_router=shot_router,
             )
             analyzer.model_analyzer = FailingModel()
@@ -252,9 +273,69 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertEqual(len(collector.calls), 1)
             self.assertEqual(len(shot_router.paths), 1)
             self.assertEqual(len(fake_model.calls), 1)
-            self.assertIsNone(fake_model.calls[0][1])
+            self.assertEqual(fake_model.calls[0][1], str(video))
             self.assertEqual(resumed["pipeline_status"], "completed")
             self.assertEqual(resumed["retry_scope"], "model-only")
+
+    def test_default_pipeline_reads_original_video_without_running_shotloom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "source.mp4"
+            video.write_bytes(b"video")
+            asset = VideoAsset(
+                provider="tk-note", status="reused", video_file=str(video),
+                video_id="123", source_url="https://www.tiktok.com/@a/video/123",
+                metadata={"video_id": "123", "title": "Picture light", "duration": 4},
+            )
+            router = FakeShotRouter()
+            analyzer = AIAnalyzer(
+                analysis_mode="pipeline", model_provider="qwen",
+                model_api_key="model-key",
+                model_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                model_name="qwen3-vl-flash", video_collector=FakeCollector(asset),
+                shot_router=router,
+            )
+            model = FakeDirectModel()
+            analyzer.model_analyzer = model
+            result = analyzer.analyze_video_script_details(
+                {"video_id": "123", "target_product": "picture light"},
+                video_url=asset.source_url,
+            )
+
+            self.assertEqual(router.paths, [])
+            self.assertEqual(model.calls[0][1], str(video))
+            self.assertEqual(result["pipeline_status"], "completed")
+            self.assertEqual(result["shot_provider"], "direct-video")
+            self.assertEqual(result["shot_status"], "completed")
+            self.assertEqual(result["evidence_bundle"]["visual_mode"], "direct")
+            self.assertEqual(result["evidence_bundle"]["target_product"], "picture light")
+
+    def test_openai_compatible_visual_model_receives_source_video_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "source.mp4"
+            video.write_bytes(b"source-video")
+            analyzer = OpenAICompatibleAnalyzer(
+                api_key="key", model="qwen3-vl-flash",
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                provider_name="Qwen3-VL Flash", supports_vision=True,
+            )
+            video_data = {
+                "target_product": "picture light",
+                "evidence_bundle": {
+                    "visual_mode": "direct", "target_product": "picture light",
+                    "video_input": {}, "platform_evidence": {}, "tk_note_evidence": {},
+                },
+            }
+            response = type("Response", (), {
+                "status_code": 200,
+                "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
+            })()
+            with patch("ai_analyzer.requests.post", return_value=response) as request:
+                self.assertEqual(analyzer.analyze(video_data, str(video)), "ok")
+            payload = request.call_args.kwargs["json"]
+            video_part = payload["messages"][0]["content"][0]
+            self.assertEqual(video_part["type"], "video_url")
+            self.assertTrue(video_part["video_url"]["url"].startswith("data:video/mp4;base64,"))
+            self.assertEqual(video_part["fps"], 2)
 
     def test_prompt_and_validator_require_concrete_shot_ids(self):
         analyzer = OpenAICompatibleAnalyzer(

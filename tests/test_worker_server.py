@@ -1,5 +1,6 @@
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -128,6 +129,36 @@ class WorkerServerTests(unittest.TestCase):
             )
             self.assertEqual(second.status_code, 409)
             first.close()
+
+    def test_analysis_job_spools_ndjson_for_short_polling_requests(self):
+        def fake_response(**_kwargs):
+            return Response(iter([
+                b'{"status":"progress","stage":"collection","done":false}\n',
+                b'{"status":"success","total_videos":1,"done":true}\n',
+            ]), mimetype="application/x-ndjson")
+
+        with patch.object(worker_server.web_app, "build_analyze_response", side_effect=fake_response):
+            accepted = self.client.post(
+                "/api/jobs",
+                headers=self.headers,
+                json={"keyword": "picture lights"},
+            )
+            self.assertEqual(accepted.status_code, 202)
+            job_id = accepted.get_json()["job_id"]
+
+            payload = None
+            for _ in range(50):
+                polled = self.client.get(f"/api/jobs/{job_id}/events?after=0", headers=self.headers)
+                payload = polled.get_json()
+                if payload.get("done"):
+                    break
+                time.sleep(0.01)
+
+        self.assertTrue(payload["done"])
+        self.assertEqual(payload["cursor"], 2)
+        output = "".join(payload["events"])
+        self.assertIn('"stage":"collection"', output)
+        self.assertIn('"total_videos":1', output)
 
     def test_task_status_is_persistent_cors_enabled_and_hides_paths(self):
         with tempfile.TemporaryDirectory() as tmp:

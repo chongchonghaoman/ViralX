@@ -29,9 +29,24 @@ class WebAppTests(unittest.TestCase):
             ):
                 config = web_app.load_config()
 
-        self.assertEqual(config['workflow_version'], 2)
-        self.assertEqual(config['shot_engine'], 'shotloom')
+        self.assertEqual(config['workflow_version'], 3)
+        self.assertEqual(config['shot_engine'], 'direct')
         self.assertEqual(config['shot_model_source'], 'inherit')
+
+    def test_workflow_v3_migration_preserves_explicit_collection_only_mode(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / 'config.json'
+            config_path.write_text(json.dumps({
+                'workflow_version': 2,
+                'shot_engine': 'skip',
+            }), encoding='utf-8')
+            with patch.object(web_app, 'CONFIG_PATH', config_path), patch.dict(
+                web_app.os.environ, {}, clear=True,
+            ):
+                config = web_app.load_config()
+
+        self.assertEqual(config['workflow_version'], 3)
+        self.assertEqual(config['shot_engine'], 'skip')
 
     def test_health_returns_readiness_without_secret_values(self):
         with patch.object(web_app.libtv_auth, 'status', return_value={

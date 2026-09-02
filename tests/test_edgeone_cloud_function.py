@@ -170,6 +170,57 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(call.kwargs["headers"]["X-ViralX-Model-Key"], "session-secret-model")
         self.assertNotIn("X-ViralX-TK-Proxy", call.kwargs["headers"])
 
+    def test_worker_proxy_falls_back_to_ipv4_relay_with_original_tls_hostname(self):
+        upstream = requests.Response()
+        upstream.status_code = 200
+        upstream._content = json.dumps({"status": "ok", "runtime": "worker"}).encode("utf-8")
+        upstream.headers["Content-Type"] = "application/json"
+
+        class FakeSession:
+            def __init__(self):
+                self.trust_env = True
+                self.mount_args = None
+                self.request_args = None
+                self.closed = False
+
+            def mount(self, prefix, adapter):
+                self.mount_args = (prefix, adapter)
+
+            def request(self, *args, **kwargs):
+                self.request_args = (args, kwargs)
+                return upstream
+
+            def close(self):
+                self.closed = True
+
+        fake_session = FakeSession()
+        with patch.object(self.module, "WORKER_PROXY_ENABLED", True), patch.object(
+            self.module.requests,
+            "request",
+            side_effect=requests.ConnectionError("no IPv6 route"),
+        ), patch.object(
+            self.module,
+            "_worker_ipv4_candidates",
+            return_value=["208.111.35.209"],
+        ), patch.object(
+            self.module.requests,
+            "Session",
+            return_value=fake_session,
+        ):
+            response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["runtime"], "worker")
+        self.assertFalse(fake_session.trust_env)
+        prefix, adapter = fake_session.mount_args
+        self.assertEqual(prefix, "https://")
+        self.assertEqual(adapter.connect_ip, "208.111.35.209")
+        self.assertEqual(adapter.server_hostname, "desktop-6a71m2q.tail2691cd.ts.net")
+        call_args, call_kwargs = fake_session.request_args
+        self.assertEqual(call_args[:2], ("GET", f"{self.module.WORKER_BASE_URL}/api/health"))
+        self.assertEqual(call_kwargs["headers"]["Host"], "desktop-6a71m2q.tail2691cd.ts.net")
+        self.assertTrue(fake_session.closed)
+
     def test_checkpoint_routes_proxy_the_exact_opaque_task_id(self):
         task_id = "A" * 24
         with patch.object(
@@ -185,6 +236,28 @@ class EdgeOneCloudFunctionTests(unittest.TestCase):
         self.assertEqual(proxy.call_args_list[0].args, (f"/api/tasks/{task_id}",))
         self.assertEqual(proxy.call_args_list[1].args, (f"/api/tasks/{task_id}/resume",))
         self.assertTrue(proxy.call_args_list[1].kwargs["stream"])
+
+    def test_analysis_job_routes_proxy_short_requests_without_streaming(self):
+        job_id = "J" * 32
+        task_id = "T" * 24
+        with patch.object(
+            self.module,
+            "_proxy_worker",
+            return_value=({"status": "ready"}, 200),
+        ) as proxy:
+            start_response = self.client.post("/jobs", json={"keyword": "picture lights"})
+            poll_response = self.client.get(f"/jobs/{job_id}/events?after=3")
+            resume_response = self.client.post(f"/jobs/tasks/{task_id}/resume", json={})
+
+        self.assertEqual(start_response.status_code, 200)
+        self.assertEqual(poll_response.status_code, 200)
+        self.assertEqual(resume_response.status_code, 200)
+        self.assertEqual(proxy.call_args_list[0].args, ("/api/jobs",))
+        self.assertEqual(proxy.call_args_list[1].args, (f"/api/jobs/{job_id}/events",))
+        self.assertEqual(proxy.call_args_list[2].args, (f"/api/jobs/tasks/{task_id}/resume",))
+        self.assertFalse(proxy.call_args_list[0].kwargs)
+        self.assertFalse(proxy.call_args_list[1].kwargs)
+        self.assertFalse(proxy.call_args_list[2].kwargs)
 
     def test_checkpoint_routes_reject_path_like_ids_before_proxying(self):
         response = self.client.get("/tasks/too-short")
