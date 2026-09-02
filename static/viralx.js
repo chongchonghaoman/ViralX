@@ -1,8 +1,7 @@
 (() => {
   "use strict";
 
-  let currentModalTitle = "";
-  let currentModalContent = "";
+  let currentModalMarkdown = "";
   let lastModalTrigger = null;
   let runtimeMode = "unknown";
   let runtimeAnalysisReady = false;
@@ -460,12 +459,54 @@
     if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  function completeMarkdownDocument(title, content) {
+    const report = String(content || "暂无报告内容").trim();
+    return /^#\s+\S/.test(report) ? report : `# ${title}\n\n${report}`;
+  }
+
+  function buildReportOutline(modalContent) {
+    const outline = byId("report-outline");
+    outline.replaceChildren();
+    const label = document.createElement("span");
+    label.className = "report-outline__label";
+    label.textContent = "报告目录";
+    outline.appendChild(label);
+
+    modalContent.querySelectorAll("h2").forEach((heading, index) => {
+      const sectionNumber = String(index + 1).padStart(2, "0");
+      heading.dataset.section = sectionNumber;
+      heading.id = `report-section-${index + 1}`;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.innerHTML = `<span>${sectionNumber}</span>${escapeHtml(heading.textContent || `第 ${index + 1} 节`)}`;
+      button.addEventListener("click", () => {
+        heading.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      });
+      outline.appendChild(button);
+    });
+  }
+
+  function setReportView(view) {
+    const sourceMode = view === "source";
+    const toggle = byId("source-toggle-btn");
+    const copyButton = byId("copy-source-btn");
+    byId("report-reading").hidden = sourceMode;
+    byId("markdown-source").hidden = !sourceMode;
+    toggle.setAttribute("aria-pressed", String(sourceMode));
+    toggle.textContent = sourceMode ? "返回阅读视图" : "查看 MD 源码";
+    copyButton.hidden = !sourceMode;
+    if (sourceMode) byId("modal-source").parentElement.focus();
+  }
+
+  function toggleMarkdownSource() {
+    setReportView(!byId("markdown-source").hidden ? "reading" : "source");
+  }
+
   function openModal(title, content) {
     const modal = byId("modal");
     const reportShell = modal.querySelector(".report-shell");
     lastModalTrigger = document.activeElement;
-    currentModalTitle = title;
-    currentModalContent = content;
+    currentModalMarkdown = completeMarkdownDocument(title, content);
     byId("modal-title").textContent = title;
     const report = content || "暂无报告内容";
     const rendered = window.marked ? window.marked.parse(report) : escapeHtml(report);
@@ -480,6 +521,13 @@
       table.before(scroller);
       scroller.appendChild(table);
     });
+    buildReportOutline(modalContent);
+    byId("modal-source").textContent = currentModalMarkdown;
+    const lineCount = currentModalMarkdown.split(/\r?\n/).length;
+    byId("source-stats").textContent = `${lineCount} 行 · ${currentModalMarkdown.length.toLocaleString("zh-CN")} 字符`;
+    byId("copy-status").textContent = "源码与当前阅读视图完全一致。";
+    byId("copy-status").dataset.state = "idle";
+    setReportView("reading");
 
     if (!modal.open) modal.showModal();
     document.body.dataset.modalOpen = "true";
@@ -521,50 +569,40 @@
     }
   }
 
-  async function exportToObsidian() {
-    const button = byId("export-btn");
+  async function copyMarkdownSource() {
+    const button = byId("copy-source-btn");
+    const status = byId("copy-status");
     const previousLabel = button.textContent;
     button.disabled = true;
-    button.textContent = "正在导出";
+    button.textContent = "正在复制";
 
     try {
-      const response = await apiFetch("/api/export-obsidian", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: currentModalTitle, content: currentModalContent }),
-      });
-      const data = await response.json();
-      if (data.status !== "success") throw new Error(data.message || "导出请求未完成");
-
-      if (data.obsidian_uri) {
-        window.location.assign(data.obsidian_uri);
-        button.textContent = "已发送到 Obsidian";
-      } else if (data.content != null && data.filename) {
-        const blob = new Blob([data.content], { type: "text/markdown;charset=utf-8" });
-        const href = URL.createObjectURL(blob);
-        const download = document.createElement("a");
-        download.href = href;
-        download.download = data.filename;
-        document.body.appendChild(download);
-        download.click();
-        download.remove();
-        URL.revokeObjectURL(href);
-        button.textContent = "Markdown 已下载";
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(currentModalMarkdown);
       } else {
-        button.textContent = "已导出";
+        const fallback = document.createElement("textarea");
+        fallback.value = currentModalMarkdown;
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.appendChild(fallback);
+        fallback.select();
+        const copied = document.execCommand("copy");
+        fallback.remove();
+        if (!copied) throw new Error("浏览器拒绝访问剪贴板");
       }
-      button.title = data.file_path || data.message || "报告已导出";
+      button.textContent = "已复制";
+      status.textContent = "完整 Markdown 已复制，可直接粘贴到飞书文档或 Obsidian。";
+      status.dataset.state = "success";
       window.setTimeout(() => {
         button.textContent = previousLabel;
         button.disabled = false;
-      }, 2500);
+      }, 2200);
     } catch (error) {
-      button.textContent = "导出失败";
+      button.textContent = "复制失败";
       button.disabled = false;
-      const hint = runtimeMode === "edgeone"
-        ? "确认浏览器允许打开 Obsidian URI，或下载 Markdown 后导入"
-        : "检查 Obsidian 输出目录";
-      showInlineError(`报告没有导出：${error.message}。${hint}后重试。`);
+      status.textContent = `没有复制：${error.message}。你仍可在上方手动全选源码。`;
+      status.dataset.state = "error";
     }
   }
 
@@ -720,8 +758,8 @@
 
   function looksLikeGroundedReport(value) {
     const report = String(value || "").trim();
-    const professional = report.startsWith("## 证据覆盖") && /\[SHOT:S\d{3}\]/.test(report);
-    const direct = report.startsWith("## 目标产品核验")
+    const professional = report.includes("## 证据覆盖") && /\[SHOT:S\d{3}\]/.test(report);
+    const direct = report.includes("## 目标产品核验")
       && /\[TARGET:(?:visible|not_visible|uncertain)\]/.test(report)
       && /\[VIDEO:\d{1,2}:\d{2}(?:\.\d+)?-\d{1,2}:\d{2}(?:\.\d+)?\]/.test(report);
     return (professional || direct)
@@ -1027,7 +1065,8 @@
     byId("analyze-btn").addEventListener("click", () => handleAnalyzeAction(false));
     byId("refresh-btn").addEventListener("click", () => handleAnalyzeAction(true));
     byId("focus-source").addEventListener("click", () => byId("keyword").focus());
-    byId("export-btn").addEventListener("click", exportToObsidian);
+    byId("source-toggle-btn").addEventListener("click", toggleMarkdownSource);
+    byId("copy-source-btn").addEventListener("click", copyMarkdownSource);
     byId("keyword").addEventListener("input", syncPrimaryActions);
     document.querySelector(".modal-close").addEventListener("click", closeModal);
 

@@ -435,6 +435,11 @@ class AIAnalyzerIngestTests(unittest.TestCase):
 
     def test_final_video_prompt_requires_high_fidelity_structure_transfer(self):
         prompt = final_video_prompt({"target_product": "picture light", "evidence_bundle": {}})
+        self.assertIn("# ViralX 爆款视频证据报告", prompt)
+        self.assertIn("## 一页结论", prompt)
+        self.assertIn("## 原片时间轴", prompt)
+        self.assertIn("## 证据索引", prompt)
+        self.assertIn("### 逐镜执行表", prompt)
         self.assertIn("高保真复刻执行脚本", prompt)
         self.assertIn("段落顺序与总时长应尽量贴近原片", prompt)
         self.assertIn("不得擅自发明", prompt)

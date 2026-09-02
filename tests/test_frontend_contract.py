@@ -206,7 +206,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_edgeone_builder_rewrites_versioned_subscription_assets(self):
         home_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.home))
         settings_versions = set(re.findall(r"url_for\('static', filename='[^']+', v='([^']+)'\)", self.settings))
-        self.assertEqual(home_versions, {"1.1.11"})
+        self.assertEqual(home_versions, {"1.1.12"})
         self.assertEqual(settings_versions, home_versions)
         self.assertIn("const renderStaticUrls", self.build_js)
         self.assertIn('`/static/${filename}${version ? `?v=${version}` : ""}`', self.build_js)
@@ -312,6 +312,28 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("REPORT_ALLOWED_TAGS", self.home_js)
         self.assertIn("sanitizeReportHtml(rendered)", self.home_js)
         self.assertNotIn("innerHTML = window.marked", self.home_js)
+
+    def test_report_has_editorial_reading_and_local_markdown_source_views(self):
+        for element_id in (
+            "report-reading",
+            "report-outline",
+            "source-toggle-btn",
+            "copy-source-btn",
+            "markdown-source",
+            "modal-source",
+            "copy-status",
+        ):
+            self.assertIn(f'id="{element_id}"', self.home)
+        self.assertIn("function completeMarkdownDocument", self.home_js)
+        self.assertIn("function buildReportOutline", self.home_js)
+        self.assertIn("function toggleMarkdownSource", self.home_js)
+        self.assertIn("async function copyMarkdownSource", self.home_js)
+        self.assertIn("navigator.clipboard.writeText(currentModalMarkdown)", self.home_js)
+        self.assertIn('document.execCommand("copy")', self.home_js)
+        self.assertNotIn("function exportToObsidian", self.home_js)
+        self.assertNotIn('byId("export-btn")', self.home_js)
+        for selector in (".report-outline", ".markdown-source", ".source-code", ".copy-status"):
+            self.assertIn(selector, self.home_css)
 
     def test_unready_runtime_stays_on_analysis_page_and_explains_offline_state(self):
         self.assertIn("function syncPrimaryActions()", self.home_js)

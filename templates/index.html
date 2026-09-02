@@ -10,13 +10,13 @@
   <title>ViralX · 把爆款拆到每一秒</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.11') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='viralx.css', v='1.1.12') }}">
   <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh" crossorigin="anonymous"></script>
-  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.11') }}"></script>
-  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.11') }}"></script>
-  <script defer src="{{ url_for('static', filename='viralx.js', v='1.1.11') }}"></script>
+  <script defer src="{{ url_for('static', filename='runtime-config.js', v='1.1.12') }}"></script>
+  <script defer src="{{ url_for('static', filename='cloud-config.js', v='1.1.12') }}"></script>
+  <script defer src="{{ url_for('static', filename='viralx.js', v='1.1.12') }}"></script>
 </head>
 <body>
   <a class="skip-link" href="#analysis-studio">跳到分析入口</a>
@@ -139,13 +139,13 @@
         <section class="empty-state" aria-labelledby="empty-title">
           <div>
             <h3 id="empty-title">先给 ViralX 一条真实视频。</h3>
-            <p>它不会从空白模板编结论。分析完成后，原片时间证据、可信报告、可选专业镜头索引和 Obsidian 导出会出现在这里。</p>
+            <p>它不会从空白模板编结论。分析完成后，原片时间证据、可信报告、可选专业镜头索引和可复制的 Markdown 源码会出现在这里。</p>
             <button class="empty-action" id="focus-source" type="button">粘贴视频来源</button>
           </div>
           <div class="empty-proof" aria-label="空状态下的输出说明">
             <span>INPUT</span><strong>视频链接 / 搜索主题</strong>
             <span>PROCESS</span><strong>TK Note → 原片视觉 → 证据终审</strong>
-            <span>OUTPUT</span><strong>报告 / 脚本 / Obsidian</strong>
+            <span>OUTPUT</span><strong>报告 / 脚本 / Markdown 源码</strong>
           </div>
         </section>
       </div>
@@ -202,7 +202,7 @@
         <article><span>02</span><h3>TK Note 采集</h3><p>原片、元数据、字幕与评论，先留下真实来源。</p></article>
         <article><span>03</span><h3>原片视觉理解</h3><p>Qwen3-VL 等视频模型直接读取完整原片，以真实时间段记录画面事实。</p></article>
         <article><span>04</span><h3>校验与终审</h3><p>平台、转写与原片事实进入统一证据协议；目标产品矛盾或引用不足时阻断报告。</p></article>
-        <article><span>05</span><h3>导出工作区</h3><p>最终报告、证据审计文件与 Obsidian 笔记回到你的工作流。</p></article>
+        <article><span>05</span><h3>复制报告源码</h3><p>完整 Markdown 一键复制，直接粘贴到飞书文档、Obsidian 或其他工作区。</p></article>
       </div>
     </section>
 
@@ -216,7 +216,7 @@
     <div class="footer-index" aria-label="页脚索引">
       <div><span>产品</span><a href="#method">分析方法</a><a href="#evidence">证据时间线</a><a href="#results-title">拉片记录</a></div>
       <div><span>工作流</span><a href="#analysis-studio">视频来源</a><a href="/settings">完整分析链</a><a href="/settings">网页设置</a></div>
-      <div><span>输出</span><p>拉片报告</p><p>复刻脚本</p><p>Obsidian 笔记</p></div>
+      <div><span>输出</span><p>拉片报告</p><p>复刻脚本</p><p>Markdown 源码</p></div>
     </div>
     <div class="footer-meta"><span>LOCAL-FIRST · 2026</span><a href="#main-content">回到顶部 ↑</a></div>
     <strong class="footer-wordmark" aria-hidden="true">ViralX</strong>
@@ -227,11 +227,26 @@
       <header class="modal-header">
         <div><span>VIRALX REPORT</span><h2 id="modal-title">拉片报告</h2></div>
         <div class="modal-actions">
-          <button class="export-btn" id="export-btn" type="button">导出 Obsidian</button>
+          <button class="source-toggle-btn" id="source-toggle-btn" type="button" aria-pressed="false">查看 MD 源码</button>
+          <button class="copy-source-btn" id="copy-source-btn" type="button" hidden>复制全部源码</button>
           <button class="modal-close" type="button" aria-label="关闭拉片报告">×</button>
         </div>
       </header>
-      <div class="modal-content markdown-content" id="modal-content"></div>
+      <div class="report-reading" id="report-reading">
+        <nav class="report-outline" id="report-outline" aria-label="报告目录"></nav>
+        <article class="modal-content markdown-content" id="modal-content"></article>
+      </div>
+      <section class="markdown-source" id="markdown-source" aria-labelledby="source-view-title" hidden>
+        <div class="source-view-head">
+          <div>
+            <span>MARKDOWN SOURCE</span>
+            <h3 id="source-view-title">可直接粘贴到飞书文档</h3>
+          </div>
+          <span class="source-stats" id="source-stats"></span>
+        </div>
+        <pre class="source-code" tabindex="0" aria-label="Markdown 报告源代码"><code id="modal-source"></code></pre>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite">源码与当前阅读视图完全一致。</p>
+      </section>
     </div>
   </dialog>
 </body>

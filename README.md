@@ -69,11 +69,12 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 - **模型断连自动恢复**：原片、抽帧和文本终审共用同一请求层；遇到连接中断、限流或临时 5xx 时串行节流并有限退避重试，诊断只记录状态和尝试次数，不记录 URL 或 Key。
 - **终审失败可从检查点续跑**：统一证据已生成但模型连接或引用门禁失败时，服务端保存 24 小时匿名任务检查点；网页复用已校验原片和证据，只重试模型终审。
 - **复刻改为高保真结构迁移**：按原片时间轴保留段落顺序、时长比例、镜头功能、动作节奏、字幕 / 声音功能、视觉效果、转场和 CTA 位置；只替换目标产品与不可复用素材，禁止无证据新增卖点。
+- **报告改为编辑部式证据文档**：固定输出一页结论、原片档案、证据覆盖、原片时间轴、爆款机制、受众、结构母版、逐镜复刻脚本与证据索引；阅读视图提供章节目录，源码视图可一键复制完整 Markdown 到飞书文档或 Obsidian。
 - **Agent-native Skill**：`$viralx-agent` 使用 TK Note、FFmpeg 和当前 Codex 模型完成取证与分析，不要求用户额外购买模型 API。
 - **网页改为集中式 Worker**：Edge 前端通过受限 HTTPS API 调用同一套证据链；访客不再连接自己的 `127.0.0.1`，离线时仍可浏览产品方法与界面内容。
 - **长任务改为后台任务传输**：网页同源提交任务，再用短轮询持续取回 NDJSON 进度；搜索、下载和原片终审超过网关单次请求时限时，不再直接变成 HTTP 504。
 
-原有能力继续保留：品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、Obsidian 导出、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
+原有能力继续保留：品类消歧、TK Note、共享 Whisper / Qwen3-ASR、ShotLoom、可选 LibTV、本地 Markdown / Obsidian 兼容、模型预设、自定义 API、Web API Skill 和 Agent-native Skill。
 
 ![ViralX 网页设置](docs/assets/viralx-settings.png)
 
@@ -122,7 +123,7 @@ ViralX 是一个证据优先的短视频拆解系统，同时提供 Web 工作�
 | 上方视觉模型 | 默认复用一套自定义 Base URL、API Key 与模型 ID，直接理解完整原片并完成证据终审 |
 | 流式进度 | NDJSON 返回发现、采集、原片送审、证据校验和最终分析五个真实阶段 |
 | 审计文件 | 保存证据包、镜头证据和最终原始输出，便于追查结论 |
-| Obsidian | 本地写入，或生成 URI / 下载 Markdown |
+| Markdown 报告 | 编辑部式阅读视图与完整 MD 源码视图；一键复制后可直接粘贴到飞书文档或 Obsidian |
 
 ## 在 Codex 中直接调用 ViralX
 
@@ -197,7 +198,7 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
 Browser
 ├── 首页与设置页
 ├── 可选会话级 BYOK
-├── 流式进度、报告与导出
+├── 流式进度、报告阅读与 Markdown 源码复制
 └── 同源任务 API → owner-operated ViralX Worker
     ├── TikTok multi-source search（关键词发现、自动切换、合并与去重）
     ├── TK Note（缓存 / 搜索媒体提示 / yt-dlp / 隔离 Chrome）
