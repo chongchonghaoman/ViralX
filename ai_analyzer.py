@@ -8,6 +8,7 @@ import time
 import hashlib
 import base64
 import subprocess
+import threading
 import requests
 import anthropic
 import google.genai as genai
@@ -154,6 +155,27 @@ class OpenAICompatibleAnalyzer:
         self.supports_vision = supports_vision
         self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
         self.video_dir.mkdir(exist_ok=True, parents=True)
+        self.request_attempts = self._bounded_env_int("VIRALX_MODEL_REQUEST_ATTEMPTS", 4, 1, 6)
+        self.request_gap_seconds = self._bounded_env_float("VIRALX_MODEL_REQUEST_GAP_SECONDS", 2.5, 0.0, 30.0)
+        self._request_lock = threading.Lock()
+        self._last_request_completed_at = 0.0
+        self.last_transport_attempts = []
+
+    @staticmethod
+    def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+        try:
+            value = int(os.environ.get(name, str(default)))
+        except (TypeError, ValueError):
+            value = default
+        return max(minimum, min(value, maximum))
+
+    @staticmethod
+    def _bounded_env_float(name: str, default: float, minimum: float, maximum: float) -> float:
+        try:
+            value = float(os.environ.get(name, str(default)))
+        except (TypeError, ValueError):
+            value = default
+        return max(minimum, min(value, maximum))
 
     def extract_frames(self, video_path: str, output_dir: str = None, max_frames: int = 64) -> list:
         """Extract a timeline-wide fallback sample instead of the first few frames."""
@@ -224,18 +246,72 @@ class OpenAICompatibleAnalyzer:
             "X-Title": "ViralX",
         }
 
-    def _request(self, content_parts: list, timeout: int = 360):
-        return requests.post(
-            f"{self.base_url}/chat/completions",
-            headers=self._headers(),
-            json={
-                "model": self.model_name,
-                "messages": [{"role": "user", "content": content_parts}],
-                "max_tokens": 8192,
-                "temperature": 0.1,
-            },
-            timeout=timeout,
-        )
+    @staticmethod
+    def _retry_after_seconds(response, fallback: float) -> float:
+        raw = str((getattr(response, "headers", {}) or {}).get("Retry-After") or "").strip()
+        try:
+            return max(0.0, min(float(raw), 30.0)) if raw else fallback
+        except ValueError:
+            return fallback
+
+    def _request(self, content_parts, timeout: int = 360, temperature: float = 0.1):
+        """Send one model request with bounded pacing and transient-error retries."""
+        retryable_statuses = {408, 425, 429, 500, 502, 503, 504, 520, 522, 524}
+        payload = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": content_parts}],
+            "max_tokens": 8192,
+            "temperature": temperature,
+        }
+        attempts = []
+        last_exception = None
+
+        with self._request_lock:
+            for attempt in range(1, self.request_attempts + 1):
+                gap_remaining = self.request_gap_seconds - (time.monotonic() - self._last_request_completed_at)
+                if gap_remaining > 0:
+                    time.sleep(gap_remaining)
+                try:
+                    response = requests.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=self._headers(),
+                        json=payload,
+                        timeout=timeout,
+                    )
+                    self._last_request_completed_at = time.monotonic()
+                    status_code = int(getattr(response, "status_code", 0) or 0)
+                    if status_code in retryable_statuses:
+                        outcome = "retryable_http"
+                    elif 200 <= status_code < 300:
+                        outcome = "completed"
+                    else:
+                        outcome = "http_error"
+                    attempts.append({"attempt": attempt, "outcome": outcome, "status_code": status_code})
+                    if status_code not in retryable_statuses or attempt >= self.request_attempts:
+                        self.last_transport_attempts = attempts
+                        return response
+                    wait_seconds = self._retry_after_seconds(response, min(2 ** attempt, 12.0))
+                    print(f"[{self.provider_name} 暂时不可用] HTTP {status_code}，{wait_seconds:g} 秒后重试（{attempt}/{self.request_attempts}）")
+                    time.sleep(wait_seconds)
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                    self._last_request_completed_at = time.monotonic()
+                    last_exception = exc
+                    attempts.append({
+                        "attempt": attempt,
+                        "outcome": "retryable_exception",
+                        "error_type": type(exc).__name__,
+                    })
+                    if attempt >= self.request_attempts:
+                        break
+                    wait_seconds = min(2 ** attempt, 12.0)
+                    print(f"[{self.provider_name} 连接中断] {wait_seconds:g} 秒后重试（{attempt}/{self.request_attempts}）")
+                    time.sleep(wait_seconds)
+
+        self.last_transport_attempts = attempts
+        error_type = type(last_exception).__name__ if last_exception else "ConnectionError"
+        raise requests.exceptions.ConnectionError(
+            f"模型连接不稳定，已自动尝试 {len(attempts)} 次（{error_type}）"
+        ) from last_exception
 
     @staticmethod
     def _mark_video_input(video_data: dict, **updates) -> None:
@@ -248,7 +324,7 @@ class OpenAICompatibleAnalyzer:
         if not frames:
             return f"{self.provider_name} 分析失败：原视频无法读取，且没有生成可用的全片抽帧"
         self._mark_video_input(
-            video_data, status="completed", transport="timeline-frames",
+            video_data, status="running", transport="timeline-frames",
             frame_count=len(frames), fps="adaptive<=2",
         )
         duration = self._probe_duration(video_file_path)
@@ -268,7 +344,16 @@ class OpenAICompatibleAnalyzer:
             ])
         response = self._request(content_parts)
         if response.status_code == 200:
+            self._mark_video_input(
+                video_data, status="completed", transport="timeline-frames",
+                frame_count=len(frames), fps="adaptive<=2",
+                transport_attempts=list(self.last_transport_attempts),
+            )
             return response.json()["choices"][0]["message"]["content"].strip()
+        self._mark_video_input(
+            video_data, status="error", transport="timeline-frames",
+            transport_attempts=list(self.last_transport_attempts),
+        )
         return f"{self.provider_name} 分析失败：HTTP {response.status_code}"
 
     def analyze(self, video_data: dict, video_file_path: str = None) -> str:
@@ -296,10 +381,16 @@ class OpenAICompatibleAnalyzer:
                     self._mark_video_input(video_data, status="running", transport="video-base64", fps=2)
                     response = self._request(content_parts)
                     if response.status_code == 200:
-                        self._mark_video_input(video_data, status="completed", transport="video-base64", fps=2)
+                        self._mark_video_input(
+                            video_data, status="completed", transport="video-base64", fps=2,
+                            transport_attempts=list(self.last_transport_attempts),
+                        )
                         return response.json()["choices"][0]["message"]["content"].strip()
                     if response.status_code not in {400, 404, 413, 415, 422}:
-                        self._mark_video_input(video_data, status="error", transport="video-base64")
+                        self._mark_video_input(
+                            video_data, status="error", transport="video-base64",
+                            transport_attempts=list(self.last_transport_attempts),
+                        )
                         return f"{self.provider_name} 分析失败：HTTP {response.status_code}"
                 self._mark_video_input(video_data, status="degraded", transport="timeline-frames")
                 return self._analyze_sampled_frames(video_data, video_file_path, prompt)
@@ -308,7 +399,11 @@ class OpenAICompatibleAnalyzer:
 
         except Exception as e:
             print(f"[{self.provider_name} 分析异常] {type(e).__name__}")
-            return f"{self.provider_name} 分析失败：{str(e)[:100]}"
+            self._mark_video_input(
+                video_data, status="error",
+                transport_attempts=list(self.last_transport_attempts),
+            )
+            return f"{self.provider_name} 分析失败：{str(e)[:160]}"
 
     def _build_analysis_prompt(self, video_data: dict, metadata_text: str, frame_count: int) -> str:
         return f"""你是一位资深TikTok电商短视频拆解专家，擅长深度结构化分析。
@@ -320,7 +415,8 @@ class OpenAICompatibleAnalyzer:
 - 字幕或 ASR 只能引用 [TK:transcript]；歌词不得冒充商品台词
 - 画面、动作、镜头、字幕和声音只允许引用 [LIBTV:shot] 或本次直接看到的 [FRAME:sample]
 - 营销解释必须明确写“推断”，并同时引用支撑它的事实来源
-- 翻拍脚本必须标为“创意提案”，不得伪装成原视频复原
+- 复刻脚本必须按原片时间轴做高保真结构迁移；保留段落顺序、时长比例、镜头功能、节奏和视觉效果，只替换目标产品与不可复用资产
+- 不得擅自发明原片或产品资料未支持的功能、场景、控制方式、价格、效果或用户反馈
 - 证据不足的栏目必须写“未采集/无法判断”，禁止用常识填空
 
 === 可引用证据源 ===
@@ -407,40 +503,16 @@ class OpenAICompatibleAnalyzer:
 
 ---
 
-## 📝 创意提案：翻拍脚本
+## 📝 高保真结构迁移：复刻执行脚本
 
-### 版本一：产品展示型（{video_data.get('duration', 'X')}秒）
+执行目标：尽可能复现原片已经验证的结构、节奏与视觉效果；不是自由创意延伸。
 
-```
-【开场钩子 - 0:00-0:0X】
-画面：（描述）
-配音：（暗示什么情绪/痛点）
+### 迁移边界
+用“必须保留 / 可以替换 / 禁止新增”三栏说明边界。
 
-【痛点引入 - 0:0X-0:0X】
-画面：
-配音：
-
-【解决方案 - 0:0X-0:0X】
-画面：
-配音：
-
-【卖点轰炸 - 0:0X-0:0X】
-画面：
-配音/字幕：（核心卖点）
-
-【效果展示 - 0:0X-0:0X】
-画面：（如何展示效果）
-
-【购买引导 - 0:0X-0:XX】
-画面：
-文字：
-```
-
-### 版本二：对比测评型（X秒）
-（类似结构）
-
-### 版本三：情绪共鸣型（15秒快剪）
-（类似结构）
+### 逐段执行表
+每段必须包含：原片时间段与证据引用、目标片时间段、镜头景别与机位/运镜、画面动作、目标产品替换、台词/字幕、声音、光线/视觉效果、转场、CTA、执行备注。
+段落顺序与总时长应尽量贴近原片；缺少产品资料时写“待补充产品资料”，不得擅自发明功能或效果。
 
 ---
 
@@ -488,24 +560,7 @@ class OpenAICompatibleAnalyzer:
         prompt = self._analyze_text_prompt(video_data)
 
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://viralx.metrolabs.mobi",
-                "X-Title": "ViralX",
-            }
-            payload = {
-                "model": self.model_name,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 8192,
-                "temperature": 0.1
-            }
-            resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120
-            )
+            resp = self._request(prompt, timeout=120)
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"].strip()
             else:
@@ -1917,11 +1972,11 @@ class AIAnalyzer:
             return f"裂变脚本生成失败: {str(e)[:100]}"
 
     def generate_remake_script(self, video_data: dict, original_analysis: str, product_name: str, product_info: str) -> str:
-        """基于爆款视频分析和产品信息，生成复刻脚本（不使用缓存）"""
+        """Generate an evidence-bounded, high-fidelity structure transfer script."""
         if not self.client:
             return "复刻脚本生成失败：未配置 MiniMax API Key"
         duration = video_data.get('duration', 0)
-        prompt = f"""角色设定：你是资深TikTok电商短视频编剧，擅长将爆款视频的成功逻辑应用到不同产品上。
+        prompt = f"""角色设定：你是资深 TikTok 电商短视频导演。你的任务不是自由发挥，而是把已经验证的爆款原片结构高保真迁移到目标产品。
 
 === 爆款视频分析 ===
 {original_analysis}
@@ -1932,38 +1987,32 @@ class AIAnalyzer:
 {product_info}
 
 === 任务 ===
-1. 分析这个产品的核心卖点，找出与爆款视频成功逻辑的结合点
-2. 保留爆款视频的结构框架（开场方式、信任建立方式、转化节奏），但替换成你的产品
-3. 写出一个完整的复刻脚本
+1. 先从上方报告提取原片时间轴，逐段确认段落顺序、时长比例、镜头功能、景别、机位/运镜、动作节奏、字幕/声音功能、光线与视觉效果、转场和 CTA 位置。
+2. 目标片段顺序与总时长应尽量贴近原片。只替换目标产品、品牌、人物和无法合法复用的素材；不得擅自发明原片或产品资料未支持的功能、场景、控制方式、价格、效果或用户反馈。
+3. 原片证据或产品资料缺失时明确写“未采集”或“待补充产品资料”，不能用常识补全。
+4. 每个目标片段必须写明对应的原片时间段或镜头引用；任何结构或时长调整必须说明原因。
 
 请严格按照以下格式输出 Markdown：
 
-## 🎯 产品适配分析
-（分析爆款逻辑如何应用到你的产品，有哪些优势可以放大，哪些需要调整）
+## 迁移边界
+用“必须保留 / 可以替换 / 禁止新增”三栏列出执行边界。
 
-## 📹 复刻脚本
-【时长】{duration}秒
+## 原片结构母版
+按时间顺序列出原片段落、证据引用、叙事功能与关键视听效果。
 
-【开场】（前3秒：如何抓住注意力，与原视频开场逻辑类似但换成本产品）
-- 画面：
-- 台词：
+## 高保真复刻执行脚本
+目标总时长：尽量贴近原片 {duration} 秒。
 
-【信任建立】（中间部分，如何让人相信你的产品）
-- 画面：
-- 台词：
+逐段表格必须包含：原片时间段与引用、目标片时间段、镜头景别与机位/运镜、画面动作、目标产品替换、台词/字幕、声音、光线/视觉效果、转场、CTA、执行备注。
 
-【转化收割】（最后部分，如何推动购买决策）
-- 画面：
-- 台词：
-
-## 💡 注意事项
-（翻拍时需要注意的要点、可能踩的坑）"""
+## 执行检查
+列出拍摄前必须补齐的产品资料，以及与原片相比的所有必要偏差。"""
 
         try:
             msg = self.client.messages.create(
                 model=self.model,
                 max_tokens=8192,
-                temperature=0.7,
+                temperature=0.2,
                 messages=[{"role": "user", "content": prompt}]
             )
             text = self._extract_text(msg)

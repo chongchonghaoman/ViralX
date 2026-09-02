@@ -1,10 +1,12 @@
 import hashlib
 import tempfile
 import unittest
+import requests
 from pathlib import Path
 from unittest.mock import patch
 
 from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer, _model_result_error
+from evidence_contract import final_video_prompt
 from shot_analyzers import ShotAnalysisResult
 from video_ingest import VideoAsset, VideoIngestError
 
@@ -336,6 +338,108 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             self.assertEqual(video_part["type"], "video_url")
             self.assertTrue(video_part["video_url"]["url"].startswith("data:video/mp4;base64,"))
             self.assertEqual(video_part["fps"], 2)
+            attempts = video_data["evidence_bundle"]["video_input"]["transport_attempts"]
+            self.assertEqual(attempts[0]["outcome"], "completed")
+
+    def test_openai_compatible_model_retries_a_disconnected_video_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / "source.mp4"
+            video.write_bytes(b"source-video")
+            analyzer = OpenAICompatibleAnalyzer(
+                api_key="key", model="qwen3-vl-flash",
+                base_url="https://example.com/v1", provider_name="Custom",
+            )
+            analyzer.request_attempts = 2
+            analyzer.request_gap_seconds = 0
+            video_data = {
+                "target_product": "picture light",
+                "evidence_bundle": {
+                    "visual_mode": "direct", "target_product": "picture light",
+                    "video_input": {}, "platform_evidence": {}, "tk_note_evidence": {},
+                },
+            }
+            response = type("Response", (), {
+                "status_code": 200, "headers": {},
+                "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
+            })()
+            with patch(
+                "ai_analyzer.requests.post",
+                side_effect=[requests.exceptions.ConnectionError("remote closed"), response],
+            ) as request, patch("ai_analyzer.time.sleep") as sleep:
+                self.assertEqual(analyzer.analyze(video_data, str(video)), "ok")
+
+            self.assertEqual(request.call_count, 2)
+            sleep.assert_called_once_with(2)
+            attempts = video_data["evidence_bundle"]["video_input"]["transport_attempts"]
+            self.assertEqual([item["outcome"] for item in attempts], ["retryable_exception", "completed"])
+            self.assertEqual(attempts[0]["error_type"], "ConnectionError")
+
+    def test_openai_compatible_text_path_uses_the_same_retry_layer(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+            supports_vision=False,
+        )
+        analyzer.request_attempts = 2
+        analyzer.request_gap_seconds = 0
+        video_data = {"evidence_bundle": {"platform_evidence": {}}}
+        response = type("Response", (), {
+            "status_code": 200, "headers": {},
+            "json": lambda self: {"choices": [{"message": {"content": "text-ok"}}]},
+        })()
+        with patch(
+            "ai_analyzer.requests.post",
+            side_effect=[requests.exceptions.Timeout("slow"), response],
+        ) as request, patch("ai_analyzer.time.sleep"):
+            self.assertEqual(analyzer.analyze(video_data), "text-ok")
+        self.assertEqual(request.call_count, 2)
+
+    def test_openai_compatible_model_retries_retryable_http_status(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+        )
+        analyzer.request_attempts = 2
+        analyzer.request_gap_seconds = 0
+        unavailable = type("Response", (), {"status_code": 503, "headers": {"Retry-After": "1"}})()
+        success = type("Response", (), {
+            "status_code": 200, "headers": {},
+            "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
+        })()
+        with patch("ai_analyzer.requests.post", side_effect=[unavailable, success]), patch(
+            "ai_analyzer.time.sleep"
+        ) as sleep:
+            response = analyzer._request("prompt", timeout=120)
+        self.assertEqual(response.status_code, 200)
+        sleep.assert_called_once_with(1.0)
+        self.assertEqual(
+            [item["outcome"] for item in analyzer.last_transport_attempts],
+            ["retryable_http", "completed"],
+        )
+
+    def test_openai_compatible_retry_exhaustion_hides_raw_transport_details(self):
+        analyzer = OpenAICompatibleAnalyzer(
+            api_key="key", model="qwen3-vl-flash",
+            base_url="https://example.com/v1", provider_name="Custom",
+            supports_vision=False,
+        )
+        analyzer.request_attempts = 2
+        analyzer.request_gap_seconds = 0
+        with patch(
+            "ai_analyzer.requests.post",
+            side_effect=requests.exceptions.ConnectionError("private upstream detail"),
+        ), patch("ai_analyzer.time.sleep"):
+            result = analyzer.analyze({"evidence_bundle": {"platform_evidence": {}}})
+        self.assertIn("已自动尝试 2 次", result)
+        self.assertNotIn("private upstream detail", result)
+
+    def test_final_video_prompt_requires_high_fidelity_structure_transfer(self):
+        prompt = final_video_prompt({"target_product": "picture light", "evidence_bundle": {}})
+        self.assertIn("高保真复刻执行脚本", prompt)
+        self.assertIn("段落顺序与总时长应尽量贴近原片", prompt)
+        self.assertIn("不得擅自发明", prompt)
+        self.assertIn("必须保留 / 可以替换 / 禁止新增", prompt)
+        self.assertNotIn("基于原视频结构进行创意延伸", prompt)
 
     def test_prompt_and_validator_require_concrete_shot_ids(self):
         analyzer = OpenAICompatibleAnalyzer(
