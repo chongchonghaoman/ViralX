@@ -1,126 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940" role="img" aria-labelledby="title desc">
-  <title id="title">ViralX 证据优先串联分析流程</title>
-  <desc id="desc">关键词通过多个 TikTok 搜索源自动切换、合并和去重；视频直链跳过搜索。ViralX Worker 使用 TK Note 下载真实原片，再由上方视觉模型直接读取完整视频并基于统一证据终审；ShotLoom 是可选的专业镜头索引。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+  <title id="title">ViralX 工作逻辑：搜索、采集、原片送审、证据合并与视觉终审</title>
+  <desc id="desc">关键词先进入多源搜索；视频直链跳过搜索。TK Note 下载并校验真实原片，准备视频输入与统一证据包，最终视觉模型读取原片并生成报告。报告通过引用与目标产品校验后，输出高保真复刻脚本、Markdown 源码与一键复制。终审失败保留检查点，采集失败不进入模型分析。ShotLoom 与 LibTV 为可选专业能力。</desc>
   <defs>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0F0F0F" flood-opacity="0.08"/>
-    </filter>
-    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0F0F0F"/>
-    </marker>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#111111"/></marker>
     <style>
-      .latin { font-family: "Hanken Grotesk", Inter, Arial, sans-serif; }
-      .cn { font-family: "Hanken Grotesk", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif; }
-      .label { font-size: 18px; font-weight: 700; letter-spacing: .08em; }
-      .small { font-size: 18px; font-weight: 600; }
-      .body { font-size: 19px; font-weight: 500; }
-      .muted { fill: #656565; }
-      .line { fill: none; stroke: #0F0F0F; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
-      .dash { fill: none; stroke: #656565; stroke-width: 3; stroke-dasharray: 9 10; stroke-linecap: round; marker-end: url(#arrow); }
+      text { font-family: "Hanken Grotesk", "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif; }
+      .label { font-size:16px; font-weight:700; letter-spacing:1px; }
+      .body { font-size:18px; font-weight:500; }
+      .small { font-size:17px; fill:#5E6063; }
+      .arrow { fill:none; stroke:#111111; stroke-width:3; marker-end:url(#arrow); }
     </style>
   </defs>
-
-  <rect width="1600" height="940" rx="36" fill="#EDEDED"/>
-  <circle cx="1494" cy="94" r="38" fill="#F9ABFF"/>
-  <circle cx="1538" cy="124" r="13" fill="#E9D352"/>
-  <circle cx="1454" cy="132" r="8" fill="#4DC5E5"/>
-
-  <g class="cn">
-    <rect x="70" y="62" width="360" height="46" rx="23" fill="#0F0F0F"/>
-    <text x="94" y="92" class="label" fill="#FAFAFA">VIRALX · EVIDENCE PIPELINE</text>
-    <text x="70" y="174" font-size="54" font-weight="700" fill="#0F0F0F">先完成证据，再允许模型判断</text>
-    <text x="72" y="215" class="body muted">同一份真实原片贯穿采集与终审；目标产品或证据矛盾就阻断，不用模型补空白。</text>
-    <rect x="1242" y="160" width="286" height="54" rx="27" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <circle cx="1272" cy="187" r="7" fill="#63AD45"/>
-    <text x="1291" y="194" class="small" fill="#0F0F0F">原片优先 · 专业镜头索引可选</text>
-
-    <rect x="70" y="264" width="258" height="74" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="94" y="294" font-size="15" font-weight="700" letter-spacing=".12em" fill="#656565">入口 A</text>
-    <text x="94" y="321" font-size="22" font-weight="700" fill="#0F0F0F">输入搜索主题</text>
-
-    <rect x="368" y="264" width="258" height="74" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="392" y="294" font-size="15" font-weight="700" letter-spacing=".12em" fill="#656565">入口 B</text>
-    <text x="392" y="321" font-size="22" font-weight="700" fill="#0F0F0F">粘贴视频直链</text>
-
-    <path d="M199 338 V371" class="line"/>
-    <path d="M497 338 V355 C497 369 510 377 527 377 H557 V398" class="dash"/>
-    <rect x="432" y="350" width="132" height="30" rx="15" fill="#E9D352"/>
-    <text x="449" y="371" font-size="14" font-weight="700" fill="#0F0F0F">跳过关键词搜索</text>
-
-    <rect x="352" y="374" width="874" height="346" rx="28" fill="none" stroke="#A7A7A7" stroke-width="2" stroke-dasharray="8 10"/>
-    <rect x="666" y="354" width="198" height="40" rx="20" fill="#0F0F0F"/>
-    <text x="690" y="381" font-size="16" font-weight="700" fill="#FAFAFA">ViralX Worker 串联</text>
-
-    <g filter="url(#shadow)">
-      <rect x="70" y="398" width="258" height="284" rx="24" fill="#FAFAFA"/>
-      <rect x="368" y="398" width="258" height="284" rx="24" fill="#FAFAFA"/>
-      <rect x="666" y="398" width="258" height="284" rx="24" fill="#1E1E1E"/>
-      <rect x="964" y="398" width="242" height="284" rx="24" fill="#F9ABFF"/>
-      <rect x="1246" y="398" width="284" height="284" rx="24" fill="#4DC5E5"/>
-    </g>
-
-    <text x="94" y="438" class="label" fill="#656565">01 · SEARCH</text>
-    <text x="94" y="485" font-size="25" font-weight="700" fill="#0F0F0F">多源无感搜索</text>
-    <text x="94" y="517" font-size="21" font-weight="700" fill="#0F0F0F">发现候选视频</text>
-    <line x1="94" y1="548" x2="304" y2="548" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="94" y="583" class="body muted">故障 / 空结果自动换源</text>
-    <text x="94" y="614" class="body muted">跨源补足并按帖子去重</text>
-    <text x="94" y="645" class="body muted">统一身份、热度与平台数据</text>
-
-    <text x="392" y="438" class="label" fill="#656565">02 · COLLECT</text>
-    <text x="392" y="485" font-size="29" font-weight="700" fill="#0F0F0F">TK Note</text>
-    <text x="392" y="517" font-size="21" font-weight="700" fill="#0F0F0F">采集平台证据</text>
-    <line x1="392" y1="548" x2="602" y2="548" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="392" y="583" class="body muted">原片 · 元数据 · 评论</text>
-    <text x="392" y="614" class="body muted">字幕 / ASR · 资产清单</text>
-    <text x="392" y="645" class="body muted">兼容链接可回退 yt-dlp</text>
-
-    <text x="690" y="438" class="label" fill="#B8B8B8">03 · EVIDENCE</text>
-    <text x="690" y="485" font-size="29" font-weight="700" fill="#FAFAFA">视觉模型读原片</text>
-    <text x="690" y="517" font-size="21" font-weight="700" fill="#FAFAFA">完整视频与真实时间段</text>
-    <line x1="690" y1="548" x2="900" y2="548" stroke="#3C3C3C" stroke-width="2"/>
-    <text x="690" y="583" class="body" fill="#D6D6D6">目标产品锁定与原片哈希</text>
-    <text x="690" y="614" class="body" fill="#D6D6D6">ShotLoom 可选镜头索引</text>
-    <text x="690" y="645" class="body" fill="#D6D6D6">LibTV 仅显式故障回退</text>
-
-    <text x="988" y="438" class="label" fill="#0F0F0F">04 · MERGE</text>
-    <text x="988" y="485" font-size="29" font-weight="700" fill="#0F0F0F">Evidence</text>
-    <text x="988" y="517" font-size="21" font-weight="700" fill="#0F0F0F">统一证据合同</text>
-    <line x1="988" y1="548" x2="1182" y2="548" stroke="#0F0F0F" stroke-opacity=".22" stroke-width="2"/>
-    <text x="988" y="583" class="body" fill="#0F0F0F">平台数据 + TK Note</text>
-    <text x="988" y="614" class="body" fill="#0F0F0F">+ 原片时间事实</text>
-    <text x="988" y="645" class="body" fill="#0F0F0F">evidence_bundle.v1</text>
-
-    <text x="1270" y="438" class="label" fill="#0F0F0F">05 · ANALYZE</text>
-    <text x="1270" y="485" font-size="29" font-weight="700" fill="#0F0F0F">模型 API</text>
-    <text x="1270" y="517" font-size="21" font-weight="700" fill="#0F0F0F">基于完整证据终审</text>
-    <line x1="1270" y1="548" x2="1506" y2="548" stroke="#0F0F0F" stroke-opacity=".22" stroke-width="2"/>
-    <text x="1270" y="583" class="body" fill="#0F0F0F">复用上方同一视觉模型</text>
-    <text x="1270" y="614" class="body" fill="#0F0F0F">原片 + 命名证据终审</text>
-    <text x="1270" y="645" class="body" fill="#0F0F0F">引用不足即拦截报告</text>
-
-    <path d="M328 540 H356" class="line"/>
-    <path d="M626 540 H654" class="line"/>
-    <path d="M924 540 H952" class="line"/>
-    <path d="M1206 540 H1234" class="line"/>
-
-    <rect x="70" y="756" width="260" height="54" rx="27" fill="#E9D352"/>
-    <text x="94" y="790" class="small" fill="#0F0F0F">多源链只负责搜索发现</text>
-    <text x="366" y="789" class="small muted">全程返回 NDJSON 五阶段真实进度</text>
-    <path d="M1388 682 V736" class="line"/>
-
-    <text x="70" y="880" font-size="15" font-weight="700" letter-spacing=".12em" fill="#656565">EDGEONE 浏览器界面</text>
-    <line x1="278" y1="875" x2="544" y2="875" stroke="#A7A7A7" stroke-width="2"/>
-
-    <rect x="834" y="742" width="152" height="62" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <rect x="1002" y="742" width="152" height="62" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <rect x="1170" y="742" width="152" height="62" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <rect x="1338" y="742" width="192" height="62" rx="18" fill="#FAFAFA" stroke="#D8D8D8" stroke-width="2"/>
-    <text x="867" y="780" class="small" fill="#0F0F0F">最终报告</text>
-    <text x="1035" y="780" class="small" fill="#0F0F0F">复刻脚本</text>
-    <text x="1185" y="780" class="small" fill="#0F0F0F">可选 LibTV 画布</text>
-    <text x="1369" y="780" class="small" fill="#0F0F0F">Obsidian / MD</text>
-
-    <text x="834" y="838" font-size="17" font-weight="600" fill="#656565">网页负责输入、状态与结果；完整分析由站点所有者的 ViralX Worker 执行。</text>
+  <rect width="1600" height="1080" rx="32" fill="#EDEDED"/>
+  <rect x="72" y="56" width="346" height="40" rx="20" fill="#111111"/>
+  <text x="96" y="82" class="label" fill="#FAFAFA">VIRALX · EVIDENCE PIPELINE</text>
+  <text x="72" y="164" font-size="48" font-weight="700" fill="#111111">看清原片，把成功结构迁移到你的产品。</text>
+  <text x="74" y="207" font-size="21" fill="#5E6063">先拿到真实视频，再让视觉模型结合证据分析；复刻保留原片结构，不凭空新增卖点。</text>
+  <rect x="72" y="250" width="272" height="60" rx="16" fill="#FAFAFA" stroke="#D4D4D4"/>
+  <text x="96" y="287" font-size="21" font-weight="700">关键词 / 产品主题</text>
+  <rect x="368" y="250" width="272" height="60" rx="16" fill="#FAFAFA" stroke="#D4D4D4"/>
+  <text x="392" y="287" font-size="21" font-weight="700">视频直链 · 跳过搜索</text>
+  <path d="M208 310V394" class="arrow"/>
+  <path d="M504 310V394" class="arrow"/>
+  <rect x="48" y="354" width="1504" height="338" rx="24" fill="none" stroke="#B1B1B1" stroke-width="2" stroke-dasharray="7 8"/>
+  <rect x="1000" y="335" width="506" height="38" rx="19" fill="#EDEDED"/>
+  <text x="1016" y="360" class="label" fill="#5E6063">ViralX Worker 编排 · 网页展示五阶段真实进度</text>
+  <g>
+    <rect x="72" y="398" width="272" height="270" rx="22" fill="#FAFAFA"/>
+    <text x="94" y="435" class="label" fill="#5E6063">01 · SEARCH</text>
+    <text x="94" y="482" font-size="27" font-weight="700" fill="#111111">发现候选视频</text>
+    <text x="94" y="516" font-size="18" font-weight="600" fill="#111111">多源无感搜索</text>
+    <line x1="94" y1="540" x2="322" y2="540" stroke="#111111" stroke-opacity=".18"/>
+    <text x="94" y="577" class="body" fill="#5E6063">自动换源、补足与去重</text>
+    <text x="94" y="607" class="body" fill="#5E6063">按帖子 ID 核对真实身份</text>
+    <text x="94" y="637" class="body" fill="#5E6063">相关性与互动指标筛选</text>
   </g>
+  <g>
+    <rect x="368" y="398" width="272" height="270" rx="22" fill="#FAFAFA"/>
+    <text x="390" y="435" class="label" fill="#5E6063">02 · COLLECT</text>
+    <text x="390" y="482" font-size="27" font-weight="700" fill="#111111">下载真实原片</text>
+    <text x="390" y="516" font-size="18" font-weight="600" fill="#111111">TK Note 固定采集</text>
+    <line x1="390" y1="540" x2="618" y2="540" stroke="#111111" stroke-opacity=".18"/>
+    <text x="390" y="577" class="body" fill="#5E6063">复用校验通过的原片缓存</text>
+    <text x="390" y="607" class="body" fill="#5E6063">媒体提示 / yt-dlp / 浏览器</text>
+    <text x="390" y="637" class="body" fill="#5E6063">字幕、元数据；缺失项标记</text>
+  </g>
+  <g>
+    <rect x="664" y="398" width="272" height="270" rx="22" fill="#1E1E1E"/>
+    <text x="686" y="435" class="label" fill="#D6D6D6">03 · PREPARE</text>
+    <text x="686" y="482" font-size="27" font-weight="700" fill="#FAFAFA">原片送审准备</text>
+    <text x="686" y="516" font-size="18" font-weight="600" fill="#FAFAFA">默认不单独调用镜头模型</text>
+    <line x1="686" y1="540" x2="914" y2="540" stroke="#FAFAFA" stroke-opacity=".18"/>
+    <text x="686" y="577" class="body" fill="#D6D6D6">确认原片可读、记录哈希</text>
+    <text x="686" y="607" class="body" fill="#D6D6D6">准备视频输入与目标产品</text>
+    <text x="686" y="637" class="body" fill="#D6D6D6">专业镜头索引可选增强</text>
+  </g>
+  <g>
+    <rect x="960" y="398" width="272" height="270" rx="22" fill="#F9ABFF"/>
+    <text x="982" y="435" class="label" fill="#343037">04 · BUNDLE</text>
+    <text x="982" y="482" font-size="27" font-weight="700" fill="#111111">整理证据包</text>
+    <text x="982" y="516" font-size="18" font-weight="600" fill="#111111">统一来源与研究对象</text>
+    <line x1="982" y1="540" x2="1210" y2="540" stroke="#111111" stroke-opacity=".18"/>
+    <text x="982" y="577" class="body" fill="#343037">平台数据 + TK Note 证据</text>
+    <text x="982" y="607" class="body" fill="#343037">原片引用 + 可选镜头索引</text>
+    <text x="982" y="637" class="body" fill="#343037">保存证据，供终审与续跑</text>
+  </g>
+  <g>
+    <rect x="1256" y="398" width="272" height="270" rx="22" fill="#4DC5E5"/>
+    <text x="1278" y="435" class="label" fill="#16353C">05 · REVIEW</text>
+    <text x="1278" y="482" font-size="27" font-weight="700" fill="#111111">视觉理解与终审</text>
+    <text x="1278" y="516" font-size="18" font-weight="600" fill="#111111">推荐 Qwen3-VL Flash</text>
+    <line x1="1278" y1="540" x2="1506" y2="540" stroke="#111111" stroke-opacity=".18"/>
+    <text x="1278" y="577" class="body" fill="#16353C">原片与证据一起交给模型</text>
+    <text x="1278" y="607" class="body" fill="#16353C">生成时间事实与复刻方案</text>
+    <text x="1278" y="637" class="body" fill="#16353C">校验时间引用与产品一致性</text>
+  </g>
+  <path d="M344 531H366" class="arrow"/>
+  <path d="M640 531H662" class="arrow"/>
+  <path d="M936 531H958" class="arrow"/>
+  <path d="M1232 531H1254" class="arrow"/>
+  <rect x="72" y="726" width="1120" height="132" rx="22" fill="#FAFAFA"/>
+  <rect x="94" y="748" width="94" height="30" rx="15" fill="#E9D352"/>
+  <text x="110" y="769" font-size="16" font-weight="700">失败恢复</text>
+  <text x="208" y="770" font-size="19" font-weight="700">采集失败：保留有效缓存，恢复采集后再继续。</text>
+  <text x="208" y="802" class="body" fill="#5E6063">临时断连：有限退避重试；终审仍失败：保留 24 小时证据检查点。</text>
+  <text x="208" y="834" class="body" fill="#5E6063">检查点有效且原片完整时，可「仅重试终审」，无需重新下载与取证。</text>
+  <path d="M1392 668V716" class="arrow"/>
+  <rect x="1216" y="726" width="312" height="132" rx="22" fill="#111111"/>
+  <text x="1240" y="769" font-size="21" font-weight="700" fill="#FAFAFA">通过校验，才展示最终报告</text>
+  <text x="1240" y="803" class="body" fill="#D6D6D6">校验未通过：展示原因并可重试</text>
+  <text x="1240" y="834" class="body" fill="#D6D6D6">不把未通过输出当作可信结论</text>
+  <rect x="72" y="890" width="1456" height="106" rx="22" fill="#FAFAFA"/>
+  <text x="96" y="929" class="label" fill="#5E6063">最终交付</text>
+  <text x="96" y="966" font-size="23" font-weight="700">证据报告</text>
+  <text x="350" y="929" font-size="21" font-weight="700">高保真复刻脚本</text>
+  <text x="350" y="966" class="body" fill="#5E6063">保留时间轴、节奏、效果与 CTA</text>
+  <text x="750" y="929" font-size="21" font-weight="700">Markdown 源码</text>
+  <text x="750" y="966" class="body" fill="#5E6063">阅读视图 / 源码视图切换</text>
+  <text x="1140" y="929" font-size="21" font-weight="700">一键复制</text>
+  <text x="1140" y="966" class="body" fill="#5E6063">粘贴到飞书文档或 Obsidian</text>
+  <text x="74" y="1041" class="small">专业增强：ShotLoom 提供镜头边界与关键帧索引；LibTV 仅在显式选择或开启故障回退时调用。</text>
 </svg>

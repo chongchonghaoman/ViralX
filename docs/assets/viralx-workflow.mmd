@@ -1,37 +1,34 @@
-flowchart LR
-    K[搜索主题] --> A[01 多源无感搜索<br/>自动切换 · 合并 · 去重]
-    A -->|达到目标候选数| T[02 TK Note / yt-dlp<br/>原片与平台证据]
-    U[视频直链] -->|跳过关键词搜索| T
-    T --> V[03 上方视觉模型<br/>直接读取完整原片]
-    T -. 可选专业增强 .-> F[ShotLoom Core<br/>镜头边界与关键帧索引]
-    F --> V
-    F -. 仅显式开启失败回退 .-> L[LibTV 备用<br/>官方 CLI 拉片]
-    V --> E[04 证据合并<br/>viralx.evidence_bundle.v1]
-    L --> E
-    E --> M[05 同一视觉模型<br/>证据终审]
-    M --> R[最终报告]
-    M --> P[复刻脚本]
-    M --> O[Obsidian / Markdown]
-    L --> C[可选 LibTV 画布]
-
-    subgraph Browser[EdgeOne 浏览器界面]
-        K
-        U
-        R
-        P
-        O
-        C
+flowchart TB
+    K["关键词 / 产品主题"] --> A
+    U["视频直链"] -->|跳过关键词搜索| T
+    subgraph Worker["ViralX Worker · 五阶段任务编排"]
+        A["01 发现候选视频<br/>多源换源 / 补足 / 去重<br/>身份、相关性与互动筛选"] --> T
+        T["02 TK Note 采集<br/>校验原片与帖子身份<br/>字幕、元数据及缺失项"] --> V
+        V["03 原片送审准备<br/>可读原片 / 哈希 / 目标产品<br/>默认不单独调用镜头模型"] --> E
+        E["04 统一证据包<br/>平台 + TK Note + 原片引用<br/>保存证据与可选镜头索引"] --> M
+        M["05 视觉理解与终审<br/>原片 + 统一证据交给视觉模型<br/>推荐 Qwen3-VL Flash"] --> G
+        G{"报告校验<br/>时间引用 / 目标产品一致性"}
+        G -->|通过| R["证据报告 + 高保真复刻脚本<br/>保留时间轴、节奏、效果与 CTA"]
+        G -->|未通过| C["保存失败原因与证据检查点<br/>不展示为可信分析"]
+        M -->|临时断连有限重试后仍失败| C
+        C -->|24 小时内且原片完整：仅重试终审| M
+        T -->|无可用原片| B["阻断后续模型分析<br/>保留有效缓存，恢复采集"]
+        B -. 重试采集 .-> T
+        T -. 显式专业模式 .-> S["ShotLoom<br/>镜头边界 / 关键帧索引"]
+        S -. 可选镜头证据 .-> E
+        S -. 仅显式开启故障回退 .-> L["LibTV 备用"]
+        T -. 显式选择 LibTV .-> L
+        L -. 可选镜头证据 .-> E
     end
-
-    subgraph Worker[ViralX Worker 串联编排]
-        T
-        F
-        V
-        L
-        E
-    end
-
-    subgraph Services[外部服务]
-        A
-        M
-    end
+    R --> O["Markdown 阅读 / 源码视图"]
+    O --> P["一键复制<br/>飞书文档 / Obsidian"]
+    classDef ordinary fill:#FAFAFA,stroke:#D4D4D4,color:#111111
+    classDef dark fill:#1E1E1E,stroke:#1E1E1E,color:#FAFAFA
+    classDef pink fill:#F9ABFF,stroke:#F9ABFF,color:#111111
+    classDef cyan fill:#4DC5E5,stroke:#4DC5E5,color:#111111
+    classDef caution fill:#E9D352,stroke:#E9D352,color:#111111
+    class A,T,K,U,R,O,P ordinary
+    class V dark
+    class E pink
+    class M,G cyan
+    class C,B caution
