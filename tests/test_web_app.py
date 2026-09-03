@@ -159,10 +159,14 @@ class WebAppTests(unittest.TestCase):
 
     def test_keyword_search_without_shared_rapidapi_key_returns_actionable_error(self):
         config = {**web_app.DEFAULT_CONFIG, 'rapidapi_key': ''}
-        with patch.object(web_app, 'load_config', return_value=config):
+        with patch('tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
+            'Unit tests must not call live search providers',
+        )) as network, patch.object(web_app, 'load_config', return_value=config):
             response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
+            payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+            response.close()
 
-        payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+        network.assert_not_called()
         self.assertEqual(payloads[0]['stage'], 'discovery')
         payload = payloads[-1]
         self.assertEqual(payload['status'], 'error')
@@ -180,12 +184,19 @@ class WebAppTests(unittest.TestCase):
             }],
             subscription_links=web_app.TikTokViralAnalyzer.provider_subscription_links(['api6']),
         )
-        with patch.object(web_app, 'load_config', return_value=config), patch.object(
+        with patch('tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
+            'Unit tests must not call live search providers',
+        )) as network, patch.object(web_app, 'load_config', return_value=config), patch.object(
             web_app.TikTokViralAnalyzer, 'search_viral_videos', side_effect=error,
-        ):
+        ) as search:
             response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
+            # Streaming generators execute after the first progress event.
+            # Consume the whole response before releasing the provider mock.
+            payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+            response.close()
 
-        payloads = [json.loads(line) for line in response.get_data(as_text=True).splitlines() if line.strip()]
+        search.assert_called_once_with('camping light', config['min_likes'], count=30)
+        network.assert_not_called()
         payload = payloads[-1]
         self.assertEqual(payload['error_code'], 'rapidapi_subscription_required')
         self.assertEqual(payload['subscription_links'][0]['provider'], 'api6')
