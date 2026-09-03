@@ -4,7 +4,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from tiktok_viral_analyzer import (
+from viralx.tiktok_viral_analyzer import (
     Scraper7SearchError,
     TikTokSearchChainError,
     TikTokViralAnalyzer,
@@ -24,7 +24,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_search_uses_feed_search_and_normalizes_data_videos(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -88,7 +88,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
             timeout=20,
         )
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_accepts_legacy_nested_stats_and_video_asset(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -122,7 +122,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(video["create_time"], 1725000001)
         self.assertTrue(video["is_ad"])
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_picture_light_intent_rejects_luminous_art_before_like_ranking(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -206,7 +206,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         })
         self.assertEqual(rejected["_media_transport_url"], "")
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_missing_key_stops_before_network_request(self, mock_get):
         self.analyzer.api_key = ""
 
@@ -215,14 +215,14 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
 
         mock_get.assert_not_called()
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_quota_error_is_actionable(self, mock_get):
         mock_get.return_value.status_code = 429
 
         with self.assertRaisesRegex(RuntimeError, "Scraper7.*配额.*HTTP 429"):
             self.analyzer.search_viral_videos("camping light")
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_business_error_is_actionable(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": -1, "msg": "upstream unavailable"}
@@ -230,7 +230,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Scraper7.*upstream unavailable.*-1"):
             self.analyzer.search_viral_videos("picture light")
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_reads_one_page_before_the_chain_continues(self, mock_get):
         mock_get.return_value = Mock(status_code=200)
         mock_get.return_value.json.return_value = {
@@ -254,7 +254,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 1)
         self.assertEqual(mock_get.call_args_list[0].kwargs["params"]["cursor"], 0)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_provider_registry_override_controls_scraper7(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": 0, "data": {"videos": []}}
@@ -267,7 +267,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(mock_get.call_args.args[0], "https://mock.example.test/feed/search")
         self.assertEqual(mock_get.call_args.kwargs["headers"]["x-rapidapi-host"], "mock.example.test")
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_unknown_scraper7_shape_is_not_reported_as_a_true_empty_list(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": 0, "data": {"unexpectedResults": []}}
@@ -277,7 +277,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(videos, [])
         self.assertIn("接口结构可能已经更新", self.analyzer.empty_result_message())
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_empty_data_videos_is_distinguished_from_like_filtering(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {"code": 0, "data": {"videos": []}}
@@ -290,7 +290,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertIn("没有返回视频候选", message)
         self.assertIn("与最低点赞数无关", message)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_scraper7_empty_message_explains_like_filtering(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -319,7 +319,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertIn("最高点赞为 1,200", message)
         self.assertIn("阈值 5,000", message)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_opaque_media_ids_are_rejected_instead_of_becoming_fake_links(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -340,7 +340,7 @@ class TikTokViralAnalyzerTests(unittest.TestCase):
         self.assertEqual(self.analyzer.last_search_diagnostics["invalid_post_ids"], 1)
         self.assertIn("ViralX 已停止生成假链接", self.analyzer.empty_result_message())
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_picture_light_empty_message_explains_semantic_rejection(self, mock_get):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
@@ -386,7 +386,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         result.json.return_value = payload
         return result
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_api6_is_primary_and_normalizes_statistics(self, mock_get):
         mock_get.return_value = self.response({
             "videos": [{
@@ -430,7 +430,7 @@ class TikTokSearchChainTests(unittest.TestCase):
             timeout=20,
         )
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_empty_primary_falls_through_to_scraptik_without_interrupting(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
@@ -452,7 +452,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-key"], "test-shared-rapidapi-key")
         self.assertEqual(mock_get.call_args_list[1].kwargs["headers"]["x-rapidapi-host"], "scraptik.p.rapidapi.com")
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_chain_merges_and_deduplicates_until_target(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraptik", "scraper7")
         mock_get.side_effect = [
@@ -475,7 +475,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertEqual(self.analyzer.last_search_diagnostics["selected_provider"], "multi")
         self.assertEqual(self.analyzer.last_search_diagnostics["selected_items"], 3)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_later_provider_enriches_duplicate_with_private_media_transport(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraper7")
         video_id = "7591234567890123499"
@@ -504,7 +504,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertNotIn("_media_transport_url", public_video)
         self.assertNotIn("short-lived", repr(public_video))
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_provider_http_failure_is_invisible_when_next_source_works(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "download5")
         mock_get.side_effect = [
@@ -541,7 +541,7 @@ class TikTokSearchChainTests(unittest.TestCase):
                 if provider_id != "api6":
                     self.assertEqual(params["count"], expected_count)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_all_empty_returns_one_provider_agnostic_message(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
@@ -556,7 +556,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertIn("所有可用搜索源", message)
         self.assertIn("与最低点赞数无关", message)
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_all_provider_failures_raise_only_after_chain_and_redact_key(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [
@@ -570,7 +570,7 @@ class TikTokSearchChainTests(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 2)
         self.assertNotIn(self.analyzer.api_key, str(raised.exception))
 
-    @patch("tiktok_viral_analyzer.requests.get")
+    @patch("viralx.tiktok_viral_analyzer.requests.get")
     def test_all_forbidden_providers_expose_safe_subscription_links(self, mock_get):
         self.analyzer.search_provider_chain = ("api6", "scraptik")
         mock_get.side_effect = [

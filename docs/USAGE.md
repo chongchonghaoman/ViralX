@@ -30,7 +30,7 @@ RapidAPI 只承载 TikTok 关键词发现：ViralX 按质量顺序尝试已订�
 
 ```powershell
 python -m pip install -r requirements.txt
-Copy-Item config.json.example config.json
+Copy-Item config/config.json.example config.json
 .\start-worker.cmd
 ```
 
@@ -42,7 +42,7 @@ Worker 默认只监听 `127.0.0.1:8000`，应通过受信任的 HTTPS 隧道对�
 
 ```bash
 python -m pip install -r requirements.txt
-cp config.json.example config.json
+cp config/config.json.example config.json
 python web_app.py
 ```
 
@@ -50,7 +50,7 @@ Windows PowerShell：
 
 ```powershell
 python -m pip install -r requirements.txt
-Copy-Item config.json.example config.json
+Copy-Item config/config.json.example config.json
 python web_app.py
 ```
 
@@ -140,4 +140,4 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-设计与动效约束见 [DESIGN.md](../DESIGN.md)。
+设计与动效约束见 [DESIGN.md](DESIGN.md)。

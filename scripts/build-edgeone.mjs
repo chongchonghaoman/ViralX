@@ -78,7 +78,12 @@ await cp(
 await cp(join(projectRoot, "static", "viralx.js"), join(publicStatic, "viralx.js"));
 
 await cp(join(projectRoot, "cloud-functions"), publicFunctions, { recursive: true });
+// Copy only the public API's dependency closure, not local management entrypoints.
+const publicPackage = join(publicFunctions, "viralx");
+await mkdir(publicPackage, { recursive: true });
 for (const moduleName of [
+  "__init__.py",
+  "paths.py",
   "ai_analyzer.py",
   "evidence_contract.py",
   "model_providers.py",
@@ -87,7 +92,7 @@ for (const moduleName of [
   "shot_analyzers.py",
   "tiktok_viral_analyzer.py",
 ]) {
-  await cp(join(projectRoot, moduleName), join(publicFunctions, moduleName));
+  await cp(join(projectRoot, "viralx", moduleName), join(publicPackage, moduleName));
 }
 await cp(
   join(projectRoot, ".agents", "skills", "tk-note", "scripts"),

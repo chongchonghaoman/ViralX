@@ -7,6 +7,8 @@ it; credential files and tokens are never read by this module.
 
 from __future__ import annotations
 
+from .paths import PROJECT_ROOT
+
 import json
 import os
 import re
@@ -91,7 +93,7 @@ def _safe_message(value: Any) -> str:
 def _default_runner(cli_path: str, args: list[str], timeout: float) -> subprocess.CompletedProcess:
     return subprocess.run(
         [cli_path, *args],
-        cwd=str(Path(__file__).parent),
+        cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -127,7 +129,7 @@ class LibTVAuthManager:
     """Own the local CLI web-login process and expose a token-free state model."""
 
     def __init__(self, cwd: Path | str | None = None, cli_path: str = ""):
-        self.cwd = Path(cwd or Path(__file__).parent)
+        self.cwd = Path(cwd or PROJECT_ROOT)
         self.cli_path = cli_path or find_libtv_cli()
         self._process: Optional[subprocess.Popen] = None
         self._login_url = ""
@@ -380,7 +382,7 @@ class LibTVAnalyzer:
         shot_model: str = "",
     ):
         self.cli_path = cli_path or find_libtv_cli()
-        self.cwd = Path(cwd or Path(__file__).parent)
+        self.cwd = Path(cwd or PROJECT_ROOT)
         self.timeout = max(15.0, float(timeout or 180))
         self.shot_model = str(shot_model or os.environ.get("LIBTV_SHOT_MODEL") or DEFAULT_SHOT_MODEL).strip()
         self.runner = runner

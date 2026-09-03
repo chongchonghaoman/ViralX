@@ -3,7 +3,7 @@ import unittest
 from subprocess import CompletedProcess
 from pathlib import Path
 
-from libtv_analyzer import LibTVAnalyzer, LibTVError, _safe_message
+from viralx.libtv_analyzer import LibTVAnalyzer, LibTVError, _safe_message
 
 
 class LibTVAnalyzerTests(unittest.TestCase):

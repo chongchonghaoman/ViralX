@@ -39,20 +39,20 @@ tk_note_script = staged_tk_note if staged_tk_note.is_file() else source_tk_note
 if tk_note_script.is_file():
     os.environ.setdefault("VIRALX_TK_NOTE_SCRIPT", str(tk_note_script))
 
-from ai_analyzer import AIAnalyzer  # noqa: E402
-from model_providers import model_is_ready, normalize_model_config  # noqa: E402
+from viralx.ai_analyzer import AIAnalyzer  # noqa: E402
+from viralx.model_providers import model_is_ready, normalize_model_config  # noqa: E402
 
 
 def _load_tiktok_analyzer_source():
     """Load the deployed source directly so EdgeOne cannot reuse stale bytecode."""
-    module_path = FUNCTIONS_DIR / "tiktok_viral_analyzer.py"
+    module_path = FUNCTIONS_DIR / "viralx" / "tiktok_viral_analyzer.py"
     if not module_path.is_file():
-        module_path = PROJECT_ROOT / "tiktok_viral_analyzer.py"
+        module_path = PROJECT_ROOT / "viralx" / "tiktok_viral_analyzer.py"
     source_bytes = module_path.read_bytes()
     namespace = {
         "__name__": "viralx_tiktok_analyzer_multisource_v5",
         "__file__": str(module_path),
-        "__package__": "",
+        "__package__": "viralx",
     }
     exec(compile(source_bytes, str(module_path), "exec"), namespace, namespace)
     return namespace, hashlib.sha256(source_bytes).hexdigest()[:12]

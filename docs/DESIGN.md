@@ -1,5 +1,7 @@
 # Design — ViralX
 
+Source paths in this document are relative to the repository root.
+
 ViralX is an evidence-led web application for short-video researchers, creative operators,
 and product teams. It uses cloud and local web runtimes behind the same browser interface.
 This document is the visual contract for every browser surface.
@@ -81,7 +83,7 @@ explains its role in the product story.
 
 The two `viralx-title-shuei-*.svg` files are title artwork, not webfonts. They are generated
 locally with `scripts/generate-outlined-title.py`; the source TTF remains outside the project.
-Install the pinned build-only dependency from `requirements-dev.txt` before regeneration.
+Install the pinned build-only dependency from `requirements/dev.txt` before regeneration.
 
 ## Motion
 

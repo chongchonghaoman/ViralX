@@ -20,7 +20,8 @@ from typing import Callable, Dict, List, Optional
 from urllib.parse import unquote, urlparse, urlsplit, urlunsplit
 from urllib.request import getproxies
 
-from tiktok_viral_analyzer import safe_error_message
+from .tiktok_viral_analyzer import safe_error_message
+from .paths import PROJECT_ROOT
 
 
 TIKTOK_HOSTS = {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vt.tiktok.com", "vm.tiktok.com"}
@@ -182,7 +183,7 @@ class TKNoteCollector:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         configured_script = os.environ.get("VIRALX_TK_NOTE_SCRIPT", "")
-        self.skill_dir = skill_dir or Path(__file__).parent / ".agents" / "skills" / "tk-note"
+        self.skill_dir = skill_dir or PROJECT_ROOT / ".agents" / "skills" / "tk-note"
         self.script = (
             self.skill_dir / "scripts" / "extract_tiktok_text.py"
             if skill_dir is not None
@@ -209,7 +210,7 @@ class TKNoteCollector:
         try:
             return subprocess.run(
                 command,
-                cwd=str(Path(__file__).parent),
+                cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -388,7 +389,7 @@ class GenericVideoDownloader:
     """Small yt-dlp compatibility route for non-TikTok links."""
 
     def __init__(self, output_dir: Optional[str] = None, timeout: float = 180):
-        self.output_dir = Path(output_dir or Path(__file__).parent / "video_cache" / "generic")
+        self.output_dir = Path(output_dir or PROJECT_ROOT / "video_cache" / "generic")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.timeout = max(float(timeout), 30)
 
@@ -446,9 +447,9 @@ class VideoAssetCollector:
         tk_note_collector: Optional[TKNoteCollector] = None,
         generic_downloader: Optional[GenericVideoDownloader] = None,
     ):
-        root = Path(cache_dir or Path(__file__).parent / "video_cache")
+        root = Path(cache_dir or PROJECT_ROOT / "video_cache")
         if not root.is_absolute():
-            root = Path(__file__).parent / root
+            root = PROJECT_ROOT / root
         root.mkdir(parents=True, exist_ok=True)
         self.tk_note = tk_note_collector or TKNoteCollector(
             cache_dir=root / "tk-note",

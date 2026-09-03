@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from checkpoint_store import CheckpointStore
+from viralx.checkpoint_store import CheckpointStore
 
 
 class CheckpointStoreTests(unittest.TestCase):

@@ -4,7 +4,7 @@ Project license: [MIT](../LICENSE). Source paths below are relative to the repos
 
 ## ShotLoom scene-detection adaptation
 
-`shot_analyzers.py` adapts the dual-detector structure from
+`viralx/shot_analyzers.py` adapts the dual-detector structure from
 [Supreme-Ultimate/shotloom](https://github.com/Supreme-Ultimate/shotloom),
 `backend/services/shot_detector.py`, commit
 `78b65e24a587052ff2c0c4ccae72575295bde34f`. ShotLoom is distributed under the

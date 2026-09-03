@@ -14,7 +14,8 @@ import anthropic
 import google.genai as genai
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from evidence_contract import (
+from .paths import PROJECT_ROOT
+from .evidence_contract import (
     evidence_bundle_text as _evidence_bundle_text,
     final_evidence_prompt as _final_evidence_prompt,
     final_video_prompt as _final_video_prompt,
@@ -23,16 +24,16 @@ from evidence_contract import (
     normalize_report_citations as _normalize_report_citations,
     persist_evidence_audit as _persist_evidence_audit,
 )
-from libtv_analyzer import LibTVAnalyzer, LibTVError
-from model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config
-from shot_analyzers import (
+from .libtv_analyzer import LibTVAnalyzer, LibTVError
+from .model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config
+from .shot_analyzers import (
     EVIDENCE_BUNDLE_SCHEMA,
     LibTVProviderAdapter,
     ShotAnalyzerRouter,
     normalize_shot_config,
     validate_shot_evidence,
 )
-from video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
+from .video_ingest import VideoAssetCollector, VideoIngestError, is_tiktok_url
 
 
 def _sha256_path(path_value: str | Path) -> str:
@@ -44,7 +45,7 @@ def _sha256_path(path_value: str | Path) -> str:
 
 
 def load_config():
-    config_path = Path(__file__).parent / "config.json"
+    config_path = PROJECT_ROOT / "config.json"
     config = {}
     if config_path.exists():
         config = json.loads(config_path.read_text(encoding='utf-8'))
@@ -108,7 +109,7 @@ class AICache:
             cache_dir = (
                 Path('/tmp/viralx/cache')
                 if os.environ.get('VIRALX_RUNTIME', '').lower() == 'edgeone'
-                else Path(__file__).parent / "cache"
+                else PROJECT_ROOT / "cache"
             )
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True, parents=True)
@@ -154,7 +155,7 @@ class OpenAICompatibleAnalyzer:
         self.base_url = str(base_url or "").rstrip("/")
         self.provider_name = provider_name
         self.supports_vision = supports_vision
-        self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
+        self.video_dir = Path(config.get('video_cache_dir', PROJECT_ROOT / "video_cache"))
         self.video_dir.mkdir(exist_ok=True, parents=True)
         self.request_attempts = self._bounded_env_int("VIRALX_MODEL_REQUEST_ATTEMPTS", 4, 1, 6)
         self.request_gap_seconds = self._bounded_env_float("VIRALX_MODEL_REQUEST_GAP_SECONDS", 2.5, 0.0, 30.0)
@@ -678,7 +679,7 @@ class GeminiAnalyzer:
         config = load_config()
         self.api_key = api_key or config.get('gemini_api_key', '')
         self.model_name = model or config.get('gemini_model', 'gemini-3.7-flash')
-        self.video_dir = Path(config.get('video_cache_dir', Path(__file__).parent / "video_cache"))
+        self.video_dir = Path(config.get('video_cache_dir', PROJECT_ROOT / "video_cache"))
         self.video_dir.mkdir(exist_ok=True)
         self.client = genai.Client(api_key=self.api_key)
 

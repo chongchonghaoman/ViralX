@@ -4,7 +4,7 @@
 The input font is only used at build time. The emitted SVG files contain glyph
 paths, not a font program, so the source TTF must never be copied into the repo
 or deployed with the website. Install the pinned development dependency with
-``python -m pip install -r requirements-dev.txt`` before regenerating the art.
+``python -m pip install -r requirements/dev.txt`` before regenerating the art.
 """
 
 from __future__ import annotations

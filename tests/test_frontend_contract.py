@@ -214,6 +214,10 @@ class FrontendContractTests(unittest.TestCase):
 
     def test_edgeone_build_carries_the_evidence_contract_module(self):
         self.assertIn('"evidence_contract.py",', self.build_js)
+        self.assertIn('"__init__.py",', self.build_js)
+        self.assertIn('"paths.py",', self.build_js)
+        self.assertIn('join(projectRoot, "viralx", moduleName)', self.build_js)
+        self.assertIn('join(publicFunctions, "viralx")', self.build_js)
 
     def test_evidence_story_does_not_fragment_on_ultrawide_screens(self):
         self.assertIn('id="evidence-title">从看见视频，到看见结构。</h2>', self.home)

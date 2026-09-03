@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成分析报告"""
+"""生成分析报告（兼容旧版 CLI）。"""
 import json
 from pathlib import Path
 from collections import Counter

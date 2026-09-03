@@ -39,7 +39,7 @@ npm run build:edgeone
 git diff --check
 ```
 
-保持网页、Worker、Agent Skill 和原片证据链的兼容性。不要仅为了目录美观移动以文件位置解析配置、模板或缓存的运行模块。
+保持网页、Worker、Agent Skill 和原片证据链的兼容性。业务代码放在 `viralx/`，内部使用包内导入；项目资源通过 `viralx.paths.PROJECT_ROOT` 定位，不依赖当前工作目录或模块所在目录。移动文件时同时验证兼容入口、Flask 资源路径及 EdgeOne 发布包，不能只改文件位置。
 
 不要提交 `config.json`、API Key、Cookie、代理凭据、部署凭据、下载视频、分析缓存或个人文件路径。发布前检查暂存区，测试通过后再合并；CI 通过不代表第三方服务始终可用。
 

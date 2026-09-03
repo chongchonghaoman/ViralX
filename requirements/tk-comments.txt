@@ -1,0 +1,3 @@
+# Optional TK Note comment collection dependencies (run from project root).
+TikTokApi
+playwright

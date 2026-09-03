@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import web_app
-from tiktok_viral_analyzer import TikTokSearchChainError
+from viralx.tiktok_viral_analyzer import TikTokSearchChainError
 
 
 class WebAppTests(unittest.TestCase):
@@ -159,7 +159,7 @@ class WebAppTests(unittest.TestCase):
 
     def test_keyword_search_without_shared_rapidapi_key_returns_actionable_error(self):
         config = {**web_app.DEFAULT_CONFIG, 'rapidapi_key': ''}
-        with patch('tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
+        with patch('viralx.tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
             'Unit tests must not call live search providers',
         )) as network, patch.object(web_app, 'load_config', return_value=config):
             response = self.client.post('/api/analyze', json={'keyword': 'camping light'})
@@ -184,7 +184,7 @@ class WebAppTests(unittest.TestCase):
             }],
             subscription_links=web_app.TikTokViralAnalyzer.provider_subscription_links(['api6']),
         )
-        with patch('tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
+        with patch('viralx.tiktok_viral_analyzer.requests.get', side_effect=AssertionError(
             'Unit tests must not call live search providers',
         )) as network, patch.object(web_app, 'load_config', return_value=config), patch.object(
             web_app.TikTokViralAnalyzer, 'search_viral_videos', side_effect=error,

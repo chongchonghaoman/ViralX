@@ -5,10 +5,10 @@ import requests
 from pathlib import Path
 from unittest.mock import patch
 
-from ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer, _model_result_error
-from evidence_contract import final_video_prompt
-from shot_analyzers import ShotAnalysisResult
-from video_ingest import VideoAsset, VideoIngestError
+from viralx.ai_analyzer import AIAnalyzer, OpenAICompatibleAnalyzer, _model_result_error
+from viralx.evidence_contract import final_video_prompt
+from viralx.shot_analyzers import ShotAnalysisResult
+from viralx.video_ingest import VideoAsset, VideoIngestError
 
 
 class FakeCollector:
@@ -421,7 +421,7 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 "status_code": 200,
                 "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
             })()
-            with patch("ai_analyzer.requests.post", return_value=response) as request:
+            with patch("viralx.ai_analyzer.requests.post", return_value=response) as request:
                 self.assertEqual(analyzer.analyze(video_data, str(video)), "ok")
             payload = request.call_args.kwargs["json"]
             video_part = payload["messages"][0]["content"][0]
@@ -453,9 +453,9 @@ class AIAnalyzerIngestTests(unittest.TestCase):
                 "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
             })()
             with patch(
-                "ai_analyzer.requests.post",
+                "viralx.ai_analyzer.requests.post",
                 side_effect=[requests.exceptions.ConnectionError("remote closed"), response],
-            ) as request, patch("ai_analyzer.time.sleep") as sleep:
+            ) as request, patch("viralx.ai_analyzer.time.sleep") as sleep:
                 self.assertEqual(analyzer.analyze(video_data, str(video)), "ok")
 
             self.assertEqual(request.call_count, 2)
@@ -478,9 +478,9 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             "json": lambda self: {"choices": [{"message": {"content": "text-ok"}}]},
         })()
         with patch(
-            "ai_analyzer.requests.post",
+            "viralx.ai_analyzer.requests.post",
             side_effect=[requests.exceptions.Timeout("slow"), response],
-        ) as request, patch("ai_analyzer.time.sleep"):
+        ) as request, patch("viralx.ai_analyzer.time.sleep"):
             self.assertEqual(analyzer.analyze(video_data), "text-ok")
         self.assertEqual(request.call_count, 2)
 
@@ -496,8 +496,8 @@ class AIAnalyzerIngestTests(unittest.TestCase):
             "status_code": 200, "headers": {},
             "json": lambda self: {"choices": [{"message": {"content": "ok"}}]},
         })()
-        with patch("ai_analyzer.requests.post", side_effect=[unavailable, success]), patch(
-            "ai_analyzer.time.sleep"
+        with patch("viralx.ai_analyzer.requests.post", side_effect=[unavailable, success]), patch(
+            "viralx.ai_analyzer.time.sleep"
         ) as sleep:
             response = analyzer._request("prompt", timeout=120)
         self.assertEqual(response.status_code, 200)
@@ -516,9 +516,9 @@ class AIAnalyzerIngestTests(unittest.TestCase):
         analyzer.request_attempts = 2
         analyzer.request_gap_seconds = 0
         with patch(
-            "ai_analyzer.requests.post",
+            "viralx.ai_analyzer.requests.post",
             side_effect=requests.exceptions.ConnectionError("private upstream detail"),
-        ), patch("ai_analyzer.time.sleep"):
+        ), patch("viralx.ai_analyzer.time.sleep"):
             result = analyzer.analyze({"evidence_bundle": {"platform_evidence": {}}})
         self.assertIn("已自动尝试 2 次", result)
         self.assertNotIn("private upstream detail", result)

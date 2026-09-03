@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from video_ingest import (
+from viralx.video_ingest import (
     GenericVideoDownloader,
     TKNoteCollector,
     VideoAsset,
@@ -115,7 +115,7 @@ class VideoIngestTests(unittest.TestCase):
             skill = root / "skill"
             (skill / "scripts").mkdir(parents=True)
             (skill / "scripts" / "extract_tiktok_text.py").write_text("# fake", encoding="utf-8")
-            with patch("video_ingest.getproxies", return_value={"https": "http://127.0.0.1:7892"}):
+            with patch("viralx.video_ingest.getproxies", return_value={"https": "http://127.0.0.1:7892"}):
                 collector = TKNoteCollector(root / "cache", skill_dir=skill)
             self.assertEqual(collector.proxy_source, "system")
             self.assertEqual(collector.proxy, "http://127.0.0.1:7892")
@@ -126,7 +126,7 @@ class VideoIngestTests(unittest.TestCase):
             skill = root / "skill"
             (skill / "scripts").mkdir(parents=True)
             (skill / "scripts" / "extract_tiktok_text.py").write_text("# fake", encoding="utf-8")
-            with patch("video_ingest.getproxies", return_value={"https": "http://127.0.0.1:7892"}):
+            with patch("viralx.video_ingest.getproxies", return_value={"https": "http://127.0.0.1:7892"}):
                 collector = TKNoteCollector(
                     root / "cache",
                     skill_dir=skill,
@@ -222,7 +222,7 @@ class VideoIngestTests(unittest.TestCase):
             signed = "https://v16-webapp-prime.tiktok.com/video/tos/example.mp4?signature=secret"
             collector = TKNoteCollector(root / "cache", skill_dir=skill)
 
-            with patch("video_ingest.subprocess.run", return_value=completed) as run:
+            with patch("viralx.video_ingest.subprocess.run", return_value=completed) as run:
                 collector.collect(payload["source_url"], payload["video_id"], media_url=signed)
 
             command = run.call_args.args[0]

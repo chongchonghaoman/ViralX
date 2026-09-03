@@ -21,7 +21,7 @@
 <p align="center">
   <a href="#工作逻辑">工作逻辑</a> ·
   <a href="#在-codex-中直接调用-viralx">Codex Skill</a> ·
-  <a href="DESIGN.md">设计合同</a>
+  <a href="docs/DESIGN.md">设计合同</a>
 </p>
 
 ![ViralX 网页首页](docs/assets/viralx-homepage.png)
@@ -242,19 +242,29 @@ ViralX/
 ├── .agents/skills/viralx/          ViralX Web API Skill
 ├── .agents/skills/tk-note/         原片、字幕与平台证据采集 Skill
 ├── .github/                        CI 与贡献指南
-├── docs/                           使用指南、第三方许可与流程图
+├── viralx/                         Python 应用包
+│   ├── tiktok_viral_analyzer.py     搜索与语义筛选
+│   ├── video_ingest.py              TK Note / yt-dlp 原片采集
+│   ├── shot_analyzers.py            镜头适配与质量门禁
+│   ├── ai_analyzer.py               证据流水线与最终报告
+│   ├── evidence_contract.py         证据合同
+│   ├── checkpoint_store.py          检查点恢复
+│   ├── web_app.py                   Flask Web API
+│   ├── worker_server.py             Worker 安全边界
+│   └── paths.py                     稳定的项目资源路径
+├── config/                         无凭据的配置示例
+├── requirements/                   开发与评论采集的可选依赖
+├── docs/                           使用指南、设计合同、许可与流程图
 ├── scripts/                        构建、启动管理与资产生成工具
 ├── templates/                      首页与设置页
 ├── static/                         设计 token、GSAP 动效与交互
-├── tiktok_viral_analyzer.py        搜索与语义筛选
-├── video_ingest.py                 TK Note / yt-dlp 原片采集
-├── shot_analyzers.py               ShotLoom、LibTV adapter 与质量门禁
-├── ai_analyzer.py                  证据流水线与最终报告门禁
-├── worker_server.py                公网受限 Worker 安全边界
-├── web_app.py                      本地 Flask Web API
-├── tests/                          后端、前端、Worker 与证据合同测试
-└── DESIGN.md                       视觉、交互与状态合同
+├── tests/                          后端、前端、Worker 与路径兼容测试
+├── web_app.py / worker_server.py    兼容启动入口（实现位于 viralx/）
+└── start.py / start-worker.cmd      日常启动入口
 ```
+
+业务实现集中在 `viralx/`；根目录保留启动入口和工具要求的配置文件。
+现有启动命令不变，个人配置、已下载原片、缓存与检查点不随代码迁移。
 
 ## 测试
 
@@ -273,7 +283,7 @@ python -m unittest discover -s tests -p "test_*.py"
 - GSAP + ScrollTrigger，并为 `prefers-reduced-motion` 完整降级。
 - 桌面与移动端保持同一任务顺序；运行状态只来自真实后端事件。
 
-完整约束见 [DESIGN.md](DESIGN.md)。
+完整约束见 [设计合同](docs/DESIGN.md)。
 
 ## License
 

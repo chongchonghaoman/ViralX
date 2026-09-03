@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import requests
 
-from shot_analyzers import (
+from viralx.shot_analyzers import (
     ShotAnalysisResult,
     ShotAnalyzerError,
     ShotAnalyzerRouter,
@@ -96,7 +96,7 @@ class ShotAnalyzerTests(unittest.TestCase):
     def test_shotloom_retries_transient_connection_failure(self):
         session = SequenceSession([requests.ConnectionError("closed"), FakeResponse(200)])
         analyzer = self.shotloom(session)
-        with patch("shot_analyzers.time.sleep"):
+        with patch("viralx.shot_analyzers.time.sleep"):
             response = analyzer._post_with_retry({"model": "vision"}, {"Authorization": "Bearer key"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(session.calls, 2)

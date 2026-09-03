@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from ai_analyzer import AIAnalyzer
-from model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config, validate_custom_base_url
+from viralx.ai_analyzer import AIAnalyzer
+from viralx.model_providers import MODEL_PROVIDER_PRESETS, normalize_model_config, validate_custom_base_url
 
 
 class ModelProviderTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class ModelProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_custom_base_url("http://127.0.0.1:11434/v1", allow_private=False)
 
-    @patch("model_providers.socket.getaddrinfo")
+    @patch("viralx.model_providers.socket.getaddrinfo")
     def test_cloud_custom_endpoint_accepts_proxy_fake_ip_for_a_hostname(self, getaddrinfo):
         getaddrinfo.return_value = [
             (2, 1, 6, "", ("198.18.0.42", 443)),
@@ -53,7 +53,7 @@ class ModelProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_custom_base_url("https://198.18.0.42/v1", allow_private=False)
 
-    @patch("model_providers.socket.getaddrinfo")
+    @patch("viralx.model_providers.socket.getaddrinfo")
     def test_cloud_custom_endpoint_still_rejects_private_dns(self, getaddrinfo):
         getaddrinfo.return_value = [
             (2, 1, 6, "", ("192.168.1.8", 443)),
@@ -61,7 +61,7 @@ class ModelProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_custom_base_url("https://nas.example.com/v1", allow_private=False)
 
-    @patch("ai_analyzer.OpenAICompatibleAnalyzer")
+    @patch("viralx.ai_analyzer.OpenAICompatibleAnalyzer")
     def test_selected_final_model_is_initialized_without_minimax_fallback(self, analyzer_class):
         analyzer = AIAnalyzer(
             analysis_mode="pipeline",

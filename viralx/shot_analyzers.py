@@ -25,7 +25,7 @@ from typing import Any, Iterable
 
 import requests
 
-from libtv_analyzer import DEFAULT_SHOT_MODEL, LibTVAnalyzer, LibTVError
+from .libtv_analyzer import DEFAULT_SHOT_MODEL, LibTVAnalyzer, LibTVError
 
 
 SHOT_EVIDENCE_SCHEMA = "viralx.shot_evidence.v1"
