@@ -33,7 +33,9 @@ public/
 # Logs
 logs/
 *.log
-output/playwright/
+# Local audit screenshots and generated reports (not source assets)
+/output/
+/.artifacts/
 outputs/
 .playwright-cli/
 

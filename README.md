@@ -187,7 +187,7 @@ python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-s
 
 公开网页只负责输入、状态、结果和可选会话级 BYOK；ViralX Worker 集中运行搜索、采集、镜头取证和模型调用。公开 Worker 不挂载设置写入、缓存清理、文件系统导出或 LibTV 账号控制端点，浏览器也不能指定服务器 Cookie、代理、目录或 LibTV 运行方式。API Key、Cookie、代理地址和代理凭据不会出现在健康状态、分析结果或日志中。
 
-本地开发、Worker 配置和故障排查见 [USAGE.md](USAGE.md)。README 只描述产品能力，不包含站点部署步骤或个人环境信息。
+本地开发、Worker 配置和故障排查见 [使用指南](docs/USAGE.md)，其他文档见 [文档索引](docs/README.md)。README 只描述产品能力，不包含站点部署步骤或个人环境信息。
 
 ## Web API 与结果合同
 
@@ -241,6 +241,9 @@ ViralX/
 ├── .agents/skills/viralx-agent/    Codex 原生分析 Skill
 ├── .agents/skills/viralx/          ViralX Web API Skill
 ├── .agents/skills/tk-note/         原片、字幕与平台证据采集 Skill
+├── .github/                        CI 与贡献指南
+├── docs/                           使用指南、第三方许可与流程图
+├── scripts/                        构建、启动管理与资产生成工具
 ├── templates/                      首页与设置页
 ├── static/                         设计 token、GSAP 动效与交互
 ├── tiktok_viral_analyzer.py        搜索与语义筛选
@@ -274,4 +277,4 @@ python -m unittest discover -s tests -p "test_*.py"
 
 ## License
 
-[MIT](LICENSE)。ShotLoom 适配来源与第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+[MIT](LICENSE)。ShotLoom 适配来源与第三方许可见 [第三方许可说明](docs/THIRD_PARTY_NOTICES.md)。

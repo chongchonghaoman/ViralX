@@ -1,14 +1,16 @@
 # ViralX 使用指南
 
+文档中的命令均从仓库根目录运行。产品概览见 [README](../README.md)。
+
 ViralX 是浏览器产品，不需要安装桌面客户端。生产网站、网页设置、本地 Flask 与 Codex Skill 使用同一套分析合同。
 
 ## 在线使用
 
-1. 打开 [viralx.metrolabs.mobi](https://viralx.metrolabs.mobi)。
+1. 打开你使用的 ViralX 站点。
 2. 首页会自动显示 ViralX 实时分析服务在线、配置中或离线；访客不需要安装任何 Connector。
 3. 服务在线且配置完整时，粘贴 TikTok / 抖音视频链接，或输入一个 TikTok 搜索主题，然后启动固定串联分析。
-4. 只有需要临时覆盖站点默认搜索或视觉模型配置时，才进入[网页设置](https://viralx.metrolabs.mobi/settings.html)填写会话级 Key。
-5. 在网页查看结果、整理复刻脚本，或导出 Markdown / Obsidian URI。
+4. 只有需要临时覆盖站点默认搜索或视觉模型配置时，才进入网页设置填写会话级配置。
+5. 在网页查看报告与复刻脚本，切换到 Markdown 源码并一键复制。
 
 公开网站不会把站点所有者的第三方 Key 写入前端。默认 Key 由 ViralX Worker 保存在服务器环境；会话级模型 / RapidAPI 搜索覆盖值只写入当前标签页的 `sessionStorage`，关闭标签页后清除。LibTV 网页授权只由 Worker 所有者在运行服务的电脑上管理。长分析由 Worker 在后台继续执行，网页通过同源短轮询读取进度，避免浏览器私网限制与单次网关超时把仍在运行的任务误报为失败。
 
@@ -117,7 +119,7 @@ $viralx 分析这个 TikTok 视频：https://www.tiktok.com/@creator/video/123
 $viralx 搜索 camping light，并分析点赞数高于 5000 的候选视频
 ```
 
-完整 Skill 合同见 [`.agents/skills/viralx/SKILL.md`](.agents/skills/viralx/SKILL.md)。
+完整 Skill 合同见 [`.agents/skills/viralx/SKILL.md`](../.agents/skills/viralx/SKILL.md)；使用当前 Codex 模型的版本见 [`viralx-agent`](../.agents/skills/viralx-agent/SKILL.md)。
 
 ## API 端点
 
@@ -138,4 +140,4 @@ python -m unittest discover -s tests -v
 npm run build:edgeone
 ```
 
-设计与动效约束见 [DESIGN.md](DESIGN.md)。
+设计与动效约束见 [DESIGN.md](../DESIGN.md)。

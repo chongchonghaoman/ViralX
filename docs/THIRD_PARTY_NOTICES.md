@@ -1,5 +1,7 @@
 # Third-party notices
 
+Project license: [MIT](../LICENSE). Source paths below are relative to the repository root.
+
 ## ShotLoom scene-detection adaptation
 
 `shot_analyzers.py` adapts the dual-detector structure from
